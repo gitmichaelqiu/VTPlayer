@@ -50,8 +50,7 @@ public actor VTFrameProcessorCoordinator {
     
     // State tracking
     private var previousSourceFrame: VTFrameProcessorFrame?
-    private var previousOutputFrame: VTFrameProcessorFrame?
-    private var isFirstFrame = true
+private var isFirstFrame = true
     
     public init(
         superResolutionLevel: Int,
@@ -249,8 +248,7 @@ public actor VTFrameProcessorCoordinator {
         self.isSessionActive = true
         self.isFirstFrame = true
         self.previousSourceFrame = nil
-        self.previousOutputFrame = nil
-    }
+}
     
     /// Processes a single incoming frame and returns a sequence of processed frames.
     public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
@@ -478,7 +476,6 @@ public actor VTFrameProcessorCoordinator {
         spatialPool2 = nil
         
         previousSourceFrame = nil
-        previousOutputFrame = nil
         isSessionActive = false
         isFirstFrame = true
     }
