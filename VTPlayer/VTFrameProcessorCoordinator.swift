@@ -55,9 +55,6 @@ public actor VTFrameProcessorCoordinator {
     // New: Quality SR (alternative to LL SR)
     public let qualitySuperResolutionScaleFactor: Int  // 0=off, 2, 4
 
-    // New: Frame rate conversion (alternative to LL FI)
-    public let useFrameRateConversion: Bool
-
     // New: Motion blur
     public let motionBlurStrength: Int         // 0=off, 1-100
 
@@ -98,7 +95,6 @@ public actor VTFrameProcessorCoordinator {
         useHighQualityDownsampling: Bool = true,
         useRealTimePriority: Bool = true,
         qualitySuperResolutionScaleFactor: Int = 0,
-        useFrameRateConversion: Bool = false,
         motionBlurStrength: Int = 0,
         denoiseStrength: Double = 0.0,
         qualityPrioritization: Int = 1
@@ -108,7 +104,6 @@ public actor VTFrameProcessorCoordinator {
         self.useHighQualityDownsampling = useHighQualityDownsampling
         self.useRealTimePriority = useRealTimePriority
         self.qualitySuperResolutionScaleFactor = qualitySuperResolutionScaleFactor
-        self.useFrameRateConversion = useFrameRateConversion
         self.motionBlurStrength = motionBlurStrength
         self.denoiseStrength = denoiseStrength
         self.qualityPrioritization = qualityPrioritization
@@ -176,33 +171,11 @@ public actor VTFrameProcessorCoordinator {
 
         // ── 2. Temporal Stage ─────────────────────────────────────────
         let useQualitySR = qualitySuperResolutionScaleFactor > 0
-        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !useFrameRateConversion
-        let inSR4FI2Mode = superResolutionLevel == 4 && frameInterpolationLevel == 2 && !useFrameRateConversion
+        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
+        let inSR4FI2Mode = superResolutionLevel == 4 && frameInterpolationLevel == 2
 
-        if frameInterpolationLevel > 0 || useFrameRateConversion {
-            if useFrameRateConversion {
-                // Quality frame rate conversion
-                let numFrames = frameInterpolationLevel == 4 ? 3 : 1
-                guard let config = VTFrameRateConversionConfiguration(
-                    frameWidth: currentWidth,
-                    frameHeight: currentHeight,
-                    usePrecomputedFlow: false,
-                    qualityPrioritization: qualityPrioritization >= 2 ? .quality : .normal,
-                    revision: .revision1
-                ) else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FRC configuration"])
-                }
-                let proc = VTFrameProcessor()
-                try proc.startSession(configuration: config)
-                let pool = makePool(width: currentWidth, height: currentHeight, from: config.destinationPixelBufferAttributes)
-                guard pool != nil else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FRC pool"])
-                }
-                // FRC outputs numFrames interpolated + 1 source at same resolution
-                addStage(.temporal, processor: proc, pool: pool, outW: currentWidth, outH: currentHeight)
-            } else if inCombinedMode || inSR4FI2Mode {
+        if frameInterpolationLevel > 0 {
+            if inCombinedMode || inSR4FI2Mode {
                 // Combined 2x spatial + 2x temporal
                 let scale: Int = 2
                 guard let config = VTLowLatencyFrameInterpolationConfiguration(
@@ -464,65 +437,9 @@ public actor VTFrameProcessorCoordinator {
             prevSourceFP = dummy
         }
 
-        let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2 && !useFrameRateConversion
+        let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2
 
-        if useFrameRateConversion {
-            // FRC needs next frame — use current frame as both source and next for now
-            // (simplified: future frames not available in frame-at-a-time processing)
-            let numInterpolated = frameInterpolationLevel == 4 ? 3 : 1
-            var destBufs: [CVPixelBuffer] = []
-            for _ in 0..<numInterpolated {
-                var buf: CVPixelBuffer?
-                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf) == kCVReturnSuccess,
-                      let b = buf else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                        userInfo: [NSLocalizedDescriptionKey: "FRC pool allocation failed"])
-                }
-                destBufs.append(b)
-            }
-
-            var phases: [Float] = []
-            if frameInterpolationLevel == 4 {
-                phases = [0.25, 0.5, 0.75]
-            } else {
-                phases = [0.5]
-            }
-
-            let destFrames = destBufs.enumerated().compactMap { (_, buf) in
-                VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: sourcePTS)
-            }
-
-            guard destFrames.count == numInterpolated else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create FRC dest frames"])
-            }
-
-            guard let params = VTFrameRateConversionParameters(
-                sourceFrame: sourceFP,
-                nextFrame: sourceFP,  // simplified: no future frame available
-                opticalFlow: nil,
-                interpolationPhase: phases,
-                submissionMode: .sequential,
-                destinationFrames: destFrames
-            ) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create FRC params"])
-            }
-
-            _ = try await instance.processor.process(parameters: params)
-
-            var outputFrames: [VTFrame] = []
-            for (i, buf) in destBufs.enumerated() {
-                let phase = phases[i]
-                let interpPTS = CMTimeAdd(prevSourceFP.presentationTimeStamp,
-                    CMTimeMultiplyByFloat64(CMTimeSubtract(sourcePTS, prevSourceFP.presentationTimeStamp), multiplier: Double(phase)))
-                outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTS))
-            }
-            // Append source (always last in FRC)
-            outputFrames.append(frame)
-
-            return outputFrames
-        } else if isCombined {
+        if isCombined {
             // Combined 2x spatial + 2x temporal
             var buf1: CVPixelBuffer?
             var buf2: CVPixelBuffer?

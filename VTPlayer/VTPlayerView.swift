@@ -36,11 +36,6 @@ final class VTPlayerViewModel {
 
     // New API Feature Levels
     var qualitySuperResolutionScaleFactor: Int = 0  // 0=off, 2, 4 (Quality SR)
-    var useFrameRateConversion: Bool = false {
-        didSet {
-            updateEnhancements()
-        }
-    }
     var motionBlurStrength: Int = 0 {  // 0=off, 1-100
         didSet { updateEnhancements() }
     }
@@ -113,7 +108,6 @@ final class VTPlayerViewModel {
     }
     
     var qualitySuperResolutionIsActive: Bool { qualitySuperResolutionScaleFactor > 0 }
-    var frameRateConversionIsActive: Bool { useFrameRateConversion && frameInterpolationLevel > 0 }
     var motionBlurIsActive: Bool { motionBlurStrength > 0 }
     var denoiseIsActive: Bool { denoiseStrength > 0 }
     var sharpnessIsActive: Bool { sharpness > 0 }
@@ -491,7 +485,6 @@ final class VTPlayerViewModel {
         let highQuality = self.useHighQualityDownsampling
         let realTime = self.useRealTimePriority
         let qualitySR = self.qualitySuperResolutionScaleFactor
-        let useFRC = self.useFrameRateConversion
         let mbStrength = self.motionBlurStrength
         let dnStrength = self.denoiseStrength
         let qualPrior = self.qualityPrioritization
@@ -503,7 +496,6 @@ final class VTPlayerViewModel {
                 useHighQualityDownsampling: highQuality,
                 useRealTimePriority: realTime,
                 qualitySuperResolutionScaleFactor: qualitySR,
-                useFrameRateConversion: useFRC,
                 motionBlurStrength: mbStrength,
                 denoiseStrength: dnStrength,
                 qualityPrioritization: qualPrior
@@ -523,10 +515,13 @@ final class VTPlayerViewModel {
             // lastPulledTime that was captured in startPlaybackLoop(), so the
             // first nextPullTime targets a stale time in the past.
             if let player = self.player {
-                let current = player.currentTime()
-                let adjusted = CMTimeSubtract(current, frameDuration)
-                self.lastPulledTime = adjusted > .zero ? adjusted : .zero
+                self.lastPulledTime = player.currentTime()
             }
+
+            // Create VTFrameSequence to decode frames faster-than-real-time
+            guard let videoURL = self.videoURL else { return }
+            let frameSequence = VTFrameSequence(url: videoURL, startTime: self.lastPulledTime)
+            var frameIterator = frameSequence.makeAsyncIterator()
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
@@ -536,59 +531,45 @@ final class VTPlayerViewModel {
                     continue
                 }
 
-                guard let player = self.player, let videoOutput = self.videoOutput else {
+                // Large cache target — buffer frames ahead so the consumer
+                // always has processed frames to render even when the
+                // pipeline is slower than real-time.
+                if self.processedFrameCache.count >= 60 {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
 
-                if self.processedFrameCache.count >= 15 {
-                    try? await Task.sleep(nanoseconds: 10_000_000)
-                    continue
-                }
-
-                let nextPullTime = CMTimeAdd(self.lastPulledTime, frameDuration)
-                let playerTime = player.currentTime()
-                let maxLookahead = CMTimeAdd(playerTime, CMTime(seconds: 0.5, preferredTimescale: 600))
-                if nextPullTime > maxLookahead {
-                    try? await Task.sleep(nanoseconds: 5_000_000)
-                    continue
-                }
-
-                // Use copyPixelBuffer directly — hasNewPixelBuffer returns NO
-                // for times already queried by the previous producer before
-                // cancellation, falsely indicating the buffer is absent when
-                // it is still available via copyPixelBuffer.
-                var presentationTime = CMTime.zero
-                if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: nextPullTime, itemTimeForDisplay: &presentationTime) {
-                    let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : nextPullTime)
-
-                    let processStart = DispatchTime.now()
-                    do {
-                        let outputFrames = try await coordinator.processFrame(frame)
-                        let processEnd = DispatchTime.now()
-
-                        guard gen == self.playbackGeneration else { break }
-
-                        self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-
-                        // ANE usage not yet measurable via public API — placeholder for future telemetry
-                        self.aneUsagePercent = 0.0
-
-                        self.processedFrameCache.append(contentsOf: outputFrames)
-                        self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
-
-                        self.lastPulledTime = nextPullTime
-                    } catch {
-                        guard gen == self.playbackGeneration else { break }
-                        self.processedFrameCache.append(frame)
-                        self.lastPulledTime = nextPullTime
+                // Read next decoded frame (hardware decoder, ~1ms per frame)
+                let vtFrame: VTFrame
+                do {
+                    guard let next = try await frameIterator.next() else {
+                        break  // EOF
                     }
-                } else {
-                    // Frame not yet available — catch up to current player time
-                    // immediately instead of stalling for 50ms.
-                    let minTime = CMTimeSubtract(playerTime, frameDuration)
-                    self.lastPulledTime = minTime > .zero ? minTime : .zero
-                    try? await Task.sleep(nanoseconds: 5_000_000)
+                    vtFrame = next
+                } catch {
+                    print("VTFrameSequence error: \(error.localizedDescription)")
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    continue
+                }
+
+                // Process through the VideoToolbox pipeline
+                let processStart = DispatchTime.now()
+                do {
+                    let outputFrames = try await coordinator.processFrame(vtFrame)
+                    let processEnd = DispatchTime.now()
+
+                    guard gen == self.playbackGeneration else { break }
+
+                    self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
+
+                    // ANE usage not yet measurable via public API — placeholder for future telemetry
+                    self.aneUsagePercent = 0.0
+
+                    self.processedFrameCache.append(contentsOf: outputFrames)
+                    self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
+                } catch {
+                    guard gen == self.playbackGeneration else { break }
+                    self.processedFrameCache.append(vtFrame)
                 }
             }
 
@@ -724,7 +705,6 @@ final class VTPlayerViewModel {
             "playbackSpeed": playbackSpeed,
             "sharpness": sharpness,
             "qualitySuperResolutionScaleFactor": qualitySuperResolutionScaleFactor,
-            "useFrameRateConversion": useFrameRateConversion,
             "motionBlurStrength": motionBlurStrength,
             "denoiseStrength": denoiseStrength,
             "qualityPrioritization": qualityPrioritization,
@@ -743,7 +723,6 @@ final class VTPlayerViewModel {
         }
         renderer.sharpness = Float(sharpness)
         qualitySuperResolutionScaleFactor = settings["qualitySuperResolutionScaleFactor"] as? Int ?? 0
-        useFrameRateConversion = settings["useFrameRateConversion"] as? Bool ?? false
         motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
         qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
@@ -769,7 +748,6 @@ struct VTPlayerView: View {
     // Hover state for control bar feature labels
     @State private var hoverSR = false
     @State private var hoverFI = false
-    @State private var hoverFRC = false
     @State private var hoverMB = false
     @State private var hoverDN = false
     
@@ -1115,8 +1093,8 @@ extension VTPlayerView {
                     // Frame Interpolation (LL FI)
                     Menu {
                         Picker(selection: Binding(
-                            get: { viewModel.useFrameRateConversion ? 0 : viewModel.frameInterpolationLevel },
-                            set: { viewModel.frameInterpolationLevel = $0; viewModel.useFrameRateConversion = false; viewModel.updateEnhancements() }
+                            get: { viewModel.frameInterpolationLevel },
+                            set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
                         )) {
                             Text("Off").tag(0)
                             Text("2x").tag(2)
@@ -1127,46 +1105,18 @@ extension VTPlayerView {
                         .pickerStyle(.inline)
                     } label: {
                         Text(hoverFI
-                            ? "Frame Interpolation: \((viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion) ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
-                            : "FI: \((viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion) ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
+                            ? "Frame Interpolation: \(viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
+                            : "FI: \(viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
                         )
                         .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion ? .green : .secondary)
+                        .foregroundColor(viewModel.frameInterpolationLevel > 0 ? .green : .secondary)
                         .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
+                        .background(viewModel.frameInterpolationLevel > 0 ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                     .onHover { hoverFI = $0 }
-
-                    // Frame Rate Conversion
-                    Menu {
-                        Picker(selection: Binding(
-                            get: { viewModel.useFrameRateConversion ? viewModel.frameInterpolationLevel : 0 },
-                            set: { viewModel.frameInterpolationLevel = $0; viewModel.useFrameRateConversion = true; viewModel.updateEnhancements() }
-                        )) {
-                            Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
-                        } label: {
-                            EmptyView()
-                        }
-                        .pickerStyle(.inline)
-                    } label: {
-                        Text(hoverFRC
-                            ? "Frame Rate Conversion: \(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
-                            : "FRC: \(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
-                        )
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? .teal : .secondary)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? Color.teal.opacity(0.15) : Color.white.opacity(0.05))
-                        .cornerRadius(6)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .onHover { hoverFRC = $0 }
 
                     // Motion Blur
                     Menu {
