@@ -44,7 +44,12 @@ AVPlayer → AVPlayerItemVideoOutput → VTFrameProcessorCoordinator (actor)
                                             VTMetalRenderer (MTKView + CIContext)
 ```
 
-Processing runs in a `Task` on `@MainActor` — all synchronous code executes on the main thread between `await` suspension points. The `VTFrameProcessorCoordinator` is an `actor`, so its methods run on its own executor.
+Processing runs in three `Task`s on `@MainActor`:
+- **Producer**: Pulls source frames from AVPlayer at source frame rate cadence, processes through VideoToolbox, and populates the frame cache
+- **Consumer**: Reads processed frames from the cache in PTS order, renders via Metal, with PTS-aware pacing (wakes just before the next frame is due)
+- **Audio Sync** (new): Monitors the gap between AVPlayer time and last rendered frame PTS; pauses AVPlayer when latency exceeds 100ms, resumes when 5+ frames are buffered
+
+The `VTFrameProcessorCoordinator` is an `actor`, so its methods run on its own executor.
 
 ### Configuration Modes
 
@@ -73,5 +78,5 @@ Processing runs in a `Task` on `@MainActor` — all synchronous code executes on
 - **VTModelManager unused**: Class exists but is never called from the playback flow
 - **Large file**: `VTPlayerView.swift` bundles ViewModel + all views + helpers (~1136 lines)
 - **Project targets**: Build settings include iOS/visionOS SDKs but UI is macOS-only (AppKit-based)
-- **Consumer polling**: The consumer task polls the frame cache every 4ms (~250 Hz); consider reducing interval for power efficiency
-- **VTFramePipeline unused**: `VTFramePipeline.swift` / `VTFrameSequence` are defined but not used by the ViewModel playback loop
+- **Consumer polling**: The consumer uses PTS-aware pacing (sleeps until next cached frame's timestamp), falling back to 4ms poll when cache is empty. Not ideal for power, but acceptable for real-time video
+- **Audio sync**: `audioSyncTask` pauses AVPlayer when frame processing latency exceeds 100ms. Resets on seek. May interact poorly with `playbackSpeed` changes

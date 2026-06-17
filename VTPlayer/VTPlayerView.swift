@@ -129,6 +129,13 @@ final class VTPlayerViewModel {
     private var processedFrameCache: [VTFrame] = []
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
+
+    // Audio sync state
+    private var lastRenderedPTS: CMTime = .zero
+    private var isAudioPausedForSync = false
+    private var audioSyncTask: Task<Void, Never>?
+    private let audioSyncLatencyThreshold: Double = 0.1
+    private let audioSyncRecoveryFrameCount: Int = 5
     
     let renderer: VTMetalRenderer
     
@@ -352,6 +359,8 @@ final class VTPlayerViewModel {
     func seek(to seconds: Double) {
         self.currentTime = seconds
         self.saveProgress()
+        self.isAudioPausedForSync = false
+        self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         guard let player = player else { return }
@@ -368,6 +377,8 @@ final class VTPlayerViewModel {
     func scrub(to seconds: Double) {
         self.currentTime = seconds
         self.saveProgress()
+        self.isAudioPausedForSync = false
+        self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         guard let player = player else { return }
@@ -556,6 +567,7 @@ final class VTPlayerViewModel {
 
                     if frameTime <= currentSecs + 0.005 {
                         self.renderer.render(pixelBuffer: firstFrame.buffer)
+                        self.lastRenderedPTS = firstFrame.presentationTimeStamp
                         processedFramesCount += 1
 
                         self.processedFrameCache.removeFirst()
@@ -579,8 +591,29 @@ final class VTPlayerViewModel {
                 }
             }
         }
+
+        audioSyncTask?.cancel()
+        audioSyncTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                guard !self.isPaused, let player = self.player else { continue }
+                let currentSecs = CMTimeGetSeconds(player.currentTime())
+                let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
+                let latency = currentSecs - lastSecs
+
+                if latency > self.audioSyncLatencyThreshold && !self.isAudioPausedForSync {
+                    player.rate = 0
+                    self.isAudioPausedForSync = true
+                } else if self.isAudioPausedForSync {
+                    if self.processedFrameCache.count >= self.audioSyncRecoveryFrameCount || latency <= 0 {
+                        player.rate = Float(self.playbackSpeed)
+                        self.isAudioPausedForSync = false
+                    }
+                }
+            }
+        }
     }
-    
+
     /// Pauses/stops playback entirely.
     func stop() {
         if self.currentTime > 0 {
@@ -590,6 +623,10 @@ final class VTPlayerViewModel {
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
+        audioSyncTask?.cancel()
+        audioSyncTask = nil
+        isAudioPausedForSync = false
+        lastRenderedPTS = .zero
         processedFrameCache.removeAll()
         
         if let observer = playerItemObserver {
