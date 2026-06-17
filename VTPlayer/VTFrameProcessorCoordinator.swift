@@ -39,6 +39,7 @@ public actor VTFrameProcessorCoordinator {
     private var temporalProcessor: VTFrameProcessor?
     private var spatialProcessor1: VTFrameProcessor?
     private var spatialProcessor2: VTFrameProcessor?
+    private var fallbackTransferSession: VTPixelTransferSession?
     
     // Memory pools
     private var temporalPool: CVPixelBufferPool?
@@ -121,16 +122,29 @@ public actor VTFrameProcessorCoordinator {
             }
             
             // Second spatial upscaler 2x -> 4x
-            let srConfig = VTLowLatencySuperResolutionScalerConfiguration(
-                frameWidth: width * 2,
-                frameHeight: height * 2,
-                scaleFactor: 2.0
-            )
-            let proc2 = VTFrameProcessor()
-            try proc2.startSession(configuration: srConfig)
-            self.spatialProcessor2 = proc2
+            let secondStageSupported = VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: width * 2, frameHeight: height * 2).contains(2.0)
             
-            let destAttributes2 = srConfig.destinationPixelBufferAttributes
+            var destAttributes2: [AnyHashable: Any]? = nil
+            if secondStageSupported {
+                let srConfig = VTLowLatencySuperResolutionScalerConfiguration(
+                    frameWidth: width * 2,
+                    frameHeight: height * 2,
+                    scaleFactor: 2.0
+                )
+                let proc2 = VTFrameProcessor()
+                try proc2.startSession(configuration: srConfig)
+                self.spatialProcessor2 = proc2
+                destAttributes2 = srConfig.destinationPixelBufferAttributes
+            } else {
+                var transferSession: VTPixelTransferSession?
+                let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
+                if status == kCVReturnSuccess {
+                    self.fallbackTransferSession = transferSession
+                } else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create fallback transfer session"])
+                }
+            }
+            
             self.spatialPool2 = makePool(width: width * 4, height: height * 4, from: destAttributes2)
             if self.spatialPool2 == nil {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create second spatial pool"])
@@ -185,17 +199,30 @@ public actor VTFrameProcessorCoordinator {
             
             // 3. Setup Spatial Processor 2 (4x upscaler)
             if superResolutionLevel == 4 {
-                let config = VTLowLatencySuperResolutionScalerConfiguration(
-                    frameWidth: currentWidth,
-                    frameHeight: currentHeight,
-                    scaleFactor: 2.0
-                )
-                let proc = VTFrameProcessor()
-                try proc.startSession(configuration: config)
-                self.spatialProcessor2 = proc
+                let secondStageSupported = VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: currentWidth, frameHeight: currentHeight).contains(2.0)
                 
-                let destAttributes = config.destinationPixelBufferAttributes
-                self.spatialPool2 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: destAttributes)
+                var destAttributes2: [AnyHashable: Any]? = nil
+                if secondStageSupported {
+                    let config = VTLowLatencySuperResolutionScalerConfiguration(
+                        frameWidth: currentWidth,
+                        frameHeight: currentHeight,
+                        scaleFactor: 2.0
+                    )
+                    let proc = VTFrameProcessor()
+                    try proc.startSession(configuration: config)
+                    self.spatialProcessor2 = proc
+                    destAttributes2 = config.destinationPixelBufferAttributes
+                } else {
+                    var transferSession: VTPixelTransferSession?
+                    let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
+                    if status == kCVReturnSuccess {
+                        self.fallbackTransferSession = transferSession
+                    } else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create fallback transfer session"])
+                    }
+                }
+                
+                self.spatialPool2 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: destAttributes2)
                 if self.spatialPool2 == nil {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial pool 2"])
                 }
@@ -386,24 +413,32 @@ public actor VTFrameProcessorCoordinator {
             }
             
             // Spatial Stage 2 (4x)
-            if let spatialProcessor2 = spatialProcessor2, let pool2 = spatialPool2 {
+            if let pool2 = spatialPool2 {
                 var buf2: CVPixelBuffer?
                 guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool2, &buf2) == kCVReturnSuccess, let outBuf2 = buf2 else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -3, userInfo: [NSLocalizedDescriptionKey: "Pool 2 allocation failed"])
                 }
                 
-                guard let sourceFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
-                      let destFP = VTFrameProcessorFrame(buffer: outBuf2, presentationTimeStamp: f.presentationTimeStamp) else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -5, userInfo: [NSLocalizedDescriptionKey: "Failed to create frames for scaling stage 2"])
+                if let spatialProcessor2 = spatialProcessor2 {
+                    guard let sourceFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
+                          let destFP = VTFrameProcessorFrame(buffer: outBuf2, presentationTimeStamp: f.presentationTimeStamp) else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -5, userInfo: [NSLocalizedDescriptionKey: "Failed to create frames for scaling stage 2"])
+                    }
+                    
+                    let params = VTLowLatencySuperResolutionScalerParameters(
+                        sourceFrame: sourceFP,
+                        destinationFrame: destFP
+                    )
+                    
+                    _ = try await spatialProcessor2.process(parameters: params)
+                    currentBuffer = outBuf2
+                } else if let transferSession = fallbackTransferSession {
+                    let status = VTPixelTransferSessionTransferImage(transferSession, from: currentBuffer, to: outBuf2)
+                    if status != noErr {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -6, userInfo: [NSLocalizedDescriptionKey: "Fallback upscaling transfer failed with status \(status)"])
+                    }
+                    currentBuffer = outBuf2
                 }
-                
-                let params = VTLowLatencySuperResolutionScalerParameters(
-                    sourceFrame: sourceFP,
-                    destinationFrame: destFP
-                )
-                
-                _ = try await spatialProcessor2.process(parameters: params)
-                currentBuffer = outBuf2
             }
             
             processedFrames.append(VTFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp))
@@ -422,6 +457,10 @@ public actor VTFrameProcessorCoordinator {
         temporalProcessor = nil
         spatialProcessor1 = nil
         spatialProcessor2 = nil
+        if let session = fallbackTransferSession {
+            VTPixelTransferSessionInvalidate(session)
+        }
+        fallbackTransferSession = nil
         
         temporalPool = nil
         spatialPool1 = nil
