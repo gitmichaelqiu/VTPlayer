@@ -13,6 +13,16 @@ import CoreVideo
 /// A coordinator actor that manages the VideoToolbox session, memory pooling, and processing execution.
 public actor VTFrameProcessorCoordinator {
     
+    /// Checks if VideoToolbox Low-Latency Super Resolution is supported on the current hardware.
+    public static func isSuperResolutionSupported() -> Bool {
+        return VTLowLatencySuperResolutionScalerConfiguration.isSupported
+    }
+    
+    /// Queries the list of supported scale factors for the given frame dimensions.
+    public static func supportedSuperResolutionScaleFactors(width: Int, height: Int) -> [Float] {
+        return VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: width, frameHeight: height)
+    }
+    
     private let processor = VTFrameProcessor()
     private var isSessionActive = false
     
