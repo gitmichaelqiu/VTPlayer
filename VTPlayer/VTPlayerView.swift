@@ -770,56 +770,66 @@ struct VTPlayerView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
-        Group {
-            if (viewModel.showLeftSidebar || viewModel.showSidebar) && !viewModel.isFullScreen {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
+        if !viewModel.isFullScreen {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                if viewModel.showLeftSidebar {
                     leftSidebar
                         .frame(minWidth: 180, idealWidth: 240, maxWidth: 500)
-                } content: {
-                    videoContent
-                } detail: {
-                    if viewModel.showSidebar && viewModel.videoURL != nil {
-                        rightSidebar
-                            .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
+                }
+            } content: {
+                videoContent
+            } detail: {
+                if viewModel.showSidebar && viewModel.videoURL != nil {
+                    rightSidebar
+                        .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
+                }
+            }
+            .navigationSplitViewStyle(.balanced)
+            .onChange(of: viewModel.showLeftSidebar) { _, _ in updateColumnVisibility() }
+            .onChange(of: viewModel.showSidebar) { _, _ in updateColumnVisibility() }
+            .onAppear(perform: updateColumnVisibility)
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button(action: { viewModel.selectFile() }) {
+                        Label("Open Video", systemImage: "plus")
+                    }
+                    .help("Open a local video file")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { viewModel.showSidebar.toggle() }) {
+                        Label("Toggle Sidebar", systemImage: "sidebar.right")
+                    }
+                    .help("Toggle diagnostics and metadata sidebar panel")
+                }
+            }
+            .windowToolbarFullScreenVisibility(.onHover)
+        } else {
+            videoContent
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button(action: { viewModel.selectFile() }) {
+                            Label("Open Video", systemImage: "plus")
+                        }
+                        .help("Open a local video file")
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { viewModel.showSidebar.toggle() }) {
+                            Label("Toggle Sidebar", systemImage: "sidebar.right")
+                        }
+                        .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
-                .navigationSplitViewStyle(.balanced)
-                .onChange(of: viewModel.showLeftSidebar) { _, _ in updateColumnVisibility() }
-                .onChange(of: viewModel.showSidebar) { _, _ in updateColumnVisibility() }
-                .onAppear(perform: updateColumnVisibility)
-            } else {
-                videoContent
-            }
+                .windowToolbarFullScreenVisibility(.onHover)
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: { viewModel.showLeftSidebar.toggle() }) {
-                    Label("Toggle Recents", systemImage: "sidebar.left")
-                }
-                .help("Toggle recent videos sidebar")
-            }
-            ToolbarItem(placement: .navigation) {
-                Button(action: { viewModel.selectFile() }) {
-                    Label("Open Video", systemImage: "plus")
-                }
-                .help("Open a local video file")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { viewModel.showSidebar.toggle() }) {
-                    Label("Toggle Sidebar", systemImage: "sidebar.right")
-                }
-                .help("Toggle diagnostics and metadata sidebar panel")
-            }
-        }
-        .windowToolbarFullScreenVisibility(.onHover)
     }
 
     private func updateColumnVisibility() {
-        switch (viewModel.showLeftSidebar, viewModel.showSidebar) {
+        let showRight = viewModel.showSidebar && viewModel.videoURL != nil
+        switch (viewModel.showLeftSidebar, showRight) {
         case (true, true):  columnVisibility = .all
         case (true, false): columnVisibility = .doubleColumn
         case (false, true): columnVisibility = .detailOnly
-        case (false, false): break // not reached — guarded at top level
+        case (false, false): columnVisibility = .doubleColumn
         }
     }
 
@@ -1148,7 +1158,8 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.superResolutionLevel > 0 ? .cyan : .secondary)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .frame(width: 148)
+                        .padding(.vertical, 5)
                         .background(viewModel.superResolutionLevel > 0 ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
                     }
@@ -1176,7 +1187,8 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.frameInterpolationLevel > 0 ? .green : .secondary)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .frame(width: 158)
+                        .padding(.vertical, 5)
                         .background(viewModel.frameInterpolationLevel > 0 ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
                     }
@@ -1206,7 +1218,8 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.motionBlurStrength > 0 ? .purple : .secondary)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .frame(width: 120)
+                        .padding(.vertical, 5)
                         .background(viewModel.motionBlurStrength > 0 ? Color.purple.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
                     }
@@ -1236,7 +1249,8 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.denoiseStrength > 0 ? .orange : .secondary)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .frame(width: 110)
+                        .padding(.vertical, 5)
                         .background(viewModel.denoiseStrength > 0 ? Color.orange.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
                     }
@@ -1297,6 +1311,7 @@ extension VTPlayerView {
             )
             .font(.caption.weight(.medium))
             .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            .frame(width: 110)
             if hoverSH {
                 Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                     .accentColor(.cyan)
