@@ -416,7 +416,7 @@ struct VTPlayerView: View {
                                     Text("Open Video File...")
                                 }
                                 .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
+                                .controlSize(.regular)
                             }
                         }
                     }
@@ -446,6 +446,11 @@ struct VTPlayerView: View {
                                         scrubTime = newValue
                                     }
                                 }
+                                .onChange(of: scrubTime) { _, newValue in
+                                    if isScrubbing {
+                                        viewModel.scrub(to: newValue)
+                                    }
+                                }
                                 
                                 Text(formatTime(viewModel.duration))
                                     .font(.system(.caption2, design: .monospaced))
@@ -456,7 +461,7 @@ struct VTPlayerView: View {
                             HStack(spacing: 20) {
                                 Button(action: { viewModel.togglePlayPause() }) {
                                     Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                                        .font(.title2)
+                                        .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.primary)
                                 }
                                 .buttonStyle(.plain)
@@ -464,7 +469,7 @@ struct VTPlayerView: View {
                                 
                                 Button(action: { viewModel.selectFile() }) {
                                     Image(systemName: "folder")
-                                        .font(.title3)
+                                        .font(.system(size: 14))
                                         .foregroundColor(.primary)
                                 }
                                 .buttonStyle(.plain)
@@ -576,6 +581,32 @@ struct VTPlayerView: View {
                         .font(.system(.subheadline, design: .monospaced))
                     }
                     
+                    Divider()
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Super Resolution Specs")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        Group {
+                            LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
+                                .foregroundColor(viewModel.srIsSupported ? .green : .secondary)
+                            LabeledContent("Scales", value: viewModel.srSupportedScales)
+                            if let initError = viewModel.srInitializationError {
+                                LabeledContent("SR Status", value: "Error")
+                                    .foregroundColor(.red)
+                                Text(initError)
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundColor(.red)
+                                    .lineLimit(3)
+                            } else {
+                                LabeledContent("SR Status", value: viewModel.enableSuperResolution ? "Active" : "Inactive")
+                                    .foregroundColor(viewModel.enableSuperResolution ? .cyan : .secondary)
+                            }
+                        }
+                        .font(.system(.subheadline, design: .monospaced))
+                    }
+                    
                     Spacer()
                 }
                 .padding(20)
@@ -596,37 +627,25 @@ struct VTPlayerView: View {
                 .help("Open a local video file")
             }
             
-            // Labeled switch toggles in the toolbar
+            // Native toolbar toggles that render as highlighted buttons on macOS
             ToolbarItem {
-                HStack(spacing: 6) {
-                    Text("2× Super Resolution")
-                        .font(.subheadline)
-                    Toggle("", isOn: $viewModel.enableSuperResolution)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .onChange(of: viewModel.enableSuperResolution) { _, _ in
-                            if viewModel.isPlaying {
-                                viewModel.play()
-                            }
-                        }
+                Toggle(isOn: $viewModel.enableSuperResolution) {
+                    Label("2× Super Resolution", systemImage: "sparkles")
+                }
+                .toggleStyle(.button)
+                .onChange(of: viewModel.enableSuperResolution) { _, _ in
+                    viewModel.updateEnhancements()
                 }
                 .help("Upscale resolution using low-latency ANE models")
             }
             
             ToolbarItem {
-                HStack(spacing: 6) {
-                    // Show dynamic expected target framerate in the toggle label
-                    let targetFPS = viewModel.sourceFrameRate > 0 ? Int(viewModel.sourceFrameRate * 2) : 60
-                    Text("Frame Interpolation (\(targetFPS)fps)")
-                        .font(.subheadline)
-                    Toggle("", isOn: $viewModel.enableFrameInterpolation)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .onChange(of: viewModel.enableFrameInterpolation) { _, _ in
-                            if viewModel.isPlaying {
-                                viewModel.play()
-                            }
-                        }
+                Toggle(isOn: $viewModel.enableFrameInterpolation) {
+                    Label("Frame Interpolation", systemImage: "bolt.fill")
+                }
+                .toggleStyle(.button)
+                .onChange(of: viewModel.enableFrameInterpolation) { _, _ in
+                    viewModel.updateEnhancements()
                 }
                 .help("Double video framerate dynamically")
             }
