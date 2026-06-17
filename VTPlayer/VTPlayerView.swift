@@ -37,8 +37,13 @@ final class VTPlayerViewModel {
     // Playback Progress & Stats
     var currentTime: Double = 0.0
     var duration: Double = 0.0
-    var playbackSpeed: Double = 1.0
-    var seekRequestTime: Double?
+    var playbackSpeed: Double = 1.0 {
+        didSet {
+            if let player = player {
+                player.rate = Float(isPaused ? 0.0 : playbackSpeed)
+            }
+        }
+    }
     
     // Video Track Specs
     var videoWidth: Int = 0
@@ -52,7 +57,17 @@ final class VTPlayerViewModel {
     var droppedFrames = 0
     var aneUsagePercent: Double = 0.0
     
-    private var playbackTask: Task<Void, Never>?
+    // Detailed SR Diagnostics
+    var srIsSupported: Bool = false
+    var srSupportedScales: String = "None"
+    var srInitializationError: String? = nil
+    
+    // AVPlayer components
+    private var player: AVPlayer?
+    private var videoOutput: AVPlayerItemVideoOutput?
+    private var playbackTimerTask: Task<Void, Never>?
+    private var playerItemObserver: Any?
+    
     private let renderer: VTMetalRenderer
     
     init(renderer: VTMetalRenderer) {
@@ -70,200 +85,277 @@ final class VTPlayerViewModel {
         if panel.runModal() == .OK, let url = panel.url {
             self.stop()
             self.videoURL = url
-            self.play()
+            self.setupPlayer(with: url)
+        }
+    }
+    
+    private func setupPlayer(with url: URL) {
+        let asset = AVAsset(url: url)
+        
+        Task {
+            do {
+                // Load metadata asynchronously using Swift 6 friendly API
+                let durationTime = try await asset.load(.duration)
+                let durationSecs = CMTimeGetSeconds(durationTime)
+                
+                let tracks = try await asset.loadTracks(withMediaType: .video)
+                guard let videoTrack = tracks.first else {
+                    return
+                }
+                
+                // Get video dimensions
+                let naturalSize = try await videoTrack.load(.naturalSize)
+                let width = Int(naturalSize.width)
+                let height = Int(naturalSize.height)
+                
+                // Get framerate
+                let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
+                let frameRate = Double(nominalFrameRate)
+                
+                // Get format description
+                var formatStr = "Unknown"
+                let descriptions = try await videoTrack.load(.formatDescriptions)
+                if let firstDesc = descriptions.first {
+                    let subType = CMFormatDescriptionGetMediaSubType(firstDesc)
+                    formatStr = "\(fourCharCodeString(subType))"
+                }
+                
+                // Perform SR support checks
+                let supported = await VTFrameProcessorCoordinator.isSuperResolutionSupported()
+                let scales = await VTFrameProcessorCoordinator.supportedSuperResolutionScaleFactors(width: width, height: height)
+                let scalesStr = scales.isEmpty ? "None" : scales.map { String(format: "%.1fx", $0) }.joined(separator: ", ")
+                
+                // Create AVPlayerItem and AVPlayerItemVideoOutput
+                let outputSettings: [String: Any] = [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+                ]
+                let output = AVPlayerItemVideoOutput(pixelBufferAttributes: outputSettings)
+                let item = AVPlayerItem(asset: asset)
+                item.add(output)
+                
+                let newPlayer = AVPlayer(playerItem: item)
+                newPlayer.automaticallyWaitsToMinimizeStalling = false
+                
+                // Update properties on @MainActor
+                await MainActor.run {
+                    self.duration = durationSecs
+                    self.videoWidth = width
+                    self.videoHeight = height
+                    self.sourceFrameRate = frameRate
+                    self.videoFormat = formatStr
+                    self.srIsSupported = supported
+                    self.srSupportedScales = scalesStr
+                    
+                    self.player = newPlayer
+                    self.videoOutput = output
+                    
+                    // Observe play ending to auto-rewind
+                    let observer = NotificationCenter.default.addObserver(
+                        forName: .AVPlayerItemDidPlayToEndTime,
+                        object: item,
+                        queue: .main
+                    ) { [weak self] _ in
+                        guard let self = self else { return }
+                        Task { @MainActor in
+                            self.pause()
+                            self.seek(to: 0)
+                        }
+                    }
+                    self.playerItemObserver = observer
+                    
+                    // Start rendering/processing loop
+                    self.play()
+                }
+            } catch {
+                print("Error loading video properties: \(error.localizedDescription)")
+            }
         }
     }
     
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
-        self.seekRequestTime = seconds
         self.currentTime = seconds
-        if !isPlaying {
-            self.play()
+        guard let player = player else { return }
+        let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
+            guard completed, let self = self else { return }
+            Task { @MainActor in
+                await self.triggerSingleFrameUpdate(at: time)
+            }
+        }
+    }
+    
+    /// Seeks and draws the frame immediately during continuous scrubbing.
+    func scrub(to seconds: Double) {
+        self.currentTime = seconds
+        guard let player = player else { return }
+        let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        
+        // Pull and render frame immediately
+        var presentationTime = CMTime.zero
+        if let videoOutput = videoOutput,
+           let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: &presentationTime) {
+            self.renderer.render(pixelBuffer: pixelBuffer)
+        }
+    }
+    
+    private func triggerSingleFrameUpdate(at time: CMTime) async {
+        guard let videoOutput = videoOutput else { return }
+        var attempts = 0
+        while attempts < 5 {
+            if videoOutput.hasNewPixelBuffer(forItemTime: time) {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+            attempts += 1
+        }
+        
+        var presentationTime = CMTime.zero
+        if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: &presentationTime) {
+            self.renderer.render(pixelBuffer: pixelBuffer)
+        }
+    }
+    
+    /// Updates coordinator when features are toggled without changing playback state.
+    func updateEnhancements() {
+        if isPlaying {
+            startPlaybackLoop()
         }
     }
     
     /// Toggles play and pause state.
     func togglePlayPause() {
-        guard videoURL != nil else { return }
-        if !isPlaying {
+        guard player != nil else { return }
+        if isPaused || !isPlaying {
             play()
         } else {
-            isPaused.toggle()
+            pause()
         }
     }
     
     /// Starts playback and the VideoToolbox processing loop.
     func play() {
-        guard let url = videoURL else { return }
-        
-        // If already playing and we just want to resume
-        if isPlaying && isPaused {
-            isPaused = false
-            return
-        }
+        guard let player = player else { return }
         
         self.isPlaying = true
         self.isPaused = false
         
-        // Cancel any active playback task
-        playbackTask?.cancel()
+        player.rate = Float(self.playbackSpeed)
         
-        playbackTask = Task {
-            let pipeline = VTFramePipeline()
+        startPlaybackLoop()
+    }
+    
+    /// Pauses player
+    func pause() {
+        guard let player = player else { return }
+        player.pause()
+        self.isPaused = true
+    }
+    
+    private func startPlaybackLoop() {
+        playbackTimerTask?.cancel()
+        
+        playbackTimerTask = Task {
             let coordinator = VTFrameProcessorCoordinator(
                 enableSuperResolution: enableSuperResolution,
                 enableFrameInterpolation: enableFrameInterpolation
             )
             
             do {
-                let asset = AVAsset(url: url)
-                
-                // Load metadata asynchronously
-                let durationTime = try await asset.load(.duration)
-                self.duration = CMTimeGetSeconds(durationTime)
-                
-                let tracks = try await asset.loadTracks(withMediaType: .video)
-                guard let videoTrack = tracks.first else {
-                    self.isPlaying = false
-                    return
-                }
-                
-                // Get video dimensions
-                let naturalSize = try await videoTrack.load(.naturalSize)
-                self.videoWidth = Int(naturalSize.width)
-                self.videoHeight = Int(naturalSize.height)
-                
-                // Get framerate
-                let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
-                self.sourceFrameRate = Double(nominalFrameRate)
-                
-                // Get format description
-                let descriptions = try await videoTrack.load(.formatDescriptions)
-                if let firstDesc = descriptions.first {
-                    let mediaType = CMFormatDescriptionGetMediaType(firstDesc)
-                    let subType = CMFormatDescriptionGetMediaSubType(firstDesc)
-                    self.videoFormat = "\(fourCharCodeString(subType))"
-                }
-                
-                // Start frame processor session (utilizing low latency configurations directly)
+                self.srInitializationError = nil
                 try await coordinator.startSession(width: videoWidth, height: videoHeight)
+            } catch {
+                self.srInitializationError = error.localizedDescription
+                print("Failed to initialize coordinator session: \(error.localizedDescription)")
+            }
+            
+            var processedFramesCount = 0
+            var fpsTimer = DispatchTime.now()
+            
+            while !Task.isCancelled {
+                // When paused, we don't need to spin, just wait.
+                if self.isPaused {
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                    continue
+                }
                 
-                var processedFramesCount = 0
-                var fpsTimer = DispatchTime.now()
+                let frameStart = DispatchTime.now()
                 
-                // Outer loop handles restarts due to seeks
-                while true {
-                    if Task.isCancelled { break }
-                    
-                    // Retrieve seek starting point if any
-                    let startSecs = self.seekRequestTime ?? self.currentTime
-                    self.seekRequestTime = nil
-                    
-                    let startTime = CMTime(seconds: startSecs, preferredTimescale: 600)
-                    let frameStream = pipeline.readFrames(from: url, startTime: startTime)
-                    
-                    var lastPTS: CMTime?
-                    var lastRenderTime = DispatchTime.now()
-                    
-                    // Use try await for throwing AsyncSequence
-                    for try await frame in frameStream {
-                        if Task.isCancelled { break }
-                        
-                        // If the user request a seek, break this inner loop to restart the stream
-                        if self.seekRequestTime != nil {
-                            break
-                        }
-                        
-                        // Handle pause state
-                        while self.isPaused {
-                            if Task.isCancelled { break }
-                            try? await Task.sleep(nanoseconds: 100_000_000)
-                            // Shift render base clock during pause to prevent huge pacing delta upon resume
-                            lastRenderTime = DispatchTime.now()
-                        }
+                guard let player = self.player, let videoOutput = self.videoOutput else {
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                    continue
+                }
+                
+                let itemTime = player.currentTime()
+                
+                if videoOutput.hasNewPixelBuffer(forItemTime: itemTime) {
+                    var presentationTime = CMTime.zero
+                    if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: &presentationTime) {
+                        let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : itemTime)
                         
                         let processStart = DispatchTime.now()
-                        
-                        // Run ANE/VideoToolbox upscaling and/or frame interpolation
-                        let outputFrames = try await coordinator.processFrame(frame)
-                        
-                        let processEnd = DispatchTime.now()
-                        self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-                        
-                        // Simulate Neural Engine workload metric
-                        if enableSuperResolution && enableFrameInterpolation {
-                            self.aneUsagePercent = Double.random(in: 60.0...75.0)
-                        } else if enableSuperResolution {
-                            self.aneUsagePercent = Double.random(in: 35.0...45.0)
-                        } else if enableFrameInterpolation {
-                            self.aneUsagePercent = Double.random(in: 25.0...35.0)
-                        } else {
-                            self.aneUsagePercent = 0.0
-                        }
-                        
-                        // Render outputs with pacing
-                        for outFrame in outputFrames {
-                            if Task.isCancelled { break }
-                            if self.seekRequestTime != nil { break }
+                        do {
+                            let outputFrames = try await coordinator.processFrame(frame)
+                            let processEnd = DispatchTime.now()
+                            self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                             
-                            if let prevPTS = lastPTS {
-                                // Scale target frame delta interval based on playbackSpeed
-                                let ptsDiff = CMTimeGetSeconds(CMTimeSubtract(outFrame.presentationTimeStamp, prevPTS)) / self.playbackSpeed
-                                let realTimePassed = Double(DispatchTime.now().uptimeNanoseconds - lastRenderTime.uptimeNanoseconds) / 1_000_000_000.0
-                                
-                                // Synchronize to video timing
-                                if ptsDiff > realTimePassed {
-                                    let sleepSecs = ptsDiff - realTimePassed
-                                    if sleepSecs < 1.0 {
-                                        try? await Task.sleep(nanoseconds: UInt64(sleepSecs * 1_000_000_000))
-                                    }
-                                } else if realTimePassed - ptsDiff > 0.03 {
-                                    // Count as late render
-                                    self.droppedFrames += 1
-                                }
+                            // ANE Workload Simulation
+                            if enableSuperResolution && enableFrameInterpolation {
+                                self.aneUsagePercent = Double.random(in: 60.0...75.0)
+                            } else if enableSuperResolution {
+                                self.aneUsagePercent = Double.random(in: 35.0...45.0)
+                            } else if enableFrameInterpolation {
+                                self.aneUsagePercent = Double.random(in: 25.0...35.0)
+                            } else {
+                                self.aneUsagePercent = 0.0
                             }
                             
-                            // Zero-copy render via Metal view
-                            self.renderer.render(pixelBuffer: outFrame.buffer)
+                            for outFrame in outputFrames {
+                                self.renderer.render(pixelBuffer: outFrame.buffer)
+                            }
                             
-                            lastPTS = outFrame.presentationTimeStamp
-                            lastRenderTime = DispatchTime.now()
-                            
-                            // Update current playback progress
-                            self.currentTime = CMTimeGetSeconds(outFrame.presentationTimeStamp)
+                            self.currentTime = CMTimeGetSeconds(itemTime)
                             processedFramesCount += 1
                             
-                            // Calculate display FPS
                             let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
                             if elapsedFPSTime >= 1.0 {
                                 self.fps = Double(processedFramesCount) / elapsedFPSTime
                                 processedFramesCount = 0
                                 fpsTimer = DispatchTime.now()
                             }
+                        } catch {
+                            // Fallback to original frame rendering on error
+                            self.renderer.render(pixelBuffer: pixelBuffer)
                         }
-                    }
-                    
-                    // If we exited the loop naturally without seeking, it means we reached the end of the video
-                    if self.seekRequestTime == nil {
-                        break
                     }
                 }
                 
-                await coordinator.endSession()
-            } catch {
-                print("Playback pipeline error: \(error.localizedDescription)")
+                // Sleep based on target framerate to avoid CPU spinning
+                let elapsed = Double(DispatchTime.now().uptimeNanoseconds - frameStart.uptimeNanoseconds) / 1_000_000_000.0
+                let targetFPS = self.enableFrameInterpolation ? (self.sourceFrameRate > 0 ? self.sourceFrameRate * 2 : 60.0) : (self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0)
+                let targetInterval = 1.0 / targetFPS
+                let sleepTime = max(0.001, targetInterval - elapsed)
+                
+                try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
             }
             
-            self.isPlaying = false
-            self.isPaused = false
+            await coordinator.endSession()
         }
     }
     
     /// Pauses/stops playback entirely.
     func stop() {
-        playbackTask?.cancel()
-        playbackTask = nil
+        playbackTimerTask?.cancel()
+        playbackTimerTask = nil
+        if let observer = playerItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+            playerItemObserver = nil
+        }
+        player?.pause()
+        player = nil
+        videoOutput = nil
+        
         self.isPlaying = false
         self.isPaused = false
         self.currentTime = 0.0
@@ -271,6 +363,7 @@ final class VTPlayerViewModel {
         self.fps = 0.0
         self.frameProcessingTime = 0.0
         self.aneUsagePercent = 0.0
+        self.srInitializationError = nil
     }
     
     private func fourCharCodeString(_ code: FourCharCode) -> String {
