@@ -773,12 +773,15 @@ struct VTPlayerView: View {
                     leftSidebar
                         .frame(minWidth: 180, idealWidth: 240, maxWidth: 500)
                 }
-            } content: {
-                videoContent
             } detail: {
-                if viewModel.showSidebar && viewModel.videoURL != nil {
-                    rightSidebar
-                        .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
+                HStack(spacing: 0) {
+                    videoContent
+
+                    if viewModel.showSidebar && viewModel.videoURL != nil {
+                        Divider()
+                        rightSidebar
+                            .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
+                    }
                 }
             }
             .navigationSplitViewStyle(.balanced)
@@ -1142,7 +1145,7 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.superResolutionLevel > 0 ? .cyan : .secondary)
-                        .frame(width: 148)
+                        .frame(width: 148, alignment: .leading)
                         .padding(.vertical, 5)
                         .background(viewModel.superResolutionLevel > 0 ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
@@ -1171,7 +1174,7 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.frameInterpolationLevel > 0 ? .green : .secondary)
-                        .frame(width: 158)
+                        .frame(width: 158, alignment: .leading)
                         .padding(.vertical, 5)
                         .background(viewModel.frameInterpolationLevel > 0 ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
@@ -1202,7 +1205,7 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.motionBlurStrength > 0 ? .purple : .secondary)
-                        .frame(width: 120)
+                        .frame(width: 120, alignment: .leading)
                         .padding(.vertical, 5)
                         .background(viewModel.motionBlurStrength > 0 ? Color.purple.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
@@ -1233,7 +1236,7 @@ extension VTPlayerView {
                         )
                         .font(.caption.weight(.medium))
                         .foregroundColor(viewModel.denoiseStrength > 0 ? .orange : .secondary)
-                        .frame(width: 110)
+                        .frame(width: 110, alignment: .leading)
                         .padding(.vertical, 5)
                         .background(viewModel.denoiseStrength > 0 ? Color.orange.opacity(0.15) : Color.white.opacity(0.05))
                         .cornerRadius(6)
@@ -1295,7 +1298,7 @@ extension VTPlayerView {
             )
             .font(.caption.weight(.medium))
             .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
-            .frame(width: 110)
+            .frame(width: 110, alignment: .leading)
             if hoverSH {
                 Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                     .accentColor(.cyan)
