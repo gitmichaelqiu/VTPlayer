@@ -766,25 +766,33 @@ struct VTPlayerView: View {
     @State private var hoverDN = false
     @State private var hoverSH = false
 
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
+
     var body: some View {
-        if !viewModel.isFullScreen {
-            NavigationSplitView {
+        if viewModel.showLeftSidebar || viewModel.showSidebar {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
                 if viewModel.showLeftSidebar {
                     leftSidebar
                         .frame(minWidth: 180, idealWidth: 240, maxWidth: 500)
                 }
+            } content: {
+                videoContent
             } detail: {
-                HStack(spacing: 0) {
-                    videoContent
-
-                    if viewModel.showSidebar && viewModel.videoURL != nil {
-                        Divider()
-                        rightSidebar
-                            .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
-                    }
+                if viewModel.showSidebar && viewModel.videoURL != nil {
+                    rightSidebar
+                        .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
                 }
             }
             .navigationSplitViewStyle(.balanced)
+            .onAppear {
+                columnVisibility = sidebarVisibility()
+            }
+            .onChange(of: viewModel.showLeftSidebar) { _, _ in
+                columnVisibility = sidebarVisibility()
+            }
+            .onChange(of: viewModel.showSidebar) { _, _ in
+                columnVisibility = sidebarVisibility()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button(action: { viewModel.selectFile() }) {
@@ -817,6 +825,15 @@ struct VTPlayerView: View {
                     }
                 }
                 .windowToolbarFullScreenVisibility(.onHover)
+        }
+    }
+
+    private func sidebarVisibility() -> NavigationSplitViewVisibility {
+        switch (viewModel.showLeftSidebar, viewModel.showSidebar && viewModel.videoURL != nil) {
+        case (true, true):  return .all
+        case (true, false): return .doubleColumn
+        case (false, true): return .detailOnly
+        case (false, false): return .doubleColumn  // routed to else branch
         }
     }
 
