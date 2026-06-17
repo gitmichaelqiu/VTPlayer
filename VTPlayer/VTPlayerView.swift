@@ -766,12 +766,9 @@ struct VTPlayerView: View {
     @State private var hoverDN = false
     @State private var hoverSH = false
 
-    // Resizable sidebar widths
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
-
     var body: some View {
         if !viewModel.isFullScreen {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
+            NavigationSplitView {
                 if viewModel.showLeftSidebar {
                     leftSidebar
                         .frame(minWidth: 180, idealWidth: 240, maxWidth: 500)
@@ -785,9 +782,6 @@ struct VTPlayerView: View {
                 }
             }
             .navigationSplitViewStyle(.balanced)
-            .onChange(of: viewModel.showLeftSidebar) { _, _ in updateColumnVisibility() }
-            .onChange(of: viewModel.showSidebar) { _, _ in updateColumnVisibility() }
-            .onAppear(perform: updateColumnVisibility)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button(action: { viewModel.selectFile() }) {
@@ -820,16 +814,6 @@ struct VTPlayerView: View {
                     }
                 }
                 .windowToolbarFullScreenVisibility(.onHover)
-        }
-    }
-
-    private func updateColumnVisibility() {
-        let showRight = viewModel.showSidebar && viewModel.videoURL != nil
-        switch (viewModel.showLeftSidebar, showRight) {
-        case (true, true):  columnVisibility = .all
-        case (true, false): columnVisibility = .doubleColumn
-        case (false, true): columnVisibility = .detailOnly
-        case (false, false): columnVisibility = .doubleColumn
         }
     }
 
