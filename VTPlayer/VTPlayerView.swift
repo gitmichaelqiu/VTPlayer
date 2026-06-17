@@ -130,10 +130,10 @@ final class VTPlayerViewModel {
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
     
-    private let renderer: VTMetalRenderer
+    let renderer: VTMetalRenderer
     
-    init(renderer: VTMetalRenderer) {
-        self.renderer = renderer
+    init() {
+        self.renderer = VTMetalRenderer(frame: .zero, device: nil)
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
         self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
         self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
@@ -634,17 +634,12 @@ final class VTPlayerViewModel {
 
 /// The premium media player user interface view.
 struct VTPlayerView: View {
-    @State private var viewModel: VTPlayerViewModel
-    private let rawRenderer: VTMetalRenderer
+    @State private var viewModel = VTPlayerViewModel()
     
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
     
-    init() {
-        let renderer = VTMetalRenderer(frame: .zero, device: nil)
-        self.rawRenderer = renderer
-        _viewModel = State(initialValue: VTPlayerViewModel(renderer: renderer))
-    }
+    init() {}
     
     var body: some View {
         HStack(spacing: 0) {
@@ -875,18 +870,12 @@ extension VTPlayerView {
     private var mainVideoArea: some View {
         VStack(spacing: 0) {
             ZStack {
-                if viewModel.isFullScreen {
-                    VTMetalRendererView(renderer: rawRenderer)
-                        .cornerRadius(0)
-                        .padding(0)
-                        .ignoresSafeArea(.all)
-                } else {
-                    VTMetalRendererView(renderer: rawRenderer)
-                        .cornerRadius(8)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 90) // Leave space for floating control bar
-                }
+                VTMetalRendererView(renderer: viewModel.renderer)
+                    .cornerRadius(viewModel.isFullScreen ? 0 : 8)
+                    .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
+                    .padding(.top, viewModel.isFullScreen ? 0 : 16)
+                    .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
+                    .ignoresSafeArea(viewModel.isFullScreen ? .all : [])
                 
                 if viewModel.videoURL == nil {
                     ContentUnavailableView {
