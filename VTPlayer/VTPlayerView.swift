@@ -67,6 +67,12 @@ final class VTPlayerViewModel {
     // Recents List
     var recentVideos: [URL] = []
     
+    // Fullscreen and Auto-hide HUD controls state
+    var isFullScreen = false
+    var showControls = true
+    @ObservationIgnored nonisolated(unsafe) private var cursorHidden = false
+    private var inactivityTask: Task<Void, Never>?
+    
     // AVPlayer components
     private var player: AVPlayer?
     private var videoOutput: AVPlayerItemVideoOutput?
@@ -85,10 +91,27 @@ final class VTPlayerViewModel {
             name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidEnterFullScreen),
+            name: NSWindow.didEnterFullScreenNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidExitFullScreen),
+            name: NSWindow.didExitFullScreenNotification,
+            object: nil
+        )
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        if cursorHidden {
+            NSCursor.unhide()
+        }
     }
     
     /// Launches an NSOpenPanel to select a local media file.
@@ -202,8 +225,53 @@ final class VTPlayerViewModel {
         self.setupPlayer(with: url)
     }
     
-
+    @objc private func windowDidEnterFullScreen() {
+        self.isFullScreen = true
+        self.userActivityDetected()
+    }
     
+    @objc private func windowDidExitFullScreen() {
+        self.isFullScreen = false
+        self.showControls = true
+        if self.cursorHidden {
+            NSCursor.unhide()
+            self.cursorHidden = false
+        }
+    }
+    
+    func userActivityDetected() {
+        if isFullScreen && isPlaying && !isPaused {
+            self.showControls = true
+            if self.cursorHidden {
+                NSCursor.unhide()
+                self.cursorHidden = false
+            }
+            startInactivityTimer()
+        } else {
+            self.showControls = true
+            if self.cursorHidden {
+                NSCursor.unhide()
+                self.cursorHidden = false
+            }
+            inactivityTask?.cancel()
+        }
+    }
+    
+    private func startInactivityTimer() {
+        inactivityTask?.cancel()
+        inactivityTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            guard !Task.isCancelled else { return }
+            if self.isFullScreen && self.isPlaying && !self.isPaused {
+                self.showControls = false
+                if !self.cursorHidden {
+                    NSCursor.hide()
+                    self.cursorHidden = true
+                }
+            }
+        }
+    }
+
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
         self.currentTime = seconds
@@ -276,6 +344,7 @@ final class VTPlayerViewModel {
         player.rate = Float(self.playbackSpeed)
         
         startPlaybackLoop()
+        self.userActivityDetected()
     }
     
     /// Pauses player
@@ -283,6 +352,7 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         player.pause()
         self.isPaused = true
+        self.userActivityDetected()
     }
     
     private func startPlaybackLoop() {
@@ -404,6 +474,7 @@ final class VTPlayerViewModel {
         self.frameProcessingTime = 0.0
         self.aneUsagePercent = 0.0
         self.srInitializationError = nil
+        self.userActivityDetected()
     }
     
     private func fourCharCodeString(_ code: FourCharCode) -> String {
@@ -433,11 +504,11 @@ struct VTPlayerView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Collapsible Left Sidebar Panel for Recent Playback History
-            if viewModel.showLeftSidebar {
+            if viewModel.showLeftSidebar && (!viewModel.isFullScreen || viewModel.showControls) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("RECENT PLAYBACKS")
-                        .font(.system(.caption, design: .monospaced)).bold()
-                        .foregroundColor(.cyan)
+                        .font(.system(.footnote, design: .default)).bold()
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.top, 20)
                         .padding(.bottom, 12)
@@ -456,11 +527,11 @@ struct VTPlayerView: View {
                             Button(action: { viewModel.openRecentVideo(url) }) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "film")
-                                        .foregroundColor(.cyan)
+                                        .foregroundColor(.secondary)
                                     Text(url.lastPathComponent)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
-                                        .font(.system(.subheadline, design: .monospaced))
+                                        .font(.system(.subheadline, design: .default))
                                 }
                                 .padding(.vertical, 4)
                             }
@@ -554,40 +625,46 @@ struct VTPlayerView: View {
                                 .buttonStyle(.plain)
                                 .keyboardShortcut(.space, modifiers: [])
                                 
-                                Button(action: { viewModel.selectFile() }) {
-                                    Image(systemName: "folder")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.primary)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Load a different video file")
-                                
                                 Divider()
                                     .frame(height: 20)
                                 
-                                // Real-time processing indicators in the control bar
-                                HStack(spacing: 12) {
-                                    if viewModel.enableSuperResolution {
-                                        Label("SR 2× Active", systemImage: "sparkles")
-                                            .font(.caption2)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(Color.cyan.opacity(0.15))
-                                            .cornerRadius(4)
-                                            .foregroundColor(.cyan)
+                                // Super Resolution Labeled Toggle Button
+                                Button(action: {
+                                    viewModel.enableSuperResolution.toggle()
+                                    viewModel.updateEnhancements()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "sparkles")
+                                        Text("Super Resolution")
                                     }
-                                    
-                                    if viewModel.enableFrameInterpolation {
-                                        let targetFPS = viewModel.sourceFrameRate > 0 ? Int(viewModel.sourceFrameRate * 2) : 60
-                                        Label("\(targetFPS) FPS Active", systemImage: "bolt.fill")
-                                            .font(.caption2)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(Color.green.opacity(0.15))
-                                            .cornerRadius(4)
-                                            .foregroundColor(.green)
-                                    }
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(viewModel.enableSuperResolution ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05))
+                                    .cornerRadius(6)
+                                    .foregroundColor(viewModel.enableSuperResolution ? .cyan : .secondary)
                                 }
+                                .buttonStyle(.plain)
+                                .help("Toggle 2× Super Resolution upscaling")
+                                
+                                // Frame Interpolation Labeled Toggle Button
+                                Button(action: {
+                                    viewModel.enableFrameInterpolation.toggle()
+                                    viewModel.updateEnhancements()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bolt.fill")
+                                        Text("Interpolation")
+                                    }
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(viewModel.enableFrameInterpolation ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
+                                    .cornerRadius(6)
+                                    .foregroundColor(viewModel.enableFrameInterpolation ? .green : .secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Toggle Frame Interpolation (Double framerate)")
                                 
                                 Spacer()
                                 
@@ -641,72 +718,97 @@ struct VTPlayerView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 20)
                     }
+                    .opacity(viewModel.showControls ? 1.0 : 0.0)
+                    .offset(y: viewModel.showControls ? 0 : 50)
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.showControls)
                 }
+            }
+            .onContinuousHover { phase in
+                viewModel.userActivityDetected()
             }
             
             // Collapsible Right Sidebar Panel for Diagnostics and Video info
-            if viewModel.showSidebar && viewModel.videoURL != nil {
+            if viewModel.showSidebar && viewModel.videoURL != nil && (!viewModel.isFullScreen || viewModel.showControls) {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("DIAGNOSTICS & SPECS")
-                        .font(.system(.caption, design: .monospaced)).bold()
-                        .foregroundColor(.cyan)
+                    Text("DIAGNOSTICS & METADATA")
+                        .font(.system(.footnote, design: .default)).bold()
+                        .foregroundColor(.secondary)
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Enhancement Metrics")
-                            .font(.headline)
+                            .font(.system(.subheadline, design: .default).bold())
                             .foregroundColor(.secondary)
                         
                         Group {
-                            LabeledContent("ANE Workload", value: String(format: "%.1f%%", viewModel.aneUsagePercent))
-                            LabeledContent("Processing Time", value: String(format: "%.1f ms", viewModel.frameProcessingTime))
-                            LabeledContent("Display Rate", value: String(format: "%.1f Hz", viewModel.fps))
-                                .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 1.8) ? .green : .yellow)
-                            LabeledContent("Late Frames", value: "\(viewModel.droppedFrames)")
-                                .foregroundColor(viewModel.droppedFrames > 0 ? .red : .primary)
+                            LabeledContent("ANE Workload") {
+                                Text(String(format: "%.1f%%", viewModel.aneUsagePercent))
+                                    .monospacedDigit()
+                            }
+                            LabeledContent("Processing Time") {
+                                Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                                    .monospacedDigit()
+                            }
+                            LabeledContent("Display Rate") {
+                                Text(String(format: "%.1f Hz", viewModel.fps))
+                                    .monospacedDigit()
+                                    .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 1.8) ? .blue : .primary)
+                            }
+                            LabeledContent("Late Frames") {
+                                Text("\(viewModel.droppedFrames)")
+                                    .monospacedDigit()
+                                    .foregroundColor(viewModel.droppedFrames > 0 ? .red : .primary)
+                            }
                         }
-                        .font(.system(.subheadline, design: .monospaced))
+                        .font(.system(.subheadline, design: .default))
                     }
                     
                     Divider()
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Video Metadata")
-                            .font(.headline)
+                            .font(.system(.subheadline, design: .default).bold())
                             .foregroundColor(.secondary)
                         
                         Group {
                             LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
-                            LabeledContent("Source Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate))
-                            LabeledContent("Target Rate", value: viewModel.enableFrameInterpolation ? String(format: "%.2f fps", viewModel.sourceFrameRate * 2) : String(format: "%.2f fps", viewModel.sourceFrameRate))
+                            LabeledContent("Source Rate") {
+                                Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
+                                    .monospacedDigit()
+                            }
+                            LabeledContent("Target Rate") {
+                                let rate = viewModel.enableFrameInterpolation ? viewModel.sourceFrameRate * 2 : viewModel.sourceFrameRate
+                                Text(String(format: "%.2f fps", rate))
+                                    .monospacedDigit()
+                            }
                             LabeledContent("Video Codec", value: viewModel.videoFormat)
                         }
-                        .font(.system(.subheadline, design: .monospaced))
+                        .font(.system(.subheadline, design: .default))
                     }
                     
                     Divider()
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Super Resolution Specs")
-                            .font(.headline)
+                            .font(.system(.subheadline, design: .default).bold())
                             .foregroundColor(.secondary)
                         
                         Group {
                             LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
-                                .foregroundColor(viewModel.srIsSupported ? .green : .secondary)
+                                .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
                             LabeledContent("Scales", value: viewModel.srSupportedScales)
                             if let initError = viewModel.srInitializationError {
                                 LabeledContent("SR Status", value: "Error")
                                     .foregroundColor(.red)
                                 Text(initError)
-                                    .font(.system(.caption2, design: .monospaced))
+                                    .font(.system(.caption2, design: .default))
                                     .foregroundColor(.red)
                                     .lineLimit(3)
                             } else {
                                 LabeledContent("SR Status", value: viewModel.enableSuperResolution ? "Active" : "Inactive")
-                                    .foregroundColor(viewModel.enableSuperResolution ? .cyan : .secondary)
+                                    .foregroundColor(viewModel.enableSuperResolution ? .blue : .secondary)
                             }
                         }
-                        .font(.system(.subheadline, design: .monospaced))
+                        .font(.system(.subheadline, design: .default))
                     }
                     
                     Spacer()
@@ -735,29 +837,6 @@ struct VTPlayerView: View {
                     Label("Open Video", systemImage: "folder.badge.plus")
                 }
                 .help("Open a local video file")
-            }
-            
-            // Native toolbar toggles that render as highlighted buttons on macOS
-            ToolbarItem {
-                Toggle(isOn: $viewModel.enableSuperResolution) {
-                    Label("2× Super Resolution", systemImage: "sparkles")
-                }
-                .toggleStyle(.button)
-                .onChange(of: viewModel.enableSuperResolution) { _, _ in
-                    viewModel.updateEnhancements()
-                }
-                .help("Upscale resolution using low-latency ANE models")
-            }
-            
-            ToolbarItem {
-                Toggle(isOn: $viewModel.enableFrameInterpolation) {
-                    Label("Frame Interpolation", systemImage: "bolt.fill")
-                }
-                .toggleStyle(.button)
-                .onChange(of: viewModel.enableFrameInterpolation) { _, _ in
-                    viewModel.updateEnhancements()
-                }
-                .help("Double video framerate dynamically")
             }
             
             ToolbarItem(placement: .primaryAction) {
