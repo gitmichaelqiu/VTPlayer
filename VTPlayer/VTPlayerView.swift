@@ -112,21 +112,11 @@ final class VTPlayerViewModel {
         }
     }
     
-    var superResolutionBackgroundColor: Color {
-        superResolutionLevel > 0 ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05)
-    }
-    
-    var superResolutionForegroundColor: Color {
-        superResolutionLevel > 0 ? Color.cyan : Color.secondary
-    }
-    
-    var frameInterpolationBackgroundColor: Color {
-        frameInterpolationLevel > 0 ? Color.green.opacity(0.15) : Color.white.opacity(0.05)
-    }
-    
-    var frameInterpolationForegroundColor: Color {
-        frameInterpolationLevel > 0 ? Color.green : Color.secondary
-    }
+    var qualitySuperResolutionIsActive: Bool { qualitySuperResolutionScaleFactor > 0 }
+    var frameRateConversionIsActive: Bool { useFrameRateConversion && frameInterpolationLevel > 0 }
+    var motionBlurIsActive: Bool { motionBlurStrength > 0 }
+    var denoiseIsActive: Bool { denoiseStrength > 0 }
+    var sharpnessIsActive: Bool { sharpness > 0 }
 
     // Sharpness Control (0.0 = off, >0 applies CIUnsharpMask)
     var sharpness: Double = 0.0 {
@@ -772,9 +762,16 @@ final class VTPlayerViewModel {
 /// The premium media player user interface view.
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
-    
+
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
+
+    // Hover state for control bar feature labels
+    @State private var hoverSR = false
+    @State private var hoverFI = false
+    @State private var hoverFRC = false
+    @State private var hoverMB = false
+    @State private var hoverDN = false
     
     init() {}
     
@@ -1005,19 +1002,6 @@ extension VTPlayerView {
                 Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
                     .font(.system(.subheadline, design: .default))
                     .help("Hint VideoToolbox to prioritize real-time processing")
-
-                HStack(spacing: 8) {
-                    Text("Sharpness")
-                        .font(.system(.subheadline, design: .default))
-                    Spacer()
-                    Text(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-
-                Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                    .accentColor(.cyan)
-                    .help("Adjust sharpness intensity (CIUnsharpMask)")
             }
             
             Spacer()
@@ -1096,21 +1080,164 @@ extension VTPlayerView {
                 
                 HStack(spacing: 20) {
                     playPauseButton
-                    
+
                     Divider()
                         .frame(height: 20)
-                    
-                    superResolutionMenu
-                    
-                    frameInterpolationMenu
-                    
+
+                    // Super Resolution
+                    Menu {
+                        Picker(selection: Binding(
+                            get: { viewModel.superResolutionLevel },
+                            set: { viewModel.superResolutionLevel = $0; viewModel.updateEnhancements() }
+                        )) {
+                            Text("Off").tag(0)
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
+                        } label: {
+                            EmptyView()
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Text(hoverSR
+                            ? "Super Resolution: \(viewModel.superResolutionLevel > 0 ? "\(viewModel.superResolutionLevel)x" : "Off")"
+                            : "SR: \(viewModel.superResolutionLevel > 0 ? "\(viewModel.superResolutionLevel)x" : "Off")"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(viewModel.superResolutionLevel > 0 ? .cyan : .secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(viewModel.superResolutionLevel > 0 ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .onHover { hoverSR = $0 }
+
+                    // Frame Interpolation (LL FI)
+                    Menu {
+                        Picker(selection: Binding(
+                            get: { viewModel.useFrameRateConversion ? 0 : viewModel.frameInterpolationLevel },
+                            set: { viewModel.frameInterpolationLevel = $0; viewModel.useFrameRateConversion = false; viewModel.updateEnhancements() }
+                        )) {
+                            Text("Off").tag(0)
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
+                        } label: {
+                            EmptyView()
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Text(hoverFI
+                            ? "Frame Interpolation: \((viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion) ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
+                            : "FI: \((viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion) ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion ? .green : .secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(viewModel.frameInterpolationLevel > 0 && !viewModel.useFrameRateConversion ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .onHover { hoverFI = $0 }
+
+                    // Frame Rate Conversion
+                    Menu {
+                        Picker(selection: Binding(
+                            get: { viewModel.useFrameRateConversion ? viewModel.frameInterpolationLevel : 0 },
+                            set: { viewModel.frameInterpolationLevel = $0; viewModel.useFrameRateConversion = true; viewModel.updateEnhancements() }
+                        )) {
+                            Text("Off").tag(0)
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
+                        } label: {
+                            EmptyView()
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Text(hoverFRC
+                            ? "Frame Rate Conversion: \(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
+                            : "FRC: \(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? .teal : .secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(viewModel.useFrameRateConversion && viewModel.frameInterpolationLevel > 0 ? Color.teal.opacity(0.15) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .onHover { hoverFRC = $0 }
+
+                    // Motion Blur
+                    Menu {
+                        Picker(selection: Binding(
+                            get: { viewModel.motionBlurStrength },
+                            set: { viewModel.motionBlurStrength = $0; viewModel.updateEnhancements() }
+                        )) {
+                            Text("Off").tag(0)
+                            Text("25").tag(25)
+                            Text("50").tag(50)
+                            Text("75").tag(75)
+                            Text("100").tag(100)
+                        } label: {
+                            EmptyView()
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Text(hoverMB
+                            ? "Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")"
+                            : "MB: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(viewModel.motionBlurStrength > 0 ? .purple : .secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(viewModel.motionBlurStrength > 0 ? Color.purple.opacity(0.15) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .onHover { hoverMB = $0 }
+
+                    // Denoise
+                    Menu {
+                        Picker(selection: Binding(
+                            get: { viewModel.denoiseStrength },
+                            set: { viewModel.denoiseStrength = $0; viewModel.updateEnhancements() }
+                        )) {
+                            Text("Off").tag(0.0)
+                            Text("0.25").tag(0.25)
+                            Text("0.5").tag(0.5)
+                            Text("0.75").tag(0.75)
+                            Text("1.0").tag(1.0)
+                        } label: {
+                            EmptyView()
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Text(hoverDN
+                            ? "Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")"
+                            : "DN: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(viewModel.denoiseStrength > 0 ? .orange : .secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(viewModel.denoiseStrength > 0 ? Color.orange.opacity(0.15) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .onHover { hoverDN = $0 }
+
+                    // Sharpness Slider
+                    sharpnessControl
+
                     Spacer()
-                    
+
                     playbackSpeedControl
-                    
+
                     Divider()
                         .frame(height: 16)
-                    
+
                     fullscreenButton
                 }
             }
@@ -1146,49 +1273,19 @@ extension VTPlayerView {
     }
     
     @ViewBuilder
-    private var superResolutionMenu: some View {
-        Picker(selection: Binding(
-            get: { viewModel.superResolutionLevel },
-            set: { viewModel.superResolutionLevel = $0; viewModel.updateEnhancements() }
-        )) {
-            Text("Off").tag(0)
-            Text("2× Super Resolution").tag(2)
-            Text("4× Super Resolution").tag(4)
-        } label: {
-            Image(systemName: "sparkles")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(viewModel.superResolutionBackgroundColor)
-                .cornerRadius(6)
-                .foregroundColor(viewModel.superResolutionForegroundColor)
+    private var sharpnessControl: some View {
+        HStack(spacing: 4) {
+            Text("SH")
+                .font(.caption.weight(.medium))
+                .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                .accentColor(.cyan)
+                .frame(width: 60)
+                .labelsHidden()
         }
-        .pickerStyle(.menu)
-        .help("Select Super Resolution upscaling level")
+        .help("Adjust sharpness intensity (CIUnsharpMask)")
     }
-    
-    @ViewBuilder
-    private var frameInterpolationMenu: some View {
-        Picker(selection: Binding(
-            get: { viewModel.frameInterpolationLevel },
-            set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
-        )) {
-            Text("Off").tag(0)
-            Text("2× Interpolation").tag(2)
-            Text("4× Interpolation").tag(4)
-        } label: {
-            Image(systemName: "bolt.fill")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(viewModel.frameInterpolationBackgroundColor)
-                .cornerRadius(6)
-                .foregroundColor(viewModel.frameInterpolationForegroundColor)
-        }
-        .pickerStyle(.menu)
-        .help("Select Frame Interpolation level")
-    }
-    
+
     @ViewBuilder
     private var playbackSpeedControl: some View {
         HStack(spacing: 6) {
