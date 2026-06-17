@@ -656,13 +656,17 @@ public actor VTFrameProcessorCoordinator {
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create MB frames"])
         }
 
-        let nextFP = frameHistory.dropFirst().first
-        let prevFP = frameHistory.dropFirst(1).first
+        // frameHistory[0] = current frame (source), [1] = previous frame
+        // Use source as "next" since we process frame-by-frame and can't look ahead.
+        // Only use frameHistory[1] as previous — the old code had both next and
+        // previous pointing to the same frame (frameHistory[1]), which double-weighted
+        // the blend and caused extreme darkening even at low strength.
+        let prevFP = frameHistory.count >= 2 ? frameHistory[1] : sourceFP
 
         guard let params = VTMotionBlurParameters(
             sourceFrame: sourceFP,
-            nextFrame: nextFP ?? sourceFP,
-            previousFrame: prevFP ?? sourceFP,
+            nextFrame: sourceFP,
+            previousFrame: prevFP,
             nextOpticalFlow: nil,
             previousOpticalFlow: nil,
             motionBlurStrength: motionBlurStrength,

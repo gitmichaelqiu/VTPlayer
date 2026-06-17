@@ -111,6 +111,8 @@ final class VTPlayerViewModel {
     var motionBlurIsActive: Bool { motionBlurStrength > 0 }
     var denoiseIsActive: Bool { denoiseStrength > 0 }
     var sharpnessIsActive: Bool { sharpness > 0 }
+    /// Number of processed frames waiting to be displayed (observable by SwiftUI).
+    var frameCacheCount: Int { processedFrameCache.count }
 
     // Sharpness Control (0.0 = off, >0 applies CIUnsharpMask)
     var sharpness: Double = 0.0 {
@@ -763,7 +765,13 @@ struct VTPlayerView: View {
     @State private var hoverMB = false
     @State private var hoverDN = false
     @State private var hoverSH = false
-    
+
+    // Resizable sidebar widths
+    @State private var leftSidebarWidth: CGFloat = 240
+    @GestureState private var leftSidebarDragOffset: CGFloat = 0
+    @State private var rightSidebarWidth: CGFloat = 260
+    @GestureState private var rightSidebarDragOffset: CGFloat = 0
+
     init() {}
     
     var body: some View {
@@ -771,16 +779,36 @@ struct VTPlayerView: View {
             // Collapsible Left Sidebar Panel for Recent Playback History
             if viewModel.showLeftSidebar && !viewModel.isFullScreen {
                 leftSidebar
+                    .frame(width: max(180, min(500, leftSidebarWidth + leftSidebarDragOffset)))
+                    .overlay(alignment: .trailing) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .frame(width: 6)
+                            .onHover { hovering in
+                                if hovering { NSCursor.resizeLeftRight.push() }
+                                else { NSCursor.pop() }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .updating($leftSidebarDragOffset) { value, state, _ in
+                                        state = value.translation.width
+                                    }
+                                    .onEnded { value in
+                                        leftSidebarWidth += value.translation.width
+                                        leftSidebarWidth = max(180, min(500, leftSidebarWidth))
+                                    }
+                            )
+                    }
                 Divider()
             }
-            
+
             ZStack {
                 // System Window Background
                 viewModel.currentBackgroundColor
                     .ignoresSafeArea()
-                
+
                 mainVideoArea
-                
+
                 // QuickTime-style Floating Control Bar at the bottom
                 if viewModel.videoURL != nil {
                     controlBar
@@ -799,10 +827,31 @@ struct VTPlayerView: View {
             .onContinuousHover { phase in
                 viewModel.userActivityDetected()
             }
-            
+
             // Collapsible Right Sidebar Panel for Diagnostics and Video info
             if viewModel.showSidebar && viewModel.videoURL != nil && !viewModel.isFullScreen {
+                Divider()
                 rightSidebar
+                    .frame(width: max(200, min(500, rightSidebarWidth + rightSidebarDragOffset)))
+                    .overlay(alignment: .leading) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .frame(width: 6)
+                            .onHover { hovering in
+                                if hovering { NSCursor.resizeLeftRight.push() }
+                                else { NSCursor.pop() }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .updating($rightSidebarDragOffset) { value, state, _ in
+                                        state = value.translation.width
+                                    }
+                                    .onEnded { value in
+                                        rightSidebarWidth += value.translation.width
+                                        rightSidebarWidth = max(200, min(500, rightSidebarWidth))
+                                    }
+                            )
+                    }
             }
         }
         .animation(.easeInOut, value: viewModel.showLeftSidebar)
@@ -853,41 +902,64 @@ extension VTPlayerView {
     @ViewBuilder
     private var leftSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("RECENT PLAYBACKS")
-                .font(.system(.footnote, design: .default)).bold()
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-                .padding(.bottom, 12)
-            
+            // Section header matching macOS sidebar conventions
+            HStack {
+                Text("Recents")
+                    .font(.system(.callout, design: .default).weight(.semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
+                if !viewModel.recentVideos.isEmpty {
+                    Button("Clear") {
+                        NSDocumentController.shared.clearRecentDocuments(nil)
+                        viewModel.reloadRecentVideos()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 8)
+
             if viewModel.recentVideos.isEmpty {
                 VStack {
                     Spacer()
                     ContentUnavailableView {
                         Label("No Recents", systemImage: "clock")
+                    } description: {
+                        Text("Open a video to see it here.")
                     }
                     Spacer()
                 }
             } else {
                 List(viewModel.recentVideos, id: \.self) { url in
                     Button(action: { viewModel.openRecentVideo(url) }) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Image(systemName: "film")
                                 .foregroundColor(.secondary)
-                            Text(url.lastPathComponent)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .font(.system(.subheadline, design: .default))
+                                .frame(width: 16)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(url.lastPathComponent)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .font(.system(.subheadline, design: .default))
+                                Text(url.path.replacingOccurrences(of: url.lastPathComponent, with: "").trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+                                    .lineLimit(1)
+                                    .truncationMode(.head)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 3)
                     }
                     .buttonStyle(.plain)
                     .help(url.path)
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
-        .frame(width: 240)
         .background(
             VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
         )
@@ -902,28 +974,24 @@ extension VTPlayerView {
                 .foregroundColor(.secondary)
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("Enhancement Metrics")
+                Text("Real-Time Metrics")
                     .font(.system(.subheadline, design: .default).bold())
                     .foregroundColor(.secondary)
-                
+
                 Group {
-                    LabeledContent("ANE Workload") {
-                        Text(String(format: "%.1f%%", viewModel.aneUsagePercent))
-                            .monospacedDigit()
-                    }
-                    LabeledContent("Processing Time") {
+                    LabeledContent("Frame Processing") {
                         Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
                             .monospacedDigit()
                     }
                     LabeledContent("Display Rate") {
                         Text(String(format: "%.1f Hz", viewModel.fps))
                             .monospacedDigit()
-                            .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 1.8) ? .blue : .primary)
+                            .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                     }
-                    LabeledContent("Late Frames") {
-                        Text("\(viewModel.droppedFrames)")
+                    LabeledContent("Cached Frames") {
+                        Text("\(viewModel.frameCacheCount)")
                             .monospacedDigit()
-                            .foregroundColor(viewModel.droppedFrames > 0 ? .red : .primary)
+                            .foregroundColor(viewModel.frameCacheCount > 10 ? .blue : .secondary)
                     }
                 }
                 .font(.system(.subheadline, design: .default))
@@ -998,7 +1066,6 @@ extension VTPlayerView {
             Spacer()
         }
         .padding(20)
-        .frame(width: 260)
         .background(
             VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
         )
@@ -1238,12 +1305,19 @@ extension VTPlayerView {
     @ViewBuilder
     private var sharpnessControl: some View {
         HStack(spacing: 4) {
-            Text(hoverSH
-                ? "Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")"
-                : "SH"
-            )
-            .font(.caption.weight(.medium))
-            .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            ZStack(alignment: .leading) {
+                // Expanded label always laid out (invisible when not hovering)
+                // so the slider never shifts when the text width changes.
+                Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")")
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.clear)
+                Text(hoverSH
+                    ? "Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")"
+                    : "SH"
+                )
+                .font(.caption.weight(.medium))
+                .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            }
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                 .accentColor(.cyan)
                 .frame(width: 60)
@@ -1283,6 +1357,7 @@ extension VTPlayerView {
         .keyboardShortcut("f", modifiers: [])
         .help("Toggle Fullscreen (F)")
     }
+
 }
 
 /// Helper view for macOS blur/visual effect backgrounds.
