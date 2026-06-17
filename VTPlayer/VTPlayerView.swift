@@ -457,6 +457,7 @@ final class VTPlayerViewModel {
         player.pause()
         self.isPaused = true
         self.saveProgress()
+        self.saveVideoSettings()
         self.userActivityDetected()
     }
     
@@ -520,7 +521,8 @@ final class VTPlayerViewModel {
 
             // Create VTFrameSequence to decode frames faster-than-real-time
             guard let videoURL = self.videoURL else { return }
-            let frameSequence = VTFrameSequence(url: videoURL, startTime: self.lastPulledTime)
+            var iteratorStartTime = self.lastPulledTime
+            let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime)
             var frameIterator = frameSequence.makeAsyncIterator()
 
             while !Task.isCancelled {
@@ -528,6 +530,16 @@ final class VTPlayerViewModel {
 
                 if self.isPaused {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                    continue
+                }
+
+                // Detect seek: if lastPulledTime was changed by seekRelative,
+                // recreate the iterator at the new position. Without this, the
+                // producer would keep feeding stale frames from the old position.
+                if self.lastPulledTime != iteratorStartTime {
+                    iteratorStartTime = self.lastPulledTime
+                    let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime)
+                    frameIterator = newSequence.makeAsyncIterator()
                     continue
                 }
 
@@ -750,6 +762,7 @@ struct VTPlayerView: View {
     @State private var hoverFI = false
     @State private var hoverMB = false
     @State private var hoverDN = false
+    @State private var hoverSH = false
     
     init() {}
     
@@ -1125,10 +1138,10 @@ extension VTPlayerView {
                             set: { viewModel.motionBlurStrength = $0; viewModel.updateEnhancements() }
                         )) {
                             Text("Off").tag(0)
-                            Text("25").tag(25)
-                            Text("50").tag(50)
-                            Text("75").tag(75)
-                            Text("100").tag(100)
+                            Text("5").tag(5)
+                            Text("10").tag(10)
+                            Text("20").tag(20)
+                            Text("30").tag(30)
                         } label: {
                             EmptyView()
                         }
@@ -1225,14 +1238,18 @@ extension VTPlayerView {
     @ViewBuilder
     private var sharpnessControl: some View {
         HStack(spacing: 4) {
-            Text("SH")
-                .font(.caption.weight(.medium))
-                .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            Text(hoverSH
+                ? "Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")"
+                : "SH"
+            )
+            .font(.caption.weight(.medium))
+            .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                 .accentColor(.cyan)
                 .frame(width: 60)
                 .labelsHidden()
         }
+        .onHover { hoverSH = $0 }
         .help("Adjust sharpness intensity (CIUnsharpMask)")
     }
 
