@@ -86,11 +86,12 @@ The `VTFrameProcessorCoordinator` is an `actor`, so its methods run on its own e
 
 - **ANE usage not measurable**: No public API to query ANE utilization; `aneUsagePercent` is a placeholder at 0
 - **VTModelManager unused**: Class exists but is never called from the playback flow
-- **Large file**: `VTPlayerView.swift` bundles ViewModel + all views + helpers (~1300 lines)
+- **Large file**: `VTPlayerView.swift` bundles ViewModel + all views + helpers (~1340 lines)
+- **Sidebar resize**: Uses NavigationSplitView with 3 columns. Column widths constrained via `.frame(minWidth:idealWidth:maxWidth:)`. Native NSSplitView handles resize and animation.
 - **Project targets**: Build settings include iOS/visionOS SDKs but UI is macOS-only (AppKit-based)
 - **Consumer polling**: The consumer uses PTS-aware pacing, falling back to 4ms poll when cache is empty. Not ideal for power, but acceptable for real-time video
 - **Audio sync**: `audioSyncTask` pauses AVPlayer when frame processing latency exceeds 100ms. Resets on seek. May interact poorly with `playbackSpeed` changes
-- **Motion Blur darkening**: VTMotionBlur blends frames which darkens output. Capped to max 30 in UI to limit effect
+- **Motion Blur darkening (fixed)**: Original bug double-weighted the same frame for next+previous references. Fixed by using sourceFP as next frame. Values capped to 30 in UI.
 - **FRC removed**: VTFrameRateConversion was removed — requires frame lookahead unavailable in frame-at-a-time pipeline
 - **VTFrameSequence seeks**: Producer recreates VTFrameSequence iterator on seek (checks `lastPulledTime` changes). Rapid seeks may briefly re-read frames
 - **Per-video settings**: Saved on pause/stop, loaded on video open. Not saved on window close (deinit is nonisolated)
