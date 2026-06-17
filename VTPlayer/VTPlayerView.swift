@@ -690,9 +690,14 @@ struct VTPlayerView: View {
     private func formatTime(_ seconds: Double) -> String {
         guard !seconds.isNaN && !seconds.isInfinite else { return "00:00" }
         let totalSeconds = Int(seconds)
-        let mins = totalSeconds / 60
+        let hours = totalSeconds / 3600
+        let mins = (totalSeconds % 3600) / 60
         let secs = totalSeconds % 60
-        return String(format: "%02d:%02d", mins, secs)
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, mins, secs)
+        } else {
+            return String(format: "%02d:%02d", mins, secs)
+        }
     }
 }
 
