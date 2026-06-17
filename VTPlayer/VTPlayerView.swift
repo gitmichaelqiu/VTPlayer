@@ -228,6 +228,13 @@ final class VTPlayerViewModel {
     @objc private func windowDidEnterFullScreen() {
         self.isFullScreen = true
         self.userActivityDetected()
+        
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.toolbar?.isVisible = false
+            window.backgroundColor = .black
+        }
     }
     
     @objc private func windowDidExitFullScreen() {
@@ -236,6 +243,13 @@ final class VTPlayerViewModel {
         if self.cursorHidden {
             NSCursor.unhide()
             self.cursorHidden = false
+        }
+        
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            window.titleVisibility = .visible
+            window.titlebarAppearsTransparent = false
+            window.toolbar?.isVisible = true
+            window.backgroundColor = .windowBackgroundColor
         }
     }
     
@@ -504,7 +518,7 @@ struct VTPlayerView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Collapsible Left Sidebar Panel for Recent Playback History
-            if viewModel.showLeftSidebar && (!viewModel.isFullScreen || viewModel.showControls) {
+            if viewModel.showLeftSidebar && !viewModel.isFullScreen {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("RECENT PLAYBACKS")
                         .font(.system(.footnote, design: .default)).bold()
@@ -552,17 +566,24 @@ struct VTPlayerView: View {
             
             ZStack {
                 // System Window Background
-                Color(nsColor: .windowBackgroundColor)
+                Color(viewModel.isFullScreen ? .black : (viewModel.videoURL != nil ? .black : Color(nsColor: .windowBackgroundColor)))
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
                     // Video Screen Area
                     ZStack {
-                        VTMetalRendererView(renderer: rawRenderer)
-                            .cornerRadius(8)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
-                            .padding(.bottom, 90) // Leave space for floating control bar
+                        if viewModel.isFullScreen {
+                            VTMetalRendererView(renderer: rawRenderer)
+                                .cornerRadius(0)
+                                .padding(0)
+                                .ignoresSafeArea(.all)
+                        } else {
+                            VTMetalRendererView(renderer: rawRenderer)
+                                .cornerRadius(8)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
+                                .padding(.bottom, 90) // Leave space for floating control bar
+                        }
                         
                         if viewModel.videoURL == nil {
                             ContentUnavailableView {
@@ -728,7 +749,7 @@ struct VTPlayerView: View {
             }
             
             // Collapsible Right Sidebar Panel for Diagnostics and Video info
-            if viewModel.showSidebar && viewModel.videoURL != nil && (!viewModel.isFullScreen || viewModel.showControls) {
+            if viewModel.showSidebar && viewModel.videoURL != nil && !viewModel.isFullScreen {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("DIAGNOSTICS & METADATA")
                         .font(.system(.footnote, design: .default)).bold()
@@ -846,6 +867,7 @@ struct VTPlayerView: View {
                 .help("Toggle diagnostics and metadata sidebar panel")
             }
         }
+        .toolbar(viewModel.isFullScreen ? .hidden : .visible, for: .windowToolbar)
     }
     
     private func formatTime(_ seconds: Double) -> String {
