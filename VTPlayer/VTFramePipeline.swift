@@ -11,7 +11,7 @@ import CoreVideo
 import CoreMedia
 
 /// A frame representation wrapping the pixel buffer and its presentation timestamp.
-public struct VTFrame: @unchecked Sendable {
+nonisolated public struct VTFrame: @unchecked Sendable {
     public let buffer: CVPixelBuffer
     public let presentationTimeStamp: CMTime
     
