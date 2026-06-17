@@ -55,6 +55,22 @@ public actor VTFrameProcessorCoordinator {
         self.frameInterpolationLevel = frameInterpolationLevel
     }
     
+    private func makePool(width: Int, height: Int, from attributes: [AnyHashable: Any]?) -> CVPixelBufferPool? {
+        var dict: [AnyHashable: Any] = attributes ?? [:]
+        dict[kCVPixelBufferWidthKey] = width
+        dict[kCVPixelBufferHeightKey] = height
+        if dict[kCVPixelBufferPixelFormatTypeKey] == nil {
+            dict[kCVPixelBufferPixelFormatTypeKey] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        }
+        if dict[kCVPixelBufferIOSurfacePropertiesKey] == nil {
+            dict[kCVPixelBufferIOSurfacePropertiesKey] = [:] as [String: Any]
+        }
+        var pool: CVPixelBufferPool?
+        let poolAttributes = [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary
+        let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, poolAttributes, dict as CFDictionary, &pool)
+        return status == kCVReturnSuccess ? pool : nil
+    }
+    
     /// Starts the processing session for the given input dimensions.
     public func startSession(width: Int, height: Int) throws {
         guard !isSessionActive else { return }
@@ -78,12 +94,10 @@ public actor VTFrameProcessorCoordinator {
             self.temporalProcessor = proc
             
             let destAttributes = combinedConfig.destinationPixelBufferAttributes
-            var pool: CVPixelBufferPool?
-            let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary, destAttributes as CFDictionary, &pool)
-            if status != kCVReturnSuccess || pool == nil {
+            self.temporalPool = makePool(width: width * 2, height: height * 2, from: destAttributes)
+            if self.temporalPool == nil {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create combined pool"])
             }
-            self.temporalPool = pool
             
         } else if superResolutionLevel == 4 && frameInterpolationLevel == 2 {
             // Combined 2x/2x first, then 2x spatial again to reach 4x size
@@ -101,12 +115,10 @@ public actor VTFrameProcessorCoordinator {
             self.temporalProcessor = proc1
             
             let destAttributes1 = combinedConfig.destinationPixelBufferAttributes
-            var pool1: CVPixelBufferPool?
-            let status1 = CVPixelBufferPoolCreate(kCFAllocatorDefault, [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary, destAttributes1 as CFDictionary, &pool1)
-            if status1 != kCVReturnSuccess || pool1 == nil {
+            self.temporalPool = makePool(width: width * 2, height: height * 2, from: destAttributes1)
+            if self.temporalPool == nil {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create combined pool"])
             }
-            self.temporalPool = pool1
             
             // Second spatial upscaler 2x -> 4x
             let srConfig = VTLowLatencySuperResolutionScalerConfiguration(
@@ -119,12 +131,10 @@ public actor VTFrameProcessorCoordinator {
             self.spatialProcessor2 = proc2
             
             let destAttributes2 = srConfig.destinationPixelBufferAttributes
-            var pool2: CVPixelBufferPool?
-            let status2 = CVPixelBufferPoolCreate(kCFAllocatorDefault, [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary, destAttributes2 as CFDictionary, &pool2)
-            if status2 != kCVReturnSuccess || pool2 == nil {
+            self.spatialPool2 = makePool(width: width * 4, height: height * 4, from: destAttributes2)
+            if self.spatialPool2 == nil {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create second spatial pool"])
             }
-            self.spatialPool2 = pool2
             
         } else {
             // Cascaded configuration
@@ -146,12 +156,10 @@ public actor VTFrameProcessorCoordinator {
                 self.temporalProcessor = proc
                 
                 let destAttributes = config.destinationPixelBufferAttributes
-                var pool: CVPixelBufferPool?
-                let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary, destAttributes as CFDictionary, &pool)
-                if status != kCVReturnSuccess || pool == nil {
+                self.temporalPool = makePool(width: currentWidth, height: currentHeight, from: destAttributes)
+                if self.temporalPool == nil {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create temporal pool"])
                 }
-                self.temporalPool = pool
             }
             
             // 2. Setup Spatial Processor 1 (2x upscaler)
@@ -166,12 +174,10 @@ public actor VTFrameProcessorCoordinator {
                 self.spatialProcessor1 = proc
                 
                 let destAttributes = config.destinationPixelBufferAttributes
-                var pool: CVPixelBufferPool?
-                let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary, destAttributes as CFDictionary, &pool)
-                if status != kCVReturnSuccess || pool == nil {
+                self.spatialPool1 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: destAttributes)
+                if self.spatialPool1 == nil {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial pool 1"])
                 }
-                self.spatialPool1 = pool
                 
                 currentWidth = currentWidth * 2
                 currentHeight = currentHeight * 2
@@ -189,12 +195,10 @@ public actor VTFrameProcessorCoordinator {
                 self.spatialProcessor2 = proc
                 
                 let destAttributes = config.destinationPixelBufferAttributes
-                var pool: CVPixelBufferPool?
-                let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary, destAttributes as CFDictionary, &pool)
-                if status != kCVReturnSuccess || pool == nil {
+                self.spatialPool2 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: destAttributes)
+                if self.spatialPool2 == nil {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial pool 2"])
                 }
-                self.spatialPool2 = pool
                 
                 currentWidth = currentWidth * 2
                 currentHeight = currentHeight * 2

@@ -110,7 +110,10 @@ final class VTPlayerViewModel {
     // AVPlayer components
     private var player: AVPlayer?
     private var videoOutput: AVPlayerItemVideoOutput?
-    private var playbackTimerTask: Task<Void, Never>?
+    private var producerTask: Task<Void, Never>?
+    private var consumerTask: Task<Void, Never>?
+    private var processedFrameCache: [VTFrame] = []
+    private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
     
     private let renderer: VTMetalRenderer
@@ -333,6 +336,8 @@ final class VTPlayerViewModel {
     func seek(to seconds: Double) {
         self.currentTime = seconds
         self.saveProgress()
+        self.processedFrameCache.removeAll()
+        self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
@@ -347,6 +352,8 @@ final class VTPlayerViewModel {
     func scrub(to seconds: Double) {
         self.currentTime = seconds
         self.saveProgress()
+        self.processedFrameCache.removeAll()
+        self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -416,9 +423,17 @@ final class VTPlayerViewModel {
     }
     
     private func startPlaybackLoop() {
-        playbackTimerTask?.cancel()
+        producerTask?.cancel()
+        consumerTask?.cancel()
         
-        playbackTimerTask = Task {
+        processedFrameCache.removeAll()
+        if let player = player {
+            lastPulledTime = player.currentTime()
+        } else {
+            lastPulledTime = .zero
+        }
+        
+        producerTask = Task {
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: superResolutionLevel,
                 frameInterpolationLevel: frameInterpolationLevel
@@ -430,90 +445,127 @@ final class VTPlayerViewModel {
             } catch {
                 self.srInitializationError = error.localizedDescription
                 print("Failed to initialize coordinator session: \(error.localizedDescription)")
+                return
             }
             
-            var processedFramesCount = 0
-            var fpsTimer = DispatchTime.now()
+            let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
+            let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
             
             while !Task.isCancelled {
-                // When paused, we don't need to spin, just wait.
                 if self.isPaused {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }
-                
-                let frameStart = DispatchTime.now()
                 
                 guard let player = self.player, let videoOutput = self.videoOutput else {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
                 
-                let itemTime = player.currentTime()
+                if self.processedFrameCache.count >= 15 {
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                    continue
+                }
                 
-                if videoOutput.hasNewPixelBuffer(forItemTime: itemTime) {
+                let currentTime = player.currentTime()
+                if self.lastPulledTime < currentTime {
+                    self.lastPulledTime = currentTime
+                }
+                
+                let nextPullTime = CMTimeAdd(self.lastPulledTime, frameDuration)
+                let maxLookahead = CMTimeAdd(currentTime, CMTime(seconds: 0.5, preferredTimescale: 600))
+                if nextPullTime > maxLookahead {
+                    try? await Task.sleep(nanoseconds: 5_000_000)
+                    continue
+                }
+                
+                if videoOutput.hasNewPixelBuffer(forItemTime: nextPullTime) {
                     var presentationTime = CMTime.zero
-                    if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: &presentationTime) {
-                        let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : itemTime)
+                    if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: nextPullTime, itemTimeForDisplay: &presentationTime) {
+                        let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : nextPullTime)
                         
                         let processStart = DispatchTime.now()
                         do {
                             let outputFrames = try await coordinator.processFrame(frame)
                             let processEnd = DispatchTime.now()
+                            
                             self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                             
-                            // ANE Workload Simulation
-                            let srFactor = Double(superResolutionLevel)
-                            let fiFactor = Double(frameInterpolationLevel)
+                            let srFactor = Double(self.superResolutionLevel)
+                            let fiFactor = Double(self.frameInterpolationLevel)
                             if srFactor > 0 || fiFactor > 0 {
                                 self.aneUsagePercent = min(98.0, 10.0 + srFactor * 15.0 + fiFactor * 12.0 + Double.random(in: -3.0...3.0))
                             } else {
                                 self.aneUsagePercent = 0.0
                             }
                             
-                            let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
-                            let frameInterval = 1.0 / sourceFPS
-                            let subFrameInterval = frameInterval / Double(outputFrames.count)
+                            self.processedFrameCache.append(contentsOf: outputFrames)
+                            self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
                             
-                            for (index, outFrame) in outputFrames.enumerated() {
-                                if index > 0 {
-                                    try? await Task.sleep(nanoseconds: UInt64(subFrameInterval * 1_000_000_000))
-                                }
-                                self.renderer.render(pixelBuffer: outFrame.buffer)
-                                processedFramesCount += 1
-                            }
-                            
-                            let prevSec = Int(self.currentTime)
-                            let newSec = Int(CMTimeGetSeconds(itemTime))
-                            self.currentTime = CMTimeGetSeconds(itemTime)
-                            if prevSec != newSec {
-                                self.saveProgress()
-                            }
-                            
-                            let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
-                            if elapsedFPSTime >= 1.0 {
-                                self.fps = Double(processedFramesCount) / elapsedFPSTime
-                                processedFramesCount = 0
-                                fpsTimer = DispatchTime.now()
-                            }
+                            self.lastPulledTime = nextPullTime
                         } catch {
-                            // Fallback to original frame rendering on error
-                            self.renderer.render(pixelBuffer: pixelBuffer)
-                            processedFramesCount += 1
+                            self.processedFrameCache.append(frame)
+                            self.lastPulledTime = nextPullTime
                         }
+                    } else {
+                        try? await Task.sleep(nanoseconds: 5_000_000)
                     }
+                } else {
+                    try? await Task.sleep(nanoseconds: 5_000_000)
                 }
-                
-                // Sleep based on source framerate to match video updates
-                let elapsed = Double(DispatchTime.now().uptimeNanoseconds - frameStart.uptimeNanoseconds) / 1_000_000_000.0
-                let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
-                let targetInterval = 1.0 / sourceFPS
-                let sleepTime = max(0.001, targetInterval - elapsed)
-                
-                try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
             }
             
             await coordinator.endSession()
+        }
+        
+        consumerTask = Task {
+            var processedFramesCount = 0
+            var fpsTimer = DispatchTime.now()
+            
+            while !Task.isCancelled {
+                if self.isPaused {
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                    continue
+                }
+                
+                guard let player = self.player else {
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                    continue
+                }
+                
+                let currentTime = player.currentTime()
+                let currentSecs = CMTimeGetSeconds(currentTime)
+                
+                if !self.processedFrameCache.isEmpty {
+                    var bestIndex = -1
+                    for (index, frame) in self.processedFrameCache.enumerated() {
+                        let frameTime = CMTimeGetSeconds(frame.presentationTimeStamp)
+                        if frameTime <= currentSecs + 0.005 {
+                            bestIndex = index
+                        } else {
+                            break
+                        }
+                    }
+                    
+                    if bestIndex != -1 {
+                        let selectedFrame = self.processedFrameCache[bestIndex]
+                        self.renderer.render(pixelBuffer: selectedFrame.buffer)
+                        processedFramesCount += 1
+                        
+                        self.processedFrameCache.removeSubrange(0...bestIndex)
+                        self.currentTime = currentSecs
+                    }
+                }
+                
+                let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
+                if elapsedFPSTime >= 1.0 {
+                    self.fps = Double(processedFramesCount) / elapsedFPSTime
+                    processedFramesCount = 0
+                    fpsTimer = DispatchTime.now()
+                }
+                
+                try? await Task.sleep(nanoseconds: 4_000_000)
+            }
         }
     }
     
@@ -522,8 +574,12 @@ final class VTPlayerViewModel {
         if self.currentTime > 0 {
             self.saveProgress()
         }
-        playbackTimerTask?.cancel()
-        playbackTimerTask = nil
+        producerTask?.cancel()
+        producerTask = nil
+        consumerTask?.cancel()
+        consumerTask = nil
+        processedFrameCache.removeAll()
+        
         if let observer = playerItemObserver {
             NotificationCenter.default.removeObserver(observer)
             playerItemObserver = nil
