@@ -490,13 +490,9 @@ final class VTPlayerViewModel {
                     continue
                 }
                 
-                let currentTime = player.currentTime()
-                if self.lastPulledTime < currentTime {
-                    self.lastPulledTime = currentTime
-                }
-                
                 let nextPullTime = CMTimeAdd(self.lastPulledTime, frameDuration)
-                let maxLookahead = CMTimeAdd(currentTime, CMTime(seconds: 0.5, preferredTimescale: 600))
+                let playerTime = player.currentTime()
+                let maxLookahead = CMTimeAdd(playerTime, CMTime(seconds: 0.5, preferredTimescale: 600))
                 if nextPullTime > maxLookahead {
                     try? await Task.sleep(nanoseconds: 5_000_000)
                     continue
@@ -555,25 +551,14 @@ final class VTPlayerViewModel {
                 let currentSecs = CMTimeGetSeconds(currentTime)
                 
                 if !self.processedFrameCache.isEmpty {
-                    var bestIndex = -1
-                    for (index, frame) in self.processedFrameCache.enumerated() {
-                        let frameTime = CMTimeGetSeconds(frame.presentationTimeStamp)
-                        if frameTime <= currentSecs + 0.005 {
-                            bestIndex = index
-                        } else {
-                            break
-                        }
-                    }
-                    
-                    if bestIndex != -1 {
-                        let selectedFrame = self.processedFrameCache[bestIndex]
-                        self.renderer.render(pixelBuffer: selectedFrame.buffer)
+                    let firstFrame = self.processedFrameCache[0]
+                    let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
+
+                    if frameTime <= currentSecs + 0.005 {
+                        self.renderer.render(pixelBuffer: firstFrame.buffer)
                         processedFramesCount += 1
 
-                        // Frames skipped before bestIndex are dropped (never rendered)
-                        self.droppedFrames += bestIndex
-
-                        self.processedFrameCache.removeSubrange(0...bestIndex)
+                        self.processedFrameCache.removeFirst()
                         self.currentTime = currentSecs
                     }
                 }
@@ -585,7 +570,13 @@ final class VTPlayerViewModel {
                     fpsTimer = DispatchTime.now()
                 }
                 
-                try? await Task.sleep(nanoseconds: 4_000_000)
+                if let nextFrame = self.processedFrameCache.first {
+                    let nextPTS = CMTimeGetSeconds(nextFrame.presentationTimeStamp)
+                    let sleepDuration = max(0.001, nextPTS - currentSecs - 0.002)
+                    try? await Task.sleep(nanoseconds: UInt64(sleepDuration * 1_000_000_000))
+                } else {
+                    try? await Task.sleep(nanoseconds: 4_000_000)
+                }
             }
         }
     }
