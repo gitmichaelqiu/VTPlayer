@@ -69,9 +69,9 @@ Processing runs in a `Task` on `@MainActor` — all synchronous code executes on
 
 ## Known Issues & Gotchas
 
-- **Fake ANE metric**: `aneUsagePercent` is calculated with `Double.random()`, not a real measurement
-- **droppedFrames always 0**: Counter is initialized but never incremented
-- **Color space**: Renderer uses device RGB, not video-native color space
+- **ANE usage not measurable**: No public API to query ANE utilization; `aneUsagePercent` is a placeholder at 0
 - **VTModelManager unused**: Class exists but is never called from the playback flow
 - **Large file**: `VTPlayerView.swift` bundles ViewModel + all views + helpers (~1136 lines)
 - **Project targets**: Build settings include iOS/visionOS SDKs but UI is macOS-only (AppKit-based)
+- **Consumer polling**: The consumer task polls the frame cache every 4ms (~250 Hz); consider reducing interval for power efficiency
+- **VTFramePipeline unused**: `VTFramePipeline.swift` / `VTFrameSequence` are defined but not used by the ViewModel playback loop
