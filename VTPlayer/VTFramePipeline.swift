@@ -21,31 +21,35 @@ nonisolated public struct VTFrame: @unchecked Sendable {
     }
 }
 
-/// An asynchronous sequence of video frames providing backpressure support.
+/// An asynchronous sequence of video frames providing backpressure and seeking support.
 public struct VTFrameSequence: AsyncSequence, Sendable {
     public typealias Element = VTFrame
     
     private let url: URL
+    private let startTime: CMTime
     
-    public init(url: URL) {
+    public init(url: URL, startTime: CMTime = .zero) {
         self.url = url
+        self.startTime = startTime
     }
     
     public func makeAsyncIterator() -> Iterator {
-        return Iterator(url: url)
+        return Iterator(url: url, startTime: startTime)
     }
     
     /// Thread-safe class-based iterator conforming to AsyncIteratorProtocol.
     public final class Iterator: AsyncIteratorProtocol, Sendable {
         private let url: URL
+        private let startTime: CMTime
         private let state = StateLock()
         
-        init(url: URL) {
+        init(url: URL, startTime: CMTime) {
             self.url = url
+            self.startTime = startTime
         }
         
         public func next() async throws -> VTFrame? {
-            return try await state.next(url: url)
+            return try await state.next(url: url, startTime: startTime)
         }
         
         /// Actor to encapsulate state and run reader initialization on background threads.
@@ -54,7 +58,7 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
             private var trackOutput: AVAssetReaderTrackOutput?
             private var isInitialized = false
             
-            func next(url: URL) async throws -> VTFrame? {
+            func next(url: URL, startTime: CMTime) async throws -> VTFrame? {
                 if !isInitialized {
                     let asset = AVURLAsset(url: url)
                     let tracks = try await asset.loadTracks(withMediaType: .video)
@@ -64,6 +68,12 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     }
                     
                     let reader = try AVAssetReader(asset: asset)
+                    
+                    // If seeked, configure starting time range
+                    if startTime > .zero {
+                        reader.timeRange = CMTimeRange(start: startTime, duration: .invalid)
+                    }
+                    
                     let outputSettings: [String: Any] = [
                         kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
                     ]
@@ -115,9 +125,11 @@ public final class VTFramePipeline: Sendable {
     public init() {}
     
     /// Starts reading frames from the specified video file URL as an asynchronous sequence.
-    /// - Parameter url: The local URL of the video file.
+    /// - Parameters:
+    ///   - url: The local URL of the video file.
+    ///   - startTime: The time location to start reading from.
     /// - Returns: A VTFrameSequence yielding VTFrame objects.
-    public func readFrames(from url: URL) -> VTFrameSequence {
-        return VTFrameSequence(url: url)
+    public func readFrames(from url: URL, startTime: CMTime = .zero) -> VTFrameSequence {
+        return VTFrameSequence(url: url, startTime: startTime)
     }
 }
