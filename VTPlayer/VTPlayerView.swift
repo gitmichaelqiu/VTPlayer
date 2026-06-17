@@ -514,13 +514,8 @@ final class VTPlayerViewModel {
                             
                             self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                             
-                            let srFactor = Double(self.superResolutionLevel)
-                            let fiFactor = Double(self.frameInterpolationLevel)
-                            if srFactor > 0 || fiFactor > 0 {
-                                self.aneUsagePercent = min(98.0, 10.0 + srFactor * 15.0 + fiFactor * 12.0 + Double.random(in: -3.0...3.0))
-                            } else {
-                                self.aneUsagePercent = 0.0
-                            }
+                            // ANE usage not yet measurable via public API — placeholder for future telemetry
+                            self.aneUsagePercent = 0.0
                             
                             self.processedFrameCache.append(contentsOf: outputFrames)
                             self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
