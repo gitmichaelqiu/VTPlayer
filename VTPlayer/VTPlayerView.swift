@@ -767,96 +767,30 @@ struct VTPlayerView: View {
     @State private var hoverSH = false
 
     // Resizable sidebar widths
-    @State private var leftSidebarWidth: CGFloat = 240
-    @GestureState private var leftSidebarDragOffset: CGFloat = 0
-    @State private var rightSidebarWidth: CGFloat = 260
-    @GestureState private var rightSidebarDragOffset: CGFloat = 0
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
 
-    init() {}
-    
     var body: some View {
-        HStack(spacing: 0) {
-            // Collapsible Left Sidebar Panel for Recent Playback History
-            if viewModel.showLeftSidebar && !viewModel.isFullScreen {
-                leftSidebar
-                    .frame(width: max(180, min(500, leftSidebarWidth + leftSidebarDragOffset)))
-                    .overlay(alignment: .trailing) {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .frame(width: 6)
-                            .onHover { hovering in
-                                if hovering { NSCursor.resizeLeftRight.push() }
-                                else { NSCursor.pop() }
-                            }
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .updating($leftSidebarDragOffset) { value, state, _ in
-                                        state = value.translation.width
-                                    }
-                                    .onEnded { value in
-                                        leftSidebarWidth += value.translation.width
-                                        leftSidebarWidth = max(180, min(500, leftSidebarWidth))
-                                    }
-                            )
+        Group {
+            if (viewModel.showLeftSidebar || viewModel.showSidebar) && !viewModel.isFullScreen {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    leftSidebar
+                        .frame(minWidth: 180, idealWidth: 240, maxWidth: 500)
+                } content: {
+                    videoContent
+                } detail: {
+                    if viewModel.showSidebar && viewModel.videoURL != nil {
+                        rightSidebar
+                            .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
                     }
-                Divider()
-            }
-
-            ZStack {
-                // System Window Background
-                viewModel.currentBackgroundColor
-                    .ignoresSafeArea()
-
-                mainVideoArea
-
-                // QuickTime-style Floating Control Bar at the bottom
-                if viewModel.videoURL != nil {
-                    controlBar
                 }
-
-                // Hidden keyboard shortcuts for seeking
-                Button("") { viewModel.seekRelative(-5) }
-                    .keyboardShortcut(.leftArrow, modifiers: [])
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-                Button("") { viewModel.seekRelative(5) }
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-            }
-            .onContinuousHover { phase in
-                viewModel.userActivityDetected()
-            }
-
-            // Collapsible Right Sidebar Panel for Diagnostics and Video info
-            if viewModel.showSidebar && viewModel.videoURL != nil && !viewModel.isFullScreen {
-                Divider()
-                rightSidebar
-                    .frame(width: max(200, min(500, rightSidebarWidth + rightSidebarDragOffset)))
-                    .overlay(alignment: .leading) {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .frame(width: 6)
-                            .onHover { hovering in
-                                if hovering { NSCursor.resizeLeftRight.push() }
-                                else { NSCursor.pop() }
-                            }
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .updating($rightSidebarDragOffset) { value, state, _ in
-                                        state = value.translation.width
-                                    }
-                                    .onEnded { value in
-                                        rightSidebarWidth += value.translation.width
-                                        rightSidebarWidth = max(200, min(500, rightSidebarWidth))
-                                    }
-                            )
-                    }
+                .navigationSplitViewStyle(.balanced)
+                .onChange(of: viewModel.showLeftSidebar) { _, _ in updateColumnVisibility() }
+                .onChange(of: viewModel.showSidebar) { _, _ in updateColumnVisibility() }
+                .onAppear(perform: updateColumnVisibility)
+            } else {
+                videoContent
             }
         }
-        .animation(.easeInOut, value: viewModel.showLeftSidebar)
-        .animation(.easeInOut, value: viewModel.showSidebar)
-        // Native System Toolbar in window titlebar
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button(action: { viewModel.showLeftSidebar.toggle() }) {
@@ -864,14 +798,12 @@ struct VTPlayerView: View {
                 }
                 .help("Toggle recent videos sidebar")
             }
-            
             ToolbarItem(placement: .navigation) {
                 Button(action: { viewModel.selectFile() }) {
-                    Label("Open Video", systemImage: "folder.badge.plus")
+                    Label("Open Video", systemImage: "plus")
                 }
                 .help("Open a local video file")
             }
-            
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { viewModel.showSidebar.toggle() }) {
                     Label("Toggle Sidebar", systemImage: "sidebar.right")
@@ -880,6 +812,58 @@ struct VTPlayerView: View {
             }
         }
         .windowToolbarFullScreenVisibility(.onHover)
+    }
+
+    private func updateColumnVisibility() {
+        switch (viewModel.showLeftSidebar, viewModel.showSidebar) {
+        case (true, true):  columnVisibility = .all
+        case (true, false): columnVisibility = .doubleColumn
+        case (false, true): columnVisibility = .detailOnly
+        case (false, false): break // not reached — guarded at top level
+        }
+    }
+
+    @ViewBuilder
+    private var videoContent: some View {
+        ZStack {
+            // System Window Background
+            viewModel.currentBackgroundColor
+                .ignoresSafeArea()
+
+            mainVideoArea
+
+            // QuickTime-style Floating Control Bar at the bottom
+            if viewModel.videoURL != nil {
+                controlBar
+            }
+
+            // Hidden keyboard shortcuts for seeking
+            Button("") { viewModel.seekRelative(-5) }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .frame(width: 0, height: 0)
+                .opacity(0)
+            Button("") { viewModel.seekRelative(5) }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .frame(width: 0, height: 0)
+                .opacity(0)
+
+            // Cmd+1...9 to switch between window tabs
+            ForEach(1..<10, id: \.self) { i in
+                Button("") {
+                    if let window = NSApp.keyWindow,
+                       let tabGroup = window.tabGroup,
+                       i - 1 < tabGroup.windows.count {
+                        tabGroup.selectedWindow = tabGroup.windows[i - 1]
+                    }
+                }
+                .keyboardShortcut(KeyEquivalent(Character("\(i)")), modifiers: [.command])
+                .frame(width: 0, height: 0)
+                .opacity(0)
+            }
+        }
+        .onContinuousHover { phase in
+            viewModel.userActivityDetected()
+        }
     }
     
     private func formatTime(_ seconds: Double) -> String {
@@ -952,6 +936,10 @@ extension VTPlayerView {
                             }
                         }
                         .padding(.vertical, 3)
+                        .padding(.horizontal, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(url == viewModel.videoURL ? Color.accentColor.opacity(0.15) : Color.clear)
+                        .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
                     .help(url.path)
@@ -963,7 +951,6 @@ extension VTPlayerView {
         .background(
             VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
         )
-        .transition(.move(edge: .leading))
     }
     
     @ViewBuilder
@@ -1069,7 +1056,6 @@ extension VTPlayerView {
         .background(
             VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
         )
-        .transition(.move(edge: .trailing))
     }
     
     @ViewBuilder
@@ -1305,25 +1291,22 @@ extension VTPlayerView {
     @ViewBuilder
     private var sharpnessControl: some View {
         HStack(spacing: 4) {
-            ZStack(alignment: .leading) {
-                // Expanded label always laid out (invisible when not hovering)
-                // so the slider never shifts when the text width changes.
-                Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")")
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(.clear)
-                Text(hoverSH
-                    ? "Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")"
-                    : "SH"
-                )
-                .font(.caption.weight(.medium))
-                .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            Text(hoverSH
+                ? "Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")"
+                : "SH"
+            )
+            .font(.caption.weight(.medium))
+            .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            if hoverSH {
+                Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                    .accentColor(.cyan)
+                    .frame(width: 60)
+                    .labelsHidden()
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
-            Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                .accentColor(.cyan)
-                .frame(width: 60)
-                .labelsHidden()
         }
         .onHover { hoverSH = $0 }
+        .animation(.easeInOut(duration: 0.15), value: hoverSH)
         .help("Adjust sharpness intensity (CIUnsharpMask)")
     }
 
