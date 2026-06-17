@@ -76,20 +76,14 @@ public actor VTFrameProcessorCoordinator {
             }
             config = interpolationConfig
         } else if enableSuperResolution {
-            // Pure spatial super resolution upscaling (2x size, 1x frame rate)
+            // Pure spatial super resolution upscaling (2x size, 1x frame rate) using low-latency configuration
             self.targetWidth = width * 2
             self.targetHeight = height * 2
-            guard let srConfig = VTSuperResolutionScalerConfiguration(
+            let srConfig = VTLowLatencySuperResolutionScalerConfiguration(
                 frameWidth: width,
                 frameHeight: height,
-                scaleFactor: 2,
-                inputType: .video,
-                usePrecomputedFlow: false,
-                qualityPrioritization: .normal,
-                revision: .revision1
-            ) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to initialize super resolution configuration"])
-            }
+                scaleFactor: 2.0
+            )
             config = srConfig
         } else {
             // Bypassed (no processing)
@@ -241,16 +235,10 @@ public actor VTFrameProcessorCoordinator {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -5, userInfo: [NSLocalizedDescriptionKey: "Failed to create destination VTFrameProcessorFrame"])
             }
             
-            guard let params = VTSuperResolutionScalerParameters(
+            let params = VTLowLatencySuperResolutionScalerParameters(
                 sourceFrame: sourceFPFrame,
-                previousFrame: previousSourceFrame,
-                previousOutputFrame: previousOutputFrame,
-                opticalFlow: nil,
-                submissionMode: isFirstFrame ? .random : .sequential,
                 destinationFrame: destFrame
-            ) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -4, userInfo: [NSLocalizedDescriptionKey: "Failed to initialize super-resolution parameters"])
-            }
+            )
             
             _ = try await processor.process(parameters: params)
             
