@@ -720,7 +720,6 @@ extension VTPlayerView {
                     ContentUnavailableView {
                         Label("No Recents", systemImage: "clock")
                     }
-                    .scaleEffect(0.8)
                     Spacer()
                 }
             } else {
@@ -960,121 +959,68 @@ extension VTPlayerView {
         }
         .opacity(viewModel.showControls ? 1.0 : 0.0)
         .offset(y: viewModel.showControls ? 0 : 50)
-        .animation(.easeInOut(duration: 0.3), value: viewModel.showControls)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
     }
     
     @ViewBuilder
     private var playPauseButton: some View {
         Button(action: { viewModel.togglePlayPause() }) {
             Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundColor(.primary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
+        .buttonBorderShape(.circle)
         .keyboardShortcut(.space, modifiers: [])
     }
     
     @ViewBuilder
     private var superResolutionMenu: some View {
-        Menu {
-            Button(action: {
-                viewModel.superResolutionLevel = 0
-                viewModel.updateEnhancements()
-            }) {
-                HStack {
-                    if viewModel.superResolutionLevel == 0 {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("Off")
-                }
-            }
-            Button(action: {
-                viewModel.superResolutionLevel = 2
-                viewModel.updateEnhancements()
-            }) {
-                HStack {
-                    if viewModel.superResolutionLevel == 2 {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("2× Super Resolution")
-                }
-            }
-            Button(action: {
-                viewModel.superResolutionLevel = 4
-                viewModel.updateEnhancements()
-            }) {
-                HStack {
-                    if viewModel.superResolutionLevel == 4 {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("4× Super Resolution")
-                }
-            }
+        Picker(selection: Binding(
+            get: { viewModel.superResolutionLevel },
+            set: { viewModel.superResolutionLevel = $0; viewModel.updateEnhancements() }
+        )) {
+            Text("Off").tag(0)
+            Text("2× Super Resolution").tag(2)
+            Text("4× Super Resolution").tag(4)
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                 Text(viewModel.superResolutionText)
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(.caption2.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(viewModel.superResolutionBackgroundColor)
             .cornerRadius(6)
             .foregroundColor(viewModel.superResolutionForegroundColor)
         }
-        .menuStyle(.borderlessButton)
+        .pickerStyle(.menu)
         .help("Select Super Resolution upscaling level")
     }
     
     @ViewBuilder
     private var frameInterpolationMenu: some View {
-        Menu {
-            Button(action: {
-                viewModel.frameInterpolationLevel = 0
-                viewModel.updateEnhancements()
-            }) {
-                HStack {
-                    if viewModel.frameInterpolationLevel == 0 {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("Off")
-                }
-            }
-            Button(action: {
-                viewModel.frameInterpolationLevel = 2
-                viewModel.updateEnhancements()
-            }) {
-                HStack {
-                    if viewModel.frameInterpolationLevel == 2 {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("2× Interpolation")
-                }
-            }
-            Button(action: {
-                viewModel.frameInterpolationLevel = 4
-                viewModel.updateEnhancements()
-            }) {
-                HStack {
-                    if viewModel.frameInterpolationLevel == 4 {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("4× Interpolation")
-                }
-            }
+        Picker(selection: Binding(
+            get: { viewModel.frameInterpolationLevel },
+            set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
+        )) {
+            Text("Off").tag(0)
+            Text("2× Interpolation").tag(2)
+            Text("4× Interpolation").tag(4)
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "bolt.fill")
                 Text(viewModel.frameInterpolationText)
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(.caption2.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(viewModel.frameInterpolationBackgroundColor)
             .cornerRadius(6)
             .foregroundColor(viewModel.frameInterpolationForegroundColor)
         }
-        .menuStyle(.borderlessButton)
+        .pickerStyle(.menu)
         .help("Select Frame Interpolation level")
     }
     
@@ -1100,10 +1046,11 @@ extension VTPlayerView {
             }
         }) {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
                 .foregroundColor(.primary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
+        .buttonBorderShape(.circle)
         .keyboardShortcut("f", modifiers: [])
         .help("Toggle Fullscreen (F)")
     }
