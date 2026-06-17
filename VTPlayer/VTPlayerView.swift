@@ -33,6 +33,23 @@ final class VTPlayerViewModel {
     // Feature Levels (0 = Off, 2 = 2x, 4 = 4x)
     var superResolutionLevel: Int = 0
     var frameInterpolationLevel: Int = 0
+
+    // New API Feature Levels
+    var qualitySuperResolutionScaleFactor: Int = 0  // 0=off, 2, 4 (Quality SR)
+    var useFrameRateConversion: Bool = false {
+        didSet {
+            updateEnhancements()
+        }
+    }
+    var motionBlurStrength: Int = 0 {  // 0=off, 1-100
+        didSet { updateEnhancements() }
+    }
+    var denoiseStrength: Double = 0.0 {  // 0.0=off, 0.0-1.0
+        didSet { updateEnhancements() }
+    }
+    var qualityPrioritization: Int = 1 {  // 1=normal, 2=quality
+        didSet { updateEnhancements() }
+    }
     var showSidebar = true
     var showLeftSidebar = true
     
@@ -483,13 +500,23 @@ final class VTPlayerViewModel {
         let fiLevel = self.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
         let realTime = self.useRealTimePriority
+        let qualitySR = self.qualitySuperResolutionScaleFactor
+        let useFRC = self.useFrameRateConversion
+        let mbStrength = self.motionBlurStrength
+        let dnStrength = self.denoiseStrength
+        let qualPrior = self.qualityPrioritization
 
         producerTask = Task {
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: srLevel,
                 frameInterpolationLevel: fiLevel,
                 useHighQualityDownsampling: highQuality,
-                useRealTimePriority: realTime
+                useRealTimePriority: realTime,
+                qualitySuperResolutionScaleFactor: qualitySR,
+                useFrameRateConversion: useFRC,
+                motionBlurStrength: mbStrength,
+                denoiseStrength: dnStrength,
+                qualityPrioritization: qualPrior
             )
 
             do {
@@ -706,6 +733,11 @@ final class VTPlayerViewModel {
             "frameInterpolationLevel": frameInterpolationLevel,
             "playbackSpeed": playbackSpeed,
             "sharpness": sharpness,
+            "qualitySuperResolutionScaleFactor": qualitySuperResolutionScaleFactor,
+            "useFrameRateConversion": useFrameRateConversion,
+            "motionBlurStrength": motionBlurStrength,
+            "denoiseStrength": denoiseStrength,
+            "qualityPrioritization": qualityPrioritization,
         ]
         UserDefaults.standard.set(settings, forKey: Self.videoSettingsKey(for: url.path))
     }
@@ -720,6 +752,11 @@ final class VTPlayerViewModel {
             sharpness = loadedSharpness
         }
         renderer.sharpness = Float(sharpness)
+        qualitySuperResolutionScaleFactor = settings["qualitySuperResolutionScaleFactor"] as? Int ?? 0
+        useFrameRateConversion = settings["useFrameRateConversion"] as? Bool ?? false
+        motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
+        denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
+        qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
     }
 
     private func fourCharCodeString(_ code: FourCharCode) -> String {
