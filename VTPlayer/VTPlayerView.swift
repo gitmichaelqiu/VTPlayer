@@ -1150,7 +1150,6 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .fixedSize()
                     .onHover { hoverSR = $0 }
 
                     // Frame Interpolation (LL FI)
@@ -1179,7 +1178,6 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .fixedSize()
                     .onHover { hoverFI = $0 }
 
                     // Motion Blur
@@ -1210,7 +1208,6 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .fixedSize()
                     .onHover { hoverMB = $0 }
 
                     // Denoise
@@ -1241,7 +1238,6 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .fixedSize()
                     .onHover { hoverDN = $0 }
 
                     // Sharpness Slider
