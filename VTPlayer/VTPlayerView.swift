@@ -95,20 +95,12 @@ final class VTPlayerViewModel {
         }
     }
     
-    var superResolutionText: String {
-        superResolutionLevel > 0 ? "SR: \(superResolutionLevel)x" : "Super Resolution"
-    }
-    
     var superResolutionBackgroundColor: Color {
         superResolutionLevel > 0 ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05)
     }
     
     var superResolutionForegroundColor: Color {
         superResolutionLevel > 0 ? Color.cyan : Color.secondary
-    }
-    
-    var frameInterpolationText: String {
-        frameInterpolationLevel > 0 ? "Interpolation: \(frameInterpolationLevel)x" : "Interpolation"
     }
     
     var frameInterpolationBackgroundColor: Color {
@@ -118,6 +110,14 @@ final class VTPlayerViewModel {
     var frameInterpolationForegroundColor: Color {
         frameInterpolationLevel > 0 ? Color.green : Color.secondary
     }
+
+    // Sharpness Control (0.0 = off, >0 applies CIUnsharpMask)
+    var sharpness: Double = 0.0 {
+        didSet {
+            renderer.sharpness = Float(sharpness)
+        }
+    }
+
     @ObservationIgnored nonisolated(unsafe) private var cursorHidden = false
     private var inactivityTask: Task<Void, Never>?
     
@@ -145,7 +145,7 @@ final class VTPlayerViewModel {
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
         self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
         self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
-        
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(reloadRecentVideos),
@@ -277,6 +277,9 @@ final class VTPlayerViewModel {
                         self.currentTime = 0.0
                     }
                     
+                    // Restore per-video enhancement settings
+                    self.loadVideoSettings(for: url)
+
                     // Start rendering/processing loop
                     self.play()
                 }
@@ -469,9 +472,12 @@ final class VTPlayerViewModel {
         if let player = player {
             let adjusted = CMTimeSubtract(player.currentTime(), frameDuration)
             lastPulledTime = adjusted > .zero ? adjusted : .zero
+            lastRenderedPTS = player.currentTime()
         } else {
             lastPulledTime = .zero
+            lastRenderedPTS = .zero
         }
+        isAudioPausedForSync = false
 
         let srLevel = self.superResolutionLevel
         let fiLevel = self.frameInterpolationLevel
@@ -495,7 +501,15 @@ final class VTPlayerViewModel {
                 return
             }
 
-            var consecutiveStalls = 0
+            // Re-sync lastPulledTime after potentially slow coordinator setup.
+            // Without this, player.currentTime() has advanced beyond the
+            // lastPulledTime that was captured in startPlaybackLoop(), so the
+            // first nextPullTime targets a stale time in the past.
+            if let player = self.player {
+                let current = player.currentTime()
+                let adjusted = CMTimeSubtract(current, frameDuration)
+                self.lastPulledTime = adjusted > .zero ? adjusted : .zero
+            }
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
@@ -523,45 +537,40 @@ final class VTPlayerViewModel {
                     continue
                 }
 
-                if videoOutput.hasNewPixelBuffer(forItemTime: nextPullTime) {
-                    consecutiveStalls = 0
-                    var presentationTime = CMTime.zero
-                    if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: nextPullTime, itemTimeForDisplay: &presentationTime) {
-                        let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : nextPullTime)
+                // Use copyPixelBuffer directly — hasNewPixelBuffer returns NO
+                // for times already queried by the previous producer before
+                // cancellation, falsely indicating the buffer is absent when
+                // it is still available via copyPixelBuffer.
+                var presentationTime = CMTime.zero
+                if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: nextPullTime, itemTimeForDisplay: &presentationTime) {
+                    let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : nextPullTime)
 
-                        let processStart = DispatchTime.now()
-                        do {
-                            let outputFrames = try await coordinator.processFrame(frame)
-                            let processEnd = DispatchTime.now()
+                    let processStart = DispatchTime.now()
+                    do {
+                        let outputFrames = try await coordinator.processFrame(frame)
+                        let processEnd = DispatchTime.now()
 
-                            guard gen == self.playbackGeneration else { break }
+                        guard gen == self.playbackGeneration else { break }
 
-                            self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
+                        self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
 
-                            // ANE usage not yet measurable via public API — placeholder for future telemetry
-                            self.aneUsagePercent = 0.0
+                        // ANE usage not yet measurable via public API — placeholder for future telemetry
+                        self.aneUsagePercent = 0.0
 
-                            self.processedFrameCache.append(contentsOf: outputFrames)
-                            self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
+                        self.processedFrameCache.append(contentsOf: outputFrames)
+                        self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
 
-                            self.lastPulledTime = nextPullTime
-                        } catch {
-                            guard gen == self.playbackGeneration else { break }
-                            self.processedFrameCache.append(frame)
-                            self.lastPulledTime = nextPullTime
-                        }
-                    } else {
-                        try? await Task.sleep(nanoseconds: 5_000_000)
+                        self.lastPulledTime = nextPullTime
+                    } catch {
+                        guard gen == self.playbackGeneration else { break }
+                        self.processedFrameCache.append(frame)
+                        self.lastPulledTime = nextPullTime
                     }
                 } else {
-                    consecutiveStalls += 1
-                    if consecutiveStalls >= 10 {
-                        // Frame at nextPullTime wasn't available (likely decoded and discarded).
-                        // Catch up by advancing lastPulledTime to just before player time.
-                        let minTime = CMTimeSubtract(playerTime, frameDuration)
-                        self.lastPulledTime = minTime > .zero ? minTime : .zero
-                        consecutiveStalls = 0
-                    }
+                    // Frame not yet available — catch up to current player time
+                    // immediately instead of stalling for 50ms.
+                    let minTime = CMTimeSubtract(playerTime, frameDuration)
+                    self.lastPulledTime = minTime > .zero ? minTime : .zero
                     try? await Task.sleep(nanoseconds: 5_000_000)
                 }
             }
@@ -633,8 +642,12 @@ final class VTPlayerViewModel {
                 let latency = currentSecs - lastSecs
 
                 if latency > self.audioSyncLatencyThreshold && !self.isAudioPausedForSync {
-                    player.rate = 0
-                    self.isAudioPausedForSync = true
+                    // Only pause when cache is non-empty — an empty cache means
+                    // the producer is still catching up after a restart.
+                    if !self.processedFrameCache.isEmpty {
+                        player.rate = 0
+                        self.isAudioPausedForSync = true
+                    }
                 } else if self.isAudioPausedForSync {
                     if self.processedFrameCache.count >= self.audioSyncRecoveryFrameCount || latency <= 0 {
                         player.rate = Float(self.playbackSpeed)
@@ -650,6 +663,7 @@ final class VTPlayerViewModel {
         if self.currentTime > 0 {
             self.saveProgress()
         }
+        saveVideoSettings()
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
@@ -678,7 +692,36 @@ final class VTPlayerViewModel {
         self.srInitializationError = nil
         self.userActivityDetected()
     }
-    
+
+    // MARK: - Per-Video Settings Persistence
+
+    private static func videoSettingsKey(for path: String) -> String {
+        return "VTSettings_\(path)"
+    }
+
+    private func saveVideoSettings() {
+        guard let url = videoURL else { return }
+        let settings: [String: Any] = [
+            "superResolutionLevel": superResolutionLevel,
+            "frameInterpolationLevel": frameInterpolationLevel,
+            "playbackSpeed": playbackSpeed,
+            "sharpness": sharpness,
+        ]
+        UserDefaults.standard.set(settings, forKey: Self.videoSettingsKey(for: url.path))
+    }
+
+    private func loadVideoSettings(for url: URL) {
+        guard let settings = UserDefaults.standard.dictionary(forKey: Self.videoSettingsKey(for: url.path)) else { return }
+        superResolutionLevel = settings["superResolutionLevel"] as? Int ?? 0
+        frameInterpolationLevel = settings["frameInterpolationLevel"] as? Int ?? 0
+        playbackSpeed = settings["playbackSpeed"] as? Double ?? 1.0
+        let loadedSharpness = settings["sharpness"] as? Double ?? 0.0
+        if loadedSharpness != sharpness {
+            sharpness = loadedSharpness
+        }
+        renderer.sharpness = Float(sharpness)
+    }
+
     private func fourCharCodeString(_ code: FourCharCode) -> String {
         let n = Int(code)
         let c1 = Character(UnicodeScalar((n >> 24) & 0xff)!)
@@ -914,17 +957,30 @@ extension VTPlayerView {
             Divider()
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("Fallback Upscaling Settings")
+                Text("Image Processing")
                     .font(.system(.subheadline, design: .default).bold())
                     .foregroundColor(.secondary)
-                
+
                 Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
                     .font(.system(.subheadline, design: .default))
                     .help("Use high-quality chroma downsampling when scaling")
-                
+
                 Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
                     .font(.system(.subheadline, design: .default))
                     .help("Hint VideoToolbox to prioritize real-time processing")
+
+                HStack(spacing: 8) {
+                    Text("Sharpness")
+                        .font(.system(.subheadline, design: .default))
+                    Spacer()
+                    Text(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                    .accentColor(.cyan)
+                    .help("Adjust sharpness intensity (CIUnsharpMask)")
             }
             
             Spacer()
@@ -1062,16 +1118,13 @@ extension VTPlayerView {
             Text("2× Super Resolution").tag(2)
             Text("4× Super Resolution").tag(4)
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                Text(viewModel.superResolutionText)
-            }
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(viewModel.superResolutionBackgroundColor)
-            .cornerRadius(6)
-            .foregroundColor(viewModel.superResolutionForegroundColor)
+            Image(systemName: "sparkles")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(viewModel.superResolutionBackgroundColor)
+                .cornerRadius(6)
+                .foregroundColor(viewModel.superResolutionForegroundColor)
         }
         .pickerStyle(.menu)
         .help("Select Super Resolution upscaling level")
@@ -1087,16 +1140,13 @@ extension VTPlayerView {
             Text("2× Interpolation").tag(2)
             Text("4× Interpolation").tag(4)
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "bolt.fill")
-                Text(viewModel.frameInterpolationText)
-            }
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(viewModel.frameInterpolationBackgroundColor)
-            .cornerRadius(6)
-            .foregroundColor(viewModel.frameInterpolationForegroundColor)
+            Image(systemName: "bolt.fill")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(viewModel.frameInterpolationBackgroundColor)
+                .cornerRadius(6)
+                .foregroundColor(viewModel.frameInterpolationForegroundColor)
         }
         .pickerStyle(.menu)
         .help("Select Frame Interpolation level")

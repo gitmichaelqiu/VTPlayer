@@ -19,6 +19,9 @@ public final class VTMetalRenderer: MTKView {
     
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
+
+    /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
+    public var sharpness: Float = 0.0
     
     public override init(frame frameRect: CGRect, device: MTLDevice?) {
         super.init(frame: frameRect, device: device ?? MTLCreateSystemDefaultDevice())
@@ -71,9 +74,20 @@ public final class VTMetalRenderer: MTKView {
         
         // Create CoreImage image wrapping the pixel buffer
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        
+
+        // Apply optional sharpness filter
+        let displayImage: CIImage
+        if sharpness > 0 {
+            displayImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
+                kCIInputIntensityKey: sharpness,
+                kCIInputRadiusKey: 0.5
+            ]))
+        } else {
+            displayImage = ciImage
+        }
+
         // Calculate aspect ratio locking transformation
-        let imageSize = ciImage.extent.size
+        let imageSize = displayImage.extent.size
         let scaleX = drawableSize.width / imageSize.width
         let scaleY = drawableSize.height / imageSize.height
         
@@ -89,7 +103,7 @@ public final class VTMetalRenderer: MTKView {
         let transform = CGAffineTransform(scaleX: scale, y: scale)
             .concatenating(CGAffineTransform(translationX: offsetX, y: offsetY))
         
-        let transformedImage = ciImage.transformed(by: transform)
+        let transformedImage = displayImage.transformed(by: transform)
         
         // Render the image to the drawable texture
         guard let commandBuffer = queue.makeCommandBuffer() else { return }
