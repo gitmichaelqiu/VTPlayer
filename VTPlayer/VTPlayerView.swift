@@ -392,7 +392,13 @@ final class VTPlayerViewModel {
             self.renderer.render(pixelBuffer: pixelBuffer)
         }
     }
-    
+
+    /// Seeks forward or backward by the given relative offset in seconds.
+    func seekRelative(_ delta: Double) {
+        let target = max(0, min(duration, currentTime + delta))
+        seek(to: target)
+    }
+
     private func triggerSingleFrameUpdate(at time: CMTime) async {
         guard let videoOutput = videoOutput else { return }
         var attempts = 0
@@ -452,19 +458,23 @@ final class VTPlayerViewModel {
     private func startPlaybackLoop() {
         producerTask?.cancel()
         consumerTask?.cancel()
-        
+
+        let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
+
         processedFrameCache.removeAll()
         if let player = player {
-            lastPulledTime = player.currentTime()
+            let adjusted = CMTimeSubtract(player.currentTime(), frameDuration)
+            lastPulledTime = adjusted > .zero ? adjusted : .zero
         } else {
             lastPulledTime = .zero
         }
-        
+
         let srLevel = self.superResolutionLevel
         let fiLevel = self.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
         let realTime = self.useRealTimePriority
-        
+
         producerTask = Task {
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: srLevel,
@@ -472,7 +482,7 @@ final class VTPlayerViewModel {
                 useHighQualityDownsampling: highQuality,
                 useRealTimePriority: realTime
             )
-            
+
             do {
                 self.srInitializationError = nil
                 try await coordinator.startSession(width: videoWidth, height: videoHeight)
@@ -481,26 +491,25 @@ final class VTPlayerViewModel {
                 print("Failed to initialize coordinator session: \(error.localizedDescription)")
                 return
             }
-            
-            let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
-            let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
-            
+
+            var consecutiveStalls = 0
+
             while !Task.isCancelled {
                 if self.isPaused {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }
-                
+
                 guard let player = self.player, let videoOutput = self.videoOutput else {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
-                
+
                 if self.processedFrameCache.count >= 15 {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
-                
+
                 let nextPullTime = CMTimeAdd(self.lastPulledTime, frameDuration)
                 let playerTime = player.currentTime()
                 let maxLookahead = CMTimeAdd(playerTime, CMTime(seconds: 0.5, preferredTimescale: 600))
@@ -508,25 +517,26 @@ final class VTPlayerViewModel {
                     try? await Task.sleep(nanoseconds: 5_000_000)
                     continue
                 }
-                
+
                 if videoOutput.hasNewPixelBuffer(forItemTime: nextPullTime) {
+                    consecutiveStalls = 0
                     var presentationTime = CMTime.zero
                     if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: nextPullTime, itemTimeForDisplay: &presentationTime) {
                         let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: presentationTime.isValid ? presentationTime : nextPullTime)
-                        
+
                         let processStart = DispatchTime.now()
                         do {
                             let outputFrames = try await coordinator.processFrame(frame)
                             let processEnd = DispatchTime.now()
-                            
+
                             self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-                            
+
                             // ANE usage not yet measurable via public API — placeholder for future telemetry
                             self.aneUsagePercent = 0.0
-                            
+
                             self.processedFrameCache.append(contentsOf: outputFrames)
                             self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
-                            
+
                             self.lastPulledTime = nextPullTime
                         } catch {
                             self.processedFrameCache.append(frame)
@@ -536,10 +546,18 @@ final class VTPlayerViewModel {
                         try? await Task.sleep(nanoseconds: 5_000_000)
                     }
                 } else {
+                    consecutiveStalls += 1
+                    if consecutiveStalls >= 10 {
+                        // Frame at nextPullTime wasn't available (likely decoded and discarded).
+                        // Catch up by advancing lastPulledTime to just before player time.
+                        let minTime = CMTimeSubtract(playerTime, frameDuration)
+                        self.lastPulledTime = minTime > .zero ? minTime : .zero
+                        consecutiveStalls = 0
+                    }
                     try? await Task.sleep(nanoseconds: 5_000_000)
                 }
             }
-            
+
             await coordinator.endSession()
         }
         
@@ -686,6 +704,16 @@ struct VTPlayerView: View {
                 if viewModel.videoURL != nil {
                     controlBar
                 }
+
+                // Hidden keyboard shortcuts for seeking
+                Button("") { viewModel.seekRelative(-5) }
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                Button("") { viewModel.seekRelative(5) }
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
             }
             .onContinuousHover { phase in
                 viewModel.userActivityDetected()
