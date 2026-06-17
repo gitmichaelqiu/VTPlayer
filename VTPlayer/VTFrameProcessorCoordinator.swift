@@ -26,6 +26,8 @@ public actor VTFrameProcessorCoordinator {
     // Configurations
     public let superResolutionLevel: Int // 0, 2, 4
     public let frameInterpolationLevel: Int // 0, 2, 4
+    public let useHighQualityDownsampling: Bool
+    public let useRealTimePriority: Bool
     
     private var isSessionActive = false
     
@@ -51,9 +53,16 @@ public actor VTFrameProcessorCoordinator {
     private var previousOutputFrame: VTFrameProcessorFrame?
     private var isFirstFrame = true
     
-    public init(superResolutionLevel: Int, frameInterpolationLevel: Int) {
+    public init(
+        superResolutionLevel: Int,
+        frameInterpolationLevel: Int,
+        useHighQualityDownsampling: Bool = true,
+        useRealTimePriority: Bool = true
+    ) {
         self.superResolutionLevel = superResolutionLevel
         self.frameInterpolationLevel = frameInterpolationLevel
+        self.useHighQualityDownsampling = useHighQualityDownsampling
+        self.useRealTimePriority = useRealTimePriority
     }
     
     private func makePool(width: Int, height: Int, from attributes: [AnyHashable: Any]?) -> CVPixelBufferPool? {
@@ -138,8 +147,9 @@ public actor VTFrameProcessorCoordinator {
             } else {
                 var transferSession: VTPixelTransferSession?
                 let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
-                if status == kCVReturnSuccess {
-                    self.fallbackTransferSession = transferSession
+                if status == kCVReturnSuccess, let session = transferSession {
+                    configureTransferSession(session)
+                    self.fallbackTransferSession = session
                 } else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create fallback transfer session"])
                 }
@@ -215,8 +225,9 @@ public actor VTFrameProcessorCoordinator {
                 } else {
                     var transferSession: VTPixelTransferSession?
                     let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
-                    if status == kCVReturnSuccess {
-                        self.fallbackTransferSession = transferSession
+                    if status == kCVReturnSuccess, let session = transferSession {
+                        configureTransferSession(session)
+                        self.fallbackTransferSession = session
                     } else {
                         throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create fallback transfer session"])
                     }
@@ -470,5 +481,18 @@ public actor VTFrameProcessorCoordinator {
         previousOutputFrame = nil
         isSessionActive = false
         isFirstFrame = true
+    }
+    
+    private func configureTransferSession(_ session: VTPixelTransferSession) {
+        // Set scaling mode to Normal
+        VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_ScalingMode, value: kVTScalingMode_Normal)
+        
+        // Set downsampling mode
+        let downsamplingMode = useHighQualityDownsampling ? kVTDownsamplingMode_Average : kVTDownsamplingMode_Decimate
+        VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DownsamplingMode, value: downsamplingMode)
+        
+        // Set real-time priority
+        let realTimeValue = useRealTimePriority ? kCFBooleanTrue : kCFBooleanFalse
+        VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_RealTime, value: realTimeValue)
     }
 }

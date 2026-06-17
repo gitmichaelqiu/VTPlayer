@@ -36,6 +36,20 @@ final class VTPlayerViewModel {
     var showSidebar = true
     var showLeftSidebar = true
     
+    // Quality Control Parameters
+    var useHighQualityDownsampling: Bool = true {
+        didSet {
+            UserDefaults.standard.set(useHighQualityDownsampling, forKey: "VTUseHighQualityDownsampling")
+            updateEnhancements()
+        }
+    }
+    var useRealTimePriority: Bool = true {
+        didSet {
+            UserDefaults.standard.set(useRealTimePriority, forKey: "VTUseRealTimePriority")
+            updateEnhancements()
+        }
+    }
+    
     // Playback Progress & Stats
     var currentTime: Double = 0.0
     var duration: Double = 0.0
@@ -121,6 +135,8 @@ final class VTPlayerViewModel {
     init(renderer: VTMetalRenderer) {
         self.renderer = renderer
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
+        self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
+        self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
         
         NotificationCenter.default.addObserver(
             self,
@@ -433,10 +449,17 @@ final class VTPlayerViewModel {
             lastPulledTime = .zero
         }
         
+        let srLevel = self.superResolutionLevel
+        let fiLevel = self.frameInterpolationLevel
+        let highQuality = self.useHighQualityDownsampling
+        let realTime = self.useRealTimePriority
+        
         producerTask = Task {
             let coordinator = VTFrameProcessorCoordinator(
-                superResolutionLevel: superResolutionLevel,
-                frameInterpolationLevel: frameInterpolationLevel
+                superResolutionLevel: srLevel,
+                frameInterpolationLevel: fiLevel,
+                useHighQualityDownsampling: highQuality,
+                useRealTimePriority: realTime
             )
             
             do {
@@ -822,6 +845,22 @@ extension VTPlayerView {
                 .font(.system(.subheadline, design: .default))
             }
             
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Fallback Upscaling Settings")
+                    .font(.system(.subheadline, design: .default).bold())
+                    .foregroundColor(.secondary)
+                
+                Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
+                    .font(.system(.subheadline, design: .default))
+                    .help("Use high-quality chroma downsampling when scaling")
+                
+                Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
+                    .font(.system(.subheadline, design: .default))
+                    .help("Hint VideoToolbox to prioritize real-time processing")
+            }
+            
             Spacer()
         }
         .padding(20)
@@ -955,17 +994,38 @@ extension VTPlayerView {
     @ViewBuilder
     private var superResolutionMenu: some View {
         Menu {
-            Button("Off") {
+            Button(action: {
                 viewModel.superResolutionLevel = 0
                 viewModel.updateEnhancements()
+            }) {
+                HStack {
+                    if viewModel.superResolutionLevel == 0 {
+                        Image(systemName: "checkmark")
+                    }
+                    Text("Off")
+                }
             }
-            Button("2× Super Resolution") {
+            Button(action: {
                 viewModel.superResolutionLevel = 2
                 viewModel.updateEnhancements()
+            }) {
+                HStack {
+                    if viewModel.superResolutionLevel == 2 {
+                        Image(systemName: "checkmark")
+                    }
+                    Text("2× Super Resolution")
+                }
             }
-            Button("4× Super Resolution") {
+            Button(action: {
                 viewModel.superResolutionLevel = 4
                 viewModel.updateEnhancements()
+            }) {
+                HStack {
+                    if viewModel.superResolutionLevel == 4 {
+                        Image(systemName: "checkmark")
+                    }
+                    Text("4× Super Resolution")
+                }
             }
         } label: {
             HStack(spacing: 6) {
@@ -986,17 +1046,38 @@ extension VTPlayerView {
     @ViewBuilder
     private var frameInterpolationMenu: some View {
         Menu {
-            Button("Off") {
+            Button(action: {
                 viewModel.frameInterpolationLevel = 0
                 viewModel.updateEnhancements()
+            }) {
+                HStack {
+                    if viewModel.frameInterpolationLevel == 0 {
+                        Image(systemName: "checkmark")
+                    }
+                    Text("Off")
+                }
             }
-            Button("2× Interpolation") {
+            Button(action: {
                 viewModel.frameInterpolationLevel = 2
                 viewModel.updateEnhancements()
+            }) {
+                HStack {
+                    if viewModel.frameInterpolationLevel == 2 {
+                        Image(systemName: "checkmark")
+                    }
+                    Text("2× Interpolation")
+                }
             }
-            Button("4× Interpolation") {
+            Button(action: {
                 viewModel.frameInterpolationLevel = 4
                 viewModel.updateEnhancements()
+            }) {
+                HStack {
+                    if viewModel.frameInterpolationLevel == 4 {
+                        Image(systemName: "checkmark")
+                    }
+                    Text("4× Interpolation")
+                }
             }
         } label: {
             HStack(spacing: 6) {
