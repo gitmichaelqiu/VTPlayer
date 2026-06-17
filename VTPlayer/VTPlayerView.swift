@@ -569,7 +569,10 @@ final class VTPlayerViewModel {
                         let selectedFrame = self.processedFrameCache[bestIndex]
                         self.renderer.render(pixelBuffer: selectedFrame.buffer)
                         processedFramesCount += 1
-                        
+
+                        // Frames skipped before bestIndex are dropped (never rendered)
+                        self.droppedFrames += bestIndex
+
                         self.processedFrameCache.removeSubrange(0...bestIndex)
                         self.currentTime = currentSecs
                     }
