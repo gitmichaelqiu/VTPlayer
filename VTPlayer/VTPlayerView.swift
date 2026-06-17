@@ -38,9 +38,6 @@ final class VTPlayerViewModel {
     var droppedFrames = 0
     var aneUsagePercent: Double = 0.0
     
-    // Model download progress
-    let modelManager = VTModelManager()
-    
     private var playbackTask: Task<Void, Never>?
     private let renderer: VTMetalRenderer
     
@@ -91,36 +88,7 @@ final class VTPlayerViewModel {
                 let width = Int(naturalSize.width)
                 let height = Int(naturalSize.height)
                 
-                // If super-resolution is enabled, verify models are downloaded first
-                if enableSuperResolution {
-                    // Create a dummy config to check status
-                    if let srConfig = VTSuperResolutionScalerConfiguration(
-                        frameWidth: width,
-                        frameHeight: height,
-                        scaleFactor: 2,
-                        inputType: .video,
-                        usePrecomputedFlow: false,
-                        qualityPrioritization: .normal,
-                        revision: .revision1
-                    ) {
-                        modelManager.checkStatus(for: srConfig)
-                        if modelManager.status == .downloadRequired {
-                            modelManager.downloadModel(for: srConfig)
-                            
-                            // Wait until model is downloaded
-                            while modelManager.status != .ready {
-                                if case .failed(let errorMsg) = modelManager.status {
-                                    print("Model download failed: \(errorMsg)")
-                                    self.isPlaying = false
-                                    return
-                                }
-                                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                            }
-                        }
-                    }
-                }
-                
-                // Start frame processor session
+                // Start frame processor session (utilizing low latency configurations directly)
                 try await coordinator.startSession(width: width, height: height)
                 
                 let frameStream = pipeline.readFrames(from: url)
@@ -129,7 +97,8 @@ final class VTPlayerViewModel {
                 var processedFramesCount = 0
                 var fpsTimer = DispatchTime.now()
                 
-                for await frame in frameStream {
+                // Use try await for throwing AsyncSequence
+                for try await frame in frameStream {
                     if Task.isCancelled { break }
                     
                     let processStart = DispatchTime.now()
@@ -142,11 +111,11 @@ final class VTPlayerViewModel {
                     
                     // Simulate Neural Engine workload metric
                     if enableSuperResolution && enableFrameInterpolation {
-                        self.aneUsagePercent = Double.random(in: 65.0...85.0)
+                        self.aneUsagePercent = Double.random(in: 60.0...75.0)
                     } else if enableSuperResolution {
-                        self.aneUsagePercent = Double.random(in: 40.0...55.0)
+                        self.aneUsagePercent = Double.random(in: 35.0...45.0)
                     } else if enableFrameInterpolation {
-                        self.aneUsagePercent = Double.random(in: 30.0...45.0)
+                        self.aneUsagePercent = Double.random(in: 25.0...35.0)
                     } else {
                         self.aneUsagePercent = 0.0
                     }
@@ -222,7 +191,7 @@ struct VTPlayerView: View {
     
     var body: some View {
         ZStack {
-            // Dark Background
+            // System Window Background
             Color(nsColor: .windowBackgroundColor)
                 .ignoresSafeArea()
             
@@ -230,55 +199,32 @@ struct VTPlayerView: View {
                 // Video Screen Area
                 ZStack {
                     VTMetalRendererView(renderer: rawRenderer)
-                        .cornerRadius(12)
-                        .padding(16)
-                        .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 5)
+                        .cornerRadius(8)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 80) // Leave space for floating control bar
                     
                     if viewModel.videoURL == nil {
-                        VStack(spacing: 12) {
-                            Image(systemName: "film")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.secondary)
-                            Text("No Video Loaded")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
+                        ContentUnavailableView {
+                            Label("No Video Loaded", systemImage: "film")
+                        } description: {
+                            Text("Open a local video file to test Apple Silicon Neural Engine enhancements.")
+                        } actions: {
                             Button(action: { viewModel.selectFile() }) {
-                                Text("Open Video File")
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
+                                Text("Open Video File...")
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.accentColor)
+                            .controlSize(.large)
                         }
-                    }
-                    
-                    // Loading overlay when model weights are downloading
-                    if case .downloading(let progress) = viewModel.modelManager.status {
-                        ZStack {
-                            Color.black.opacity(0.7)
-                            VStack(spacing: 16) {
-                                ProgressView()
-                                    .scaleEffect(1.2)
-                                Text("Downloading ANE Super-Resolution Model weights...")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                Text("\(Int(progress * 100))%")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                ProgressView(value: progress, total: 1.0)
-                                    .progressViewStyle(.linear)
-                                    .frame(width: 300)
-                            }
-                        }
-                        .cornerRadius(12)
-                        .padding(16)
                     }
                 }
-                
-                // Glassmorphic Control Bar
-                HStack(spacing: 20) {
-                    // Play / Pause / Load
-                    HStack(spacing: 12) {
+            }
+            
+            // QuickTime-style Floating Control Bar at the bottom
+            if viewModel.videoURL != nil {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 24) {
                         Button(action: {
                             if viewModel.isPlaying {
                                 viewModel.stop()
@@ -287,77 +233,71 @@ struct VTPlayerView: View {
                             }
                         }) {
                             Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.title3)
-                                .foregroundColor(.white)
-                                .frame(width: 40, height: 40)
-                                .background(Color.accentColor)
-                                .clipShape(Circle())
+                                .font(.title2)
+                                .foregroundColor(.primary)
                         }
-                        .disabled(viewModel.videoURL == nil)
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.space, modifiers: [])
                         
                         Button(action: { viewModel.selectFile() }) {
-                            Image(systemName: "folder.badge.plus")
+                            Image(systemName: "folder")
                                 .font(.title3)
-                                .foregroundColor(.white)
-                                .frame(width: 40, height: 40)
-                                .background(Color.white.opacity(0.15))
-                                .clipShape(Circle())
+                                .foregroundColor(.primary)
                         }
-                    }
-                    
-                    Divider()
-                        .frame(height: 30)
-                        .background(Color.white.opacity(0.2))
-                    
-                    // Enhancement Toggles
-                    Toggle(isOn: $viewModel.enableSuperResolution) {
-                        HStack {
-                            Image(systemName: "sparkles")
-                            Text("2× Super Resolution")
+                        .buttonStyle(.plain)
+                        .help("Load a different video file")
+                        
+                        Divider()
+                            .frame(height: 20)
+                        
+                        // Real-time processing indicators in the control bar
+                        HStack(spacing: 16) {
+                            if viewModel.enableSuperResolution {
+                                Label("SR 2×", systemImage: "sparkles")
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.cyan.opacity(0.15))
+                                    .cornerRadius(4)
+                                    .foregroundColor(.cyan)
+                            }
+                            
+                            if viewModel.enableFrameInterpolation {
+                                Label("60/120 FPS", systemImage: "bolt.fill")
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green.opacity(0.15))
+                                    .cornerRadius(4)
+                                    .foregroundColor(.green)
+                            }
                         }
+                        
+                        Spacer()
+                        
+                        // Mini stats summary in the control bar
+                        Text(String(format: "%.1f ms | %.1f FPS", viewModel.frameProcessingTime, viewModel.fps))
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
                     }
-                    .toggleStyle(.checkbox)
-                    .tint(.cyan)
-                    .onChange(of: viewModel.enableSuperResolution) { _, _ in
-                        if viewModel.isPlaying {
-                            viewModel.play() // restart pipeline with new config
-                        }
-                    }
-                    
-                    Toggle(isOn: $viewModel.enableFrameInterpolation) {
-                        HStack {
-                            Image(systemName: "bolt.fill")
-                            Text("Frame Interpolation")
-                        }
-                    }
-                    .toggleStyle(.checkbox)
-                    .tint(.green)
-                    .onChange(of: viewModel.enableFrameInterpolation) { _, _ in
-                        if viewModel.isPlaying {
-                            viewModel.play()
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // Stats Summary
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(String(format: "Processing: %.1f ms", viewModel.frameProcessingTime))
-                        Text(String(format: "FPS: %.1f", viewModel.fps))
-                    }
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
+                    .frame(height: 54)
+                    .background(
+                        VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                            .cornerRadius(27)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 27)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                .background(
-                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                        .opacity(0.85)
-                )
-                .border(SeparatorShapeStyle(), width: 1)
             }
             
-            // Stats HUD overlay (top right corner)
+            // HUD Overlay (Top Right Corner) showing performance metrics
             if viewModel.videoURL != nil {
                 VStack {
                     HStack {
@@ -401,16 +341,49 @@ struct VTPlayerView: View {
                         .padding(12)
                         .frame(width: 180)
                         .background(
+                            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                                .cornerRadius(8)
+                        )
+                        .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.black.opacity(0.6))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                                )
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
                         )
                         .padding(24)
                     }
                     Spacer()
+                }
+            }
+        }
+        // Native System Toolbar in window titlebar
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: { viewModel.selectFile() }) {
+                    Label("Open Video", systemImage: "folder.badge.plus")
+                }
+                .help("Open a local video file")
+            }
+            
+            ToolbarItemGroup(placement: .principal) {
+                Toggle(isOn: $viewModel.enableSuperResolution) {
+                    Text("2× Super Resolution")
+                }
+                .toggleStyle(.switch)
+                .help("Upscale resolution using low-latency ANE models")
+                .onChange(of: viewModel.enableSuperResolution) { _, _ in
+                    if viewModel.isPlaying {
+                        viewModel.play() // restart pipeline with new config
+                    }
+                }
+                
+                Toggle(isOn: $viewModel.enableFrameInterpolation) {
+                    Text("Frame Interpolation")
+                }
+                .toggleStyle(.switch)
+                .help("Double video framerate dynamically")
+                .onChange(of: viewModel.enableFrameInterpolation) { _, _ in
+                    if viewModel.isPlaying {
+                        viewModel.play() // restart pipeline with new config
+                    }
                 }
             }
         }
