@@ -129,6 +129,7 @@ final class VTPlayerViewModel {
     private var processedFrameCache: [VTFrame] = []
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
+    private var playbackGeneration: UInt64 = 0
 
     // Audio sync state
     private var lastRenderedPTS: CMTime = .zero
@@ -456,6 +457,8 @@ final class VTPlayerViewModel {
     }
     
     private func startPlaybackLoop() {
+        playbackGeneration += 1
+        let gen = playbackGeneration
         producerTask?.cancel()
         consumerTask?.cancel()
 
@@ -495,6 +498,8 @@ final class VTPlayerViewModel {
             var consecutiveStalls = 0
 
             while !Task.isCancelled {
+                guard gen == self.playbackGeneration else { break }
+
                 if self.isPaused {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
@@ -529,6 +534,8 @@ final class VTPlayerViewModel {
                             let outputFrames = try await coordinator.processFrame(frame)
                             let processEnd = DispatchTime.now()
 
+                            guard gen == self.playbackGeneration else { break }
+
                             self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
 
                             // ANE usage not yet measurable via public API — placeholder for future telemetry
@@ -539,6 +546,7 @@ final class VTPlayerViewModel {
 
                             self.lastPulledTime = nextPullTime
                         } catch {
+                            guard gen == self.playbackGeneration else { break }
                             self.processedFrameCache.append(frame)
                             self.lastPulledTime = nextPullTime
                         }
@@ -562,10 +570,13 @@ final class VTPlayerViewModel {
         }
         
         consumerTask = Task {
+            let myGen = gen
             var processedFramesCount = 0
             var fpsTimer = DispatchTime.now()
-            
+
             while !Task.isCancelled {
+                guard myGen == self.playbackGeneration else { break }
+
                 if self.isPaused {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
@@ -612,7 +623,9 @@ final class VTPlayerViewModel {
 
         audioSyncTask?.cancel()
         audioSyncTask = Task {
+            let myGen = gen
             while !Task.isCancelled {
+                guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 50_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
