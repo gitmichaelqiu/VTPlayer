@@ -206,6 +206,16 @@ final class VTPlayerViewModel {
                     }
                     self.playerItemObserver = observer
                     
+                    // Retrieve and apply saved playback progress
+                    let savedProgress = UserDefaults.standard.double(forKey: "VTPlaybackProgress_\(url.path)")
+                    if savedProgress > 0 && savedProgress < durationSecs {
+                        self.currentTime = savedProgress
+                        let cmTime = CMTime(seconds: savedProgress, preferredTimescale: 600)
+                        newPlayer.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    } else {
+                        self.currentTime = 0.0
+                    }
+                    
                     // Start rendering/processing loop
                     self.play()
                 }
@@ -213,6 +223,11 @@ final class VTPlayerViewModel {
                 print("Error loading video properties: \(error.localizedDescription)")
             }
         }
+    }
+    
+    func saveProgress() {
+        guard let url = videoURL else { return }
+        UserDefaults.standard.set(self.currentTime, forKey: "VTPlaybackProgress_\(url.path)")
     }
     
     @objc func reloadRecentVideos() {
@@ -230,9 +245,6 @@ final class VTPlayerViewModel {
         self.userActivityDetected()
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = true
-            window.toolbar?.isVisible = false
             window.backgroundColor = .black
         }
     }
@@ -246,9 +258,6 @@ final class VTPlayerViewModel {
         }
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = false
-            window.toolbar?.isVisible = true
             window.backgroundColor = .windowBackgroundColor
         }
     }
@@ -289,6 +298,7 @@ final class VTPlayerViewModel {
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
         self.currentTime = seconds
+        self.saveProgress()
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
@@ -302,6 +312,7 @@ final class VTPlayerViewModel {
     /// Seeks and draws the frame immediately during continuous scrubbing.
     func scrub(to seconds: Double) {
         self.currentTime = seconds
+        self.saveProgress()
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -366,6 +377,7 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         player.pause()
         self.isPaused = true
+        self.saveProgress()
         self.userActivityDetected()
     }
     
@@ -439,7 +451,12 @@ final class VTPlayerViewModel {
                                 processedFramesCount += 1
                             }
                             
+                            let prevSec = Int(self.currentTime)
+                            let newSec = Int(CMTimeGetSeconds(itemTime))
                             self.currentTime = CMTimeGetSeconds(itemTime)
+                            if prevSec != newSec {
+                                self.saveProgress()
+                            }
                             
                             let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
                             if elapsedFPSTime >= 1.0 {
@@ -470,6 +487,9 @@ final class VTPlayerViewModel {
     
     /// Pauses/stops playback entirely.
     func stop() {
+        if self.currentTime > 0 {
+            self.saveProgress()
+        }
         playbackTimerTask?.cancel()
         playbackTimerTask = nil
         if let observer = playerItemObserver {
@@ -688,32 +708,23 @@ struct VTPlayerView: View {
                                 .help("Toggle Frame Interpolation (Double framerate)")
                                 
                                 Spacer()
-                                
-                                // Playback Speed Menu Selector
-                                Menu {
-                                    ForEach([0.5, 1.0, 1.5, 2.0], id: \.self) { speed in
-                                        Button(action: { viewModel.playbackSpeed = speed }) {
-                                            HStack {
-                                                Text(String(format: "%.1fx", speed))
-                                                if viewModel.playbackSpeed == speed {
-                                                    Image(systemName: "checkmark")
-                                                }
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    Text(String(format: "Speed: %.1fx", viewModel.playbackSpeed))
-                                        .font(.system(.caption, design: .monospaced))
-                                }
-                                .menuStyle(.button)
-                                .controlSize(.small)
-                                .frame(width: 100)
+                                                                 // Playback Speed Slider
+                                 HStack(spacing: 6) {
+                                     Text(String(format: "%.2fx", viewModel.playbackSpeed))
+                                         .font(.system(.caption, design: .monospaced))
+                                         .foregroundColor(.secondary)
+                                         .frame(width: 45, alignment: .trailing)
+                                     Slider(value: $viewModel.playbackSpeed, in: 0.25...4.0)
+                                         .frame(width: 80)
+                                         .accentColor(.cyan)
+                                 }
+                                 .help("Adjust playback speed (0.25x - 4x)")
                                 
                                 Divider()
                                     .frame(height: 16)
                                 
                                 Button(action: {
-                                    if let window = NSApp.mainWindow {
+                                    if let window = NSApp.mainWindow ?? NSApp.keyWindow {
                                         window.toggleFullScreen(nil)
                                     }
                                 }) {
@@ -722,7 +733,8 @@ struct VTPlayerView: View {
                                         .foregroundColor(.primary)
                                 }
                                 .buttonStyle(.plain)
-                                .help("Toggle Fullscreen")
+                                .keyboardShortcut("f", modifiers: [])
+                                .help("Toggle Fullscreen (F)")
                             }
                         }
                         .padding(.horizontal, 20)
@@ -867,7 +879,6 @@ struct VTPlayerView: View {
                 .help("Toggle diagnostics and metadata sidebar panel")
             }
         }
-        .toolbar(viewModel.isFullScreen ? .hidden : .visible, for: .windowToolbar)
     }
     
     private func formatTime(_ seconds: Double) -> String {
