@@ -9,6 +9,7 @@ import SwiftUI
 import AVFoundation
 import MetalKit
 import VideoToolbox
+import AppKit
 
 /// SwiftUI Representable wrapper for the VTMetalRenderer.
 struct VTMetalRendererView: NSViewRepresentable {
@@ -33,6 +34,7 @@ final class VTPlayerViewModel {
     var enableSuperResolution = false
     var enableFrameInterpolation = false
     var showSidebar = true
+    var showLeftSidebar = true
     
     // Playback Progress & Stats
     var currentTime: Double = 0.0
@@ -62,6 +64,9 @@ final class VTPlayerViewModel {
     var srSupportedScales: String = "None"
     var srInitializationError: String? = nil
     
+    // Recents List
+    var recentVideos: [URL] = []
+    
     // AVPlayer components
     private var player: AVPlayer?
     private var videoOutput: AVPlayerItemVideoOutput?
@@ -72,6 +77,18 @@ final class VTPlayerViewModel {
     
     init(renderer: VTMetalRenderer) {
         self.renderer = renderer
+        self.recentVideos = NSDocumentController.shared.recentDocumentURLs
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reloadRecentVideos),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     /// Launches an NSOpenPanel to select a local media file.
@@ -138,6 +155,9 @@ final class VTPlayerViewModel {
                 
                 // Update properties on @MainActor
                 await MainActor.run {
+                    NSDocumentController.shared.noteNewRecentDocumentURL(url)
+                    self.reloadRecentVideos()
+                    
                     self.duration = durationSecs
                     self.videoWidth = width
                     self.videoHeight = height
@@ -171,6 +191,18 @@ final class VTPlayerViewModel {
             }
         }
     }
+    
+    @objc func reloadRecentVideos() {
+        self.recentVideos = NSDocumentController.shared.recentDocumentURLs
+    }
+    
+    func openRecentVideo(_ url: URL) {
+        self.stop()
+        self.videoURL = url
+        self.setupPlayer(with: url)
+    }
+    
+
     
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
@@ -311,12 +343,19 @@ final class VTPlayerViewModel {
                                 self.aneUsagePercent = 0.0
                             }
                             
-                            for outFrame in outputFrames {
+                            let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
+                            let frameInterval = 1.0 / sourceFPS
+                            let subFrameInterval = frameInterval / Double(outputFrames.count)
+                            
+                            for (index, outFrame) in outputFrames.enumerated() {
+                                if index > 0 {
+                                    try? await Task.sleep(nanoseconds: UInt64(subFrameInterval * 1_000_000_000))
+                                }
                                 self.renderer.render(pixelBuffer: outFrame.buffer)
+                                processedFramesCount += 1
                             }
                             
                             self.currentTime = CMTimeGetSeconds(itemTime)
-                            processedFramesCount += 1
                             
                             let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
                             if elapsedFPSTime >= 1.0 {
@@ -327,14 +366,15 @@ final class VTPlayerViewModel {
                         } catch {
                             // Fallback to original frame rendering on error
                             self.renderer.render(pixelBuffer: pixelBuffer)
+                            processedFramesCount += 1
                         }
                     }
                 }
                 
-                // Sleep based on target framerate to avoid CPU spinning
+                // Sleep based on source framerate to match video updates
                 let elapsed = Double(DispatchTime.now().uptimeNanoseconds - frameStart.uptimeNanoseconds) / 1_000_000_000.0
-                let targetFPS = self.enableFrameInterpolation ? (self.sourceFrameRate > 0 ? self.sourceFrameRate * 2 : 60.0) : (self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0)
-                let targetInterval = 1.0 / targetFPS
+                let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
+                let targetInterval = 1.0 / sourceFPS
                 let sleepTime = max(0.001, targetInterval - elapsed)
                 
                 try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
@@ -392,6 +432,53 @@ struct VTPlayerView: View {
     
     var body: some View {
         HStack(spacing: 0) {
+            // Collapsible Left Sidebar Panel for Recent Playback History
+            if viewModel.showLeftSidebar {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("RECENT PLAYBACKS")
+                        .font(.system(.caption, design: .monospaced)).bold()
+                        .foregroundColor(.cyan)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 20)
+                        .padding(.bottom, 12)
+                    
+                    if viewModel.recentVideos.isEmpty {
+                        VStack {
+                            Spacer()
+                            ContentUnavailableView {
+                                Label("No Recents", systemImage: "clock")
+                            }
+                            .scaleEffect(0.8)
+                            Spacer()
+                        }
+                    } else {
+                        List(viewModel.recentVideos, id: \.self) { url in
+                            Button(action: { viewModel.openRecentVideo(url) }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "film")
+                                        .foregroundColor(.cyan)
+                                    Text(url.lastPathComponent)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .font(.system(.subheadline, design: .monospaced))
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .buttonStyle(.plain)
+                            .help(url.path)
+                        }
+                        .listStyle(.sidebar)
+                    }
+                }
+                .frame(width: 240)
+                .background(
+                    VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
+                )
+                .transition(.move(edge: .leading))
+                
+                Divider()
+            }
+            
             ZStack {
                 // System Window Background
                 Color(nsColor: .windowBackgroundColor)
@@ -523,6 +610,21 @@ struct VTPlayerView: View {
                                 .menuStyle(.button)
                                 .controlSize(.small)
                                 .frame(width: 100)
+                                
+                                Divider()
+                                    .frame(height: 16)
+                                
+                                Button(action: {
+                                    if let window = NSApp.mainWindow {
+                                        window.toggleFullScreen(nil)
+                                    }
+                                }) {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Toggle Fullscreen")
                             }
                         }
                         .padding(.horizontal, 20)
@@ -617,9 +719,17 @@ struct VTPlayerView: View {
                 .transition(.move(edge: .trailing))
             }
         }
+        .animation(.easeInOut, value: viewModel.showLeftSidebar)
         .animation(.easeInOut, value: viewModel.showSidebar)
         // Native System Toolbar in window titlebar
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: { viewModel.showLeftSidebar.toggle() }) {
+                    Label("Toggle Recents", systemImage: "sidebar.left")
+                }
+                .help("Toggle recent videos sidebar")
+            }
+            
             ToolbarItem(placement: .navigation) {
                 Button(action: { viewModel.selectFile() }) {
                     Label("Open Video", systemImage: "folder.badge.plus")
