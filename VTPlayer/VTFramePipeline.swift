@@ -21,82 +21,103 @@ nonisolated public struct VTFrame: @unchecked Sendable {
     }
 }
 
+/// An asynchronous sequence of video frames providing backpressure support.
+public struct VTFrameSequence: AsyncSequence, Sendable {
+    public typealias Element = VTFrame
+    
+    private let url: URL
+    
+    public init(url: URL) {
+        self.url = url
+    }
+    
+    public func makeAsyncIterator() -> Iterator {
+        return Iterator(url: url)
+    }
+    
+    /// Thread-safe class-based iterator conforming to AsyncIteratorProtocol.
+    public final class Iterator: AsyncIteratorProtocol, Sendable {
+        private let url: URL
+        private let state = StateLock()
+        
+        init(url: URL) {
+            self.url = url
+        }
+        
+        public func next() async throws -> VTFrame? {
+            return try await state.next(url: url)
+        }
+        
+        /// Actor to encapsulate state and run reader initialization on background threads.
+        private actor StateLock {
+            private var reader: AVAssetReader?
+            private var trackOutput: AVAssetReaderTrackOutput?
+            private var isInitialized = false
+            
+            func next(url: URL) async throws -> VTFrame? {
+                if !isInitialized {
+                    let asset = AVURLAsset(url: url)
+                    let tracks = try await asset.loadTracks(withMediaType: .video)
+                    guard let videoTrack = tracks.first else {
+                        isInitialized = true
+                        return nil
+                    }
+                    
+                    let reader = try AVAssetReader(asset: asset)
+                    let outputSettings: [String: Any] = [
+                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+                    ]
+                    let trackOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: outputSettings)
+                    trackOutput.alwaysCopiesSampleData = false
+                    
+                    guard reader.canAdd(trackOutput) else {
+                        isInitialized = true
+                        return nil
+                    }
+                    reader.add(trackOutput)
+                    
+                    guard reader.startReading() else {
+                        isInitialized = true
+                        return nil
+                    }
+                    
+                    self.reader = reader
+                    self.trackOutput = trackOutput
+                    self.isInitialized = true
+                }
+                
+                guard let reader = reader, let trackOutput = trackOutput else {
+                    return nil
+                }
+                
+                if reader.status == .reading {
+                    return autoreleasepool { () -> VTFrame? in
+                        guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else {
+                            return nil
+                        }
+                        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                            return nil
+                        }
+                        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        return VTFrame(buffer: pixelBuffer, presentationTimeStamp: pts)
+                    }
+                } else {
+                    return nil
+                }
+            }
+        }
+    }
+}
+
 /// A pipeline responsible for reading and decompressing video tracks asynchronously.
 public final class VTFramePipeline: Sendable {
     
     public init() {}
     
-    /// Starts reading frames from the specified video file URL as an asynchronous stream.
+    /// Starts reading frames from the specified video file URL as an asynchronous sequence.
     /// - Parameter url: The local URL of the video file.
-    /// - Returns: An AsyncStream yielding VTFrame objects.
-    public func readFrames(from url: URL) -> AsyncStream<VTFrame> {
-        AsyncStream { continuation in
-            let asset = AVAsset(url: url)
-            
-            Task {
-                do {
-                    // Swift 6 asynchronous loading of tracks
-                    let tracks = try await asset.loadTracks(withMediaType: .video)
-                    guard let videoTrack = tracks.first else {
-                        continuation.finish()
-                        return
-                    }
-                    
-                    let reader = try AVAssetReader(asset: asset)
-                    
-                    // Request NV12 pixel format (kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
-                    let outputSettings: [String: Any] = [
-                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-                    ]
-                    
-                    let trackOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: outputSettings)
-                    trackOutput.alwaysCopiesSampleData = false
-                    
-                    guard reader.canAdd(trackOutput) else {
-                        continuation.finish()
-                        return
-                    }
-                    reader.add(trackOutput)
-                    
-                    guard reader.startReading() else {
-                        continuation.finish()
-                        return
-                    }
-                    
-                    continuation.onTermination = { _ in
-                        if reader.status == .reading {
-                            reader.cancelReading()
-                        }
-                    }
-                    
-                    // Processing loop on background queue
-                    while reader.status == .reading {
-                        autoreleasepool {
-                            guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else {
-                                return
-                            }
-                            
-                            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                                return
-                            }
-                            
-                            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                            let frame = VTFrame(buffer: pixelBuffer, presentationTimeStamp: pts)
-                            
-                            // Yield to stream with backpressure support
-                            let result = continuation.yield(frame)
-                            if case .terminated = result {
-                                reader.cancelReading()
-                            }
-                        }
-                    }
-                    
-                    continuation.finish()
-                } catch {
-                    print("Error loading or reading asset: \(error.localizedDescription)")
-                    continuation.finish()
-                }
-            }
-        }
+    /// - Returns: A VTFrameSequence yielding VTFrame objects.
+    public func readFrames(from url: URL) -> VTFrameSequence {
+        return VTFrameSequence(url: url)
     }
 }
