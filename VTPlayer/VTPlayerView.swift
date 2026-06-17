@@ -1298,16 +1298,17 @@ extension VTPlayerView {
             .font(.caption.weight(.medium))
             .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
             .frame(width: 110, alignment: .leading)
-            if hoverSH {
-                Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                    .accentColor(.cyan)
-                    .frame(width: 60)
-                    .labelsHidden()
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
-            }
+            Color.clear
+                .frame(width: 60)
+                .overlay {
+                    if hoverSH {
+                        Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                            .accentColor(.cyan)
+                            .labelsHidden()
+                    }
+                }
         }
         .onHover { hoverSH = $0 }
-        .animation(.easeInOut(duration: 0.15), value: hoverSH)
         .help("Adjust sharpness intensity (CIUnsharpMask)")
     }
 
