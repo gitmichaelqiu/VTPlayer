@@ -26,7 +26,10 @@ public final class VTModelManager {
     
     /// The observable status of the model manager.
     public private(set) var status: Status = .notChecked
-    
+
+    /// Tracks whether the asynchronous download has completed (success or failure).
+    private var downloadCompleted = false
+
     public init() {}
     
     /// Checks the model status for the given configuration.
@@ -59,19 +62,21 @@ public final class VTModelManager {
             self.status = .ready
             return
         }
-        
+
         // Double check if model is already ready
         if srConfig.configurationModelStatus == .ready {
             self.status = .ready
             return
         }
-        
+
         self.status = .downloading(progress: Double(srConfig.configurationModelPercentageAvailable))
-        
+        self.downloadCompleted = false
+
         // Start downloading configuration model with a completion handler
         srConfig.downloadConfigurationModel { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                self.downloadCompleted = true
                 if let error = error {
                     self.status = .failed(error.localizedDescription)
                 } else {
@@ -79,15 +84,21 @@ public final class VTModelManager {
                 }
             }
         }
-        
-        // Start a timer to poll progress while downloading
+
+        // Start a timer to poll progress while downloading.
+        // The timer stops overriding status once downloadCompleted is set (e.g. after failure).
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self, srConfig] timer in
             Task { @MainActor in
                 guard let self = self else {
                     timer.invalidate()
                     return
                 }
-                
+
+                if self.downloadCompleted {
+                    timer.invalidate()
+                    return
+                }
+
                 switch srConfig.configurationModelStatus {
                 case .downloading:
                     let progress = srConfig.configurationModelPercentageAvailable
@@ -96,8 +107,11 @@ public final class VTModelManager {
                     self.status = .ready
                     timer.invalidate()
                 case .downloadRequired:
-                    self.status = .downloadRequired
-                    timer.invalidate()
+                    // Download not yet in progress or already failed — keep showing
+                    // the previous status (e.g. .downloading or .failed) instead of
+                    // reverting to .downloadRequired. The completion handler will
+                    // set the final status.
+                    break
                 @unknown default:
                     timer.invalidate()
                 }
