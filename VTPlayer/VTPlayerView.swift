@@ -521,9 +521,9 @@ final class VTPlayerViewModel {
                     await self.modelManager.checkStatus(for: checkConfig)
                     if case .downloadRequired = self.modelManager.status {
                         print("Quality SR model download required, starting download and falling back to LL SR")
-                        Task { @MainActor in
-                            self.modelManager.downloadModel(for: checkConfig)
-                        }
+                        self.modelManager.downloadModel(for: checkConfig)
+                        // Yield to allow the download Timer to fire and UI to update progress
+                        try? await Task.sleep(nanoseconds: 50_000_000)
                         effectiveQualitySR = 0
                         effectiveSRLevel = qualitySR == 4 ? 4 : 2
                     }
@@ -618,6 +618,10 @@ final class VTPlayerViewModel {
 
                     // ANE usage not yet measurable via public API — placeholder for future telemetry
                     self.aneUsagePercent = 0.0
+
+                    if outputFrames.count < 2 && (self.frameInterpolationLevel > 0 || self.superResolutionLevel > 0) {
+                        print("⚠️ FI/SR: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
+                    }
 
                     self.processedFrameCache.append(contentsOf: outputFrames)
                     self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
