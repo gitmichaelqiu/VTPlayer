@@ -112,6 +112,7 @@ final class VTPlayerViewModel {
     var motionBlurIsActive: Bool { motionBlurStrength > 0 }
     var denoiseIsActive: Bool { denoiseStrength > 0 }
     var sharpnessIsActive: Bool { sharpness > 0 }
+    var hdrIsActive: Bool { hdrStrength > 0 }
     /// Number of processed frames waiting to be displayed (observable by SwiftUI).
     var frameCacheCount: Int { processedFrameCache.count }
 
@@ -119,6 +120,13 @@ final class VTPlayerViewModel {
     var sharpness: Double = 0.0 {
         didSet {
             renderer.sharpness = Float(sharpness)
+        }
+    }
+
+    // HDR Tone Mapping (0.0 = off, >0 applies exposure/saturation boost into EDR headroom)
+    var hdrStrength: Double = 0.0 {
+        didSet {
+            renderer.hdrStrength = Float(hdrStrength)
         }
     }
 
@@ -765,6 +773,7 @@ final class VTPlayerViewModel {
             "frameInterpolationLevel": frameInterpolationLevel,
             "playbackSpeed": playbackSpeed,
             "sharpness": sharpness,
+            "hdrStrength": hdrStrength,
             "qualitySuperResolutionScaleFactor": qualitySuperResolutionScaleFactor,
             "motionBlurStrength": motionBlurStrength,
             "denoiseStrength": denoiseStrength,
@@ -783,6 +792,8 @@ final class VTPlayerViewModel {
             sharpness = loadedSharpness
         }
         renderer.sharpness = Float(sharpness)
+        hdrStrength = settings["hdrStrength"] as? Double ?? 0.0
+        renderer.hdrStrength = Float(hdrStrength)
         qualitySuperResolutionScaleFactor = settings["qualitySuperResolutionScaleFactor"] as? Int ?? 0
         // Migrate: QL SR only supports 4x, convert old 2x setting to LL SR 2x
         if qualitySuperResolutionScaleFactor == 2 {
@@ -817,6 +828,7 @@ struct VTPlayerView: View {
     @State private var hoverMB = false
     @State private var hoverDN = false
     @State private var hoverSH = false
+    @State private var hoverHDR = false
 
     var body: some View {
         if !viewModel.isFullScreen {
@@ -1327,6 +1339,25 @@ extension VTPlayerView {
 
                     // Sharpness Slider
                     sharpnessControl
+
+                    // HDR Tone Mapping
+                    HStack(spacing: 4) {
+                        Text(hoverHDR
+                            ? "HDR: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : "Off")"
+                            : "HDR"
+                        )
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(viewModel.hdrStrength > 0 ? .yellow : .secondary)
+                        .frame(width: hoverHDR ? 90 : 28, alignment: .leading)
+                        Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                            .accentColor(.yellow)
+                            .labelsHidden()
+                            .frame(width: 60)
+                            .opacity(hoverHDR ? 1 : 0)
+                            .allowsHitTesting(hoverHDR)
+                    }
+                    .onHover { hoverHDR = $0 }
+                    .help("SDR to HDR tone mapping — expands highlights into display EDR headroom")
 
                     Spacer()
 
