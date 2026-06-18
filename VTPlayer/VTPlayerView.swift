@@ -491,6 +491,15 @@ final class VTPlayerViewModel {
         }
         audioSyncLatency = 0
 
+        // Re-assert player rate so audio keeps playing after a pipeline
+        // restart triggered by updateEnhancements().  Without this, a
+        // rate that dropped to 0 (AVPlayer internal stall) stays silent
+        // because the old audioSyncTask was already cancelled and the new
+        // one won't check for 200 ms.
+        if let player = player, !isPaused {
+            player.rate = Float(playbackSpeed)
+        }
+
         let srLevel = self.superResolutionLevel
         let fiLevel = self.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
