@@ -834,6 +834,8 @@ final class VTPlayerViewModel {
         self.frameProcessingTime = 0.0
         self.aneUsagePercent = 0.0
         self.srInitializationError = nil
+        self.isInitializingPipeline = false
+        self.enhancementsPendingRestart = false
         self.userActivityDetected()
     }
 
