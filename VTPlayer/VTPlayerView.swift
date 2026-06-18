@@ -598,7 +598,7 @@ final class VTPlayerViewModel {
                 let resumeTime = player.currentTime()
                 self.lastPulledTime = resumeTime
                 self.lastRenderedPTS = resumeTime
-                player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 self.isInitializingPipeline = false
             }

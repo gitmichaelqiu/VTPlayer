@@ -534,7 +534,7 @@ public actor VTFrameProcessorCoordinator {
             // Include the source frame as the final output
             outputFrames.append(frame)
 
-            print("FI: frame at \(String(format: "%.3f", CMTimeGetSeconds(sourcePTS)))s → \(outputFrames.count) output frames (phases=\(phases))")
+
             return outputFrames
         }
     }
