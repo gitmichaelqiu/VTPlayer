@@ -393,7 +393,6 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
-        self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         guard let player = player else { return }
