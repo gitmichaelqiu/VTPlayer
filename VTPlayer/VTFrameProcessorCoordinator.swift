@@ -512,12 +512,15 @@ public actor VTFrameProcessorCoordinator {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
             }
 
-            guard let params = VTLowLatencyFrameInterpolationParameters(
+            // Log params creation
+            let params = VTLowLatencyFrameInterpolationParameters(
                 sourceFrame: sourceFP,
                 previousFrame: prevSourceFP,
                 interpolationPhase: phases,
                 destinationFrames: destFrames
-            ) else {
+            )
+            guard let params = params else {
+                print("⚠️ VTLowLatencyFrameInterpolationParameters returned nil: fiLevel=\(frameInterpolationLevel), phases=\(phases), destCount=\(destFrames.count)")
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create FI params"])
             }
@@ -528,8 +531,10 @@ public actor VTFrameProcessorCoordinator {
             for (i, buf) in destBufs.enumerated() {
                 outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i]))
             }
+            // Include the source frame as the final output
             outputFrames.append(frame)
 
+            print("FI: frame at \(String(format: "%.3f", CMTimeGetSeconds(sourcePTS)))s → \(outputFrames.count) output frames (phases=\(phases))")
             return outputFrames
         }
     }
