@@ -571,6 +571,13 @@ final class VTPlayerViewModel {
                 qualityPrioritization: qualPrior
             )
 
+            // Pause the player during coordinator init so the audio clock
+            // doesn't advance while the cache is empty.  Without this, the
+            // consumer stalls (empty cache) while audio keeps running,
+            // creating an audible gap followed by a video jump.
+            let wasRate = self.player?.rate ?? 0
+            self.player?.pause()
+
             do {
                 self.srInitializationError = nil
                 try await coordinator.startSession(width: videoWidth, height: videoHeight)
@@ -583,12 +590,14 @@ final class VTPlayerViewModel {
                 return
             }
 
-            // Re-sync lastPulledTime after potentially slow coordinator setup.
-            // Without this, player.currentTime() has advanced beyond the
-            // lastPulledTime that was captured in startPlaybackLoop(), so the
-            // first nextPullTime targets a stale time in the past.
+            // Re-sync lastPulledTime after potentially slow coordinator setup
+            // and resume the player from the same position.
             if let player = self.player {
-                self.lastPulledTime = player.currentTime()
+                let resumeTime = player.currentTime()
+                self.lastPulledTime = resumeTime
+                self.lastRenderedPTS = resumeTime
+                player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
