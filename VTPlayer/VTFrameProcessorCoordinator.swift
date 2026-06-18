@@ -646,44 +646,54 @@ public actor VTFrameProcessorCoordinator {
     private func processMotionBlur(instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {
         guard motionBlurStrength > 0,
               let pool = instance.pixelBufferPool,
-              let frame = inputFrames.first else { return inputFrames }
+              !inputFrames.isEmpty else { return inputFrames }
 
-        var outBuf: CVPixelBuffer?
-        guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &outBuf) == kCVReturnSuccess,
-              let destBuf = outBuf else {
-            throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                userInfo: [NSLocalizedDescriptionKey: "MB pool allocation failed"])
+        var outputFrames: [VTFrame] = []
+
+        for (idx, frame) in inputFrames.enumerated() {
+            var outBuf: CVPixelBuffer?
+            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &outBuf) == kCVReturnSuccess,
+                  let destBuf = outBuf else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                    userInfo: [NSLocalizedDescriptionKey: "MB pool allocation failed"])
+            }
+
+            guard let sourceFP = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp),
+                  let destFP = VTFrameProcessorFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp) else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create MB frames"])
+            }
+
+            // Use the previous frame in the input batch, or fall back to
+            // frameHistory for the first frame in the batch.
+            let prevFP: VTFrameProcessorFrame
+            if idx > 0,
+               let prev = VTFrameProcessorFrame(buffer: inputFrames[idx - 1].buffer,
+                                                 presentationTimeStamp: inputFrames[idx - 1].presentationTimeStamp) {
+                prevFP = prev
+            } else {
+                prevFP = frameHistory.count >= 2 ? frameHistory[1] : sourceFP
+            }
+
+            guard let params = VTMotionBlurParameters(
+                sourceFrame: sourceFP,
+                nextFrame: sourceFP,
+                previousFrame: prevFP,
+                nextOpticalFlow: nil,
+                previousOpticalFlow: nil,
+                motionBlurStrength: motionBlurStrength,
+                submissionMode: .sequential,
+                destinationFrame: destFP
+            ) else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create MB params"])
+            }
+
+            _ = try await instance.processor.process(parameters: params)
+            outputFrames.append(VTFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp))
         }
 
-        guard let sourceFP = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp),
-              let destFP = VTFrameProcessorFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp) else {
-            throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to create MB frames"])
-        }
-
-        // frameHistory[0] = current frame (source), [1] = previous frame
-        // Use source as "next" since we process frame-by-frame and can't look ahead.
-        // Only use frameHistory[1] as previous — the old code had both next and
-        // previous pointing to the same frame (frameHistory[1]), which double-weighted
-        // the blend and caused extreme darkening even at low strength.
-        let prevFP = frameHistory.count >= 2 ? frameHistory[1] : sourceFP
-
-        guard let params = VTMotionBlurParameters(
-            sourceFrame: sourceFP,
-            nextFrame: sourceFP,
-            previousFrame: prevFP,
-            nextOpticalFlow: nil,
-            previousOpticalFlow: nil,
-            motionBlurStrength: motionBlurStrength,
-            submissionMode: .sequential,
-            destinationFrame: destFP
-        ) else {
-            throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to create MB params"])
-        }
-
-        _ = try await instance.processor.process(parameters: params)
-        return [VTFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp)]
+        return outputFrames
     }
 
     // MARK: - End Session
