@@ -143,12 +143,11 @@ final class VTPlayerViewModel {
     private var playerItemObserver: Any?
     private var playbackGeneration: UInt64 = 0
 
-    // Audio sync state
+    // Audio sync monitoring (diagnostic only — never pauses player)
     private var lastRenderedPTS: CMTime = .zero
-    private var isAudioPausedForSync = false
+    var audioSyncLatency: Double = 0
     private var audioSyncTask: Task<Void, Never>?
     private let audioSyncLatencyThreshold: Double = 0.1
-    private let audioSyncRecoveryFrameCount: Int = 5
     
     let renderer: VTMetalRenderer
     let modelManager = VTModelManager()
@@ -376,7 +375,6 @@ final class VTPlayerViewModel {
     func seek(to seconds: Double) {
         self.currentTime = seconds
         self.saveProgress()
-        self.isAudioPausedForSync = false
         self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
@@ -389,12 +387,12 @@ final class VTPlayerViewModel {
             }
         }
     }
-    
+
     /// Seeks and draws the frame immediately during continuous scrubbing.
     func scrub(to seconds: Double) {
         self.currentTime = seconds
         self.saveProgress()
-        self.isAudioPausedForSync = false
+        self.lastRenderedPTS = .zero
         self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
@@ -491,7 +489,7 @@ final class VTPlayerViewModel {
             lastPulledTime = .zero
             lastRenderedPTS = .zero
         }
-        isAudioPausedForSync = false
+        audioSyncLatency = 0
 
         let srLevel = self.superResolutionLevel
         let fiLevel = self.frameInterpolationLevel
@@ -702,24 +700,21 @@ final class VTPlayerViewModel {
             let myGen = gen
             while !Task.isCancelled {
                 guard myGen == self.playbackGeneration else { break }
-                try? await Task.sleep(nanoseconds: 50_000_000)
+                try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
 
-                if latency > self.audioSyncLatencyThreshold && !self.isAudioPausedForSync {
-                    // Only pause when cache is non-empty — an empty cache means
-                    // the producer is still catching up after a restart.
-                    if !self.processedFrameCache.isEmpty {
-                        player.rate = 0
-                        self.isAudioPausedForSync = true
-                    }
-                } else if self.isAudioPausedForSync {
-                    if self.processedFrameCache.count >= self.audioSyncRecoveryFrameCount || latency <= 0 {
-                        player.rate = Float(self.playbackSpeed)
-                        self.isAudioPausedForSync = false
-                    }
+                // Log desync for diagnostics but never pause the player.
+                // Pausing freezes currentTime(), which prevents the consumer
+                // from rendering any frames (their PTS > frozen time), causing
+                // a death spiral: pause → no frames rendered → resume →
+                // immediate re-pause. This also fights the speed slider.
+                if latency > self.audioSyncLatencyThreshold {
+                    self.audioSyncLatency = latency
+                } else {
+                    self.audioSyncLatency = 0
                 }
             }
         }
@@ -737,7 +732,7 @@ final class VTPlayerViewModel {
         consumerTask = nil
         audioSyncTask?.cancel()
         audioSyncTask = nil
-        isAudioPausedForSync = false
+        audioSyncLatency = 0
         lastRenderedPTS = .zero
         processedFrameCache.removeAll()
         
