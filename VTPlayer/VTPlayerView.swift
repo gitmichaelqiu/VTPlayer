@@ -550,6 +550,9 @@ final class VTPlayerViewModel {
             } catch {
                 self.srInitializationError = error.localizedDescription
                 print("Failed to initialize coordinator session: \(error.localizedDescription)")
+                // Stop playback entirely so the consumer and audio sync don't hang
+                // forever with an empty frame cache.
+                self.stop()
                 return
             }
 
