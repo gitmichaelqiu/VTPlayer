@@ -670,6 +670,15 @@ final class VTPlayerViewModel {
                     let firstFrame = self.processedFrameCache[0]
                     let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
 
+                    // If the pipeline falls behind (e.g. FI 4x at 100fps target but ~56fps actual),
+                    // skip stale frames so the consumer catches up without audio sync pausing the
+                    // player — which causes slow-motion stutter and fights the speed slider.
+                    if frameTime < currentSecs - 0.05 {
+                        self.processedFrameCache.removeFirst()
+                        self.droppedFrames += 1
+                        continue
+                    }
+
                     if frameTime <= currentSecs + 0.005 {
                         self.renderer.render(pixelBuffer: firstFrame.buffer)
                         self.lastRenderedPTS = firstFrame.presentationTimeStamp
