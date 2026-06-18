@@ -22,33 +22,45 @@ public final class VTMetalRenderer: MTKView {
 
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
     public var sharpness: Float = 0.0
-    
+
+    /// HDR tone mapping strength (0.0 = off, >0 expands SDR highlights into display EDR headroom)
+    public var hdrStrength: Float = 0.0
+
     public override init(frame frameRect: CGRect, device: MTLDevice?) {
         super.init(frame: frameRect, device: device ?? MTLCreateSystemDefaultDevice())
         setupMetal()
     }
-    
+
     required init(coder: NSCoder) {
         super.init(coder: coder)
         self.device = MTLCreateSystemDefaultDevice()
         setupMetal()
     }
-    
+
     private func setupMetal() {
         guard let device = self.device else { return }
-        
-        // Configure MTKView
+
+        // Configure MTKView for EDR support via RGBA16Float pixel format
+        self.colorPixelFormat = .rgba16Float
         self.framebufferOnly = false
         self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         self.enableSetNeedsDisplay = true
         self.isPaused = true // We manually trigger drawing when a new frame is received
-        
+
+        // Enable Extended Dynamic Range on the Metal layer so the display does not clamp values > 1.0
+        if let metalLayer = self.layer as? CAMetalLayer {
+            metalLayer.wantsExtendedDynamicRangeContent = true
+        }
+
         self.commandQueue = device.makeCommandQueue()
         if let queue = commandQueue {
-            // Initialize CoreImage context backed by the same Metal command queue
+            // Initialize CoreImage context with extended linear sRGB working space.
+            // This allows CIFilters to produce values > 1.0 for HDR tone expansion.
+            let extendedLinearSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)
             self.ciContext = CIContext(mtlCommandQueue: queue, options: [
                 .cacheIntermediates: false,
-                .useSoftwareRenderer: false
+                .useSoftwareRenderer: false,
+                .workingColorSpace: extendedLinearSpace as Any
             ])
         }
     }
@@ -76,18 +88,35 @@ public final class VTMetalRenderer: MTKView {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
 
         // Apply optional sharpness filter
-        let displayImage: CIImage
+        let sharpenedImage: CIImage
         if sharpness > 0 {
-            displayImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
+            sharpenedImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
                 kCIInputIntensityKey: sharpness,
                 kCIInputRadiusKey: 0.5
             ]))
         } else {
-            displayImage = ciImage
+            sharpenedImage = ciImage
+        }
+
+        // Apply optional HDR tone expansion (pushes highlights into display EDR headroom)
+        let hdrImage: CIImage
+        if hdrStrength > 0 {
+            // Exposure boost pushes bright values beyond 1.0 into EDR territory;
+            // saturation and contrast make the image more vibrant.
+            hdrImage = sharpenedImage
+                .applyingFilter("CIExposureAdjust", parameters: [
+                    kCIInputEVKey: hdrStrength * 0.75
+                ])
+                .applyingFilter("CIColorControls", parameters: [
+                    kCIInputSaturationKey: 1.0 + hdrStrength * 0.15,
+                    kCIInputContrastKey: 1.0 + hdrStrength * 0.1
+                ])
+        } else {
+            hdrImage = sharpenedImage
         }
 
         // Calculate aspect ratio locking transformation
-        let imageSize = displayImage.extent.size
+        let imageSize = hdrImage.extent.size
         let scaleX = drawableSize.width / imageSize.width
         let scaleY = drawableSize.height / imageSize.height
         
@@ -103,7 +132,7 @@ public final class VTMetalRenderer: MTKView {
         let transform = CGAffineTransform(scaleX: scale, y: scale)
             .concatenating(CGAffineTransform(translationX: offsetX, y: offsetY))
         
-        let transformedImage = displayImage.transformed(by: transform)
+        let transformedImage = hdrImage.transformed(by: transform)
         
         // Render the image to the drawable texture
         guard let commandBuffer = queue.makeCommandBuffer() else { return }
@@ -119,14 +148,16 @@ public final class VTMetalRenderer: MTKView {
             encoder.endEncoding()
         }
         
-        // Draw the video frame using the optimized CoreImage Metal pipeline
+        // Draw the video frame using the optimized CoreImage Metal pipeline.
+        // Extended sRGB color space preserves values > 1.0 for HDR/EDR display.
         let targetRect = CGRect(x: 0, y: 0, width: drawableSize.width, height: drawableSize.height)
+        let outputColorSpace = CGColorSpace(name: CGColorSpace.extendedSRGB) ?? CGColorSpaceCreateDeviceRGB()
         context.render(
             transformedImage,
             to: destinationTexture,
             commandBuffer: commandBuffer,
             bounds: targetRect,
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: outputColorSpace
         )
         
         commandBuffer.present(drawable)
