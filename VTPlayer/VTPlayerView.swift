@@ -430,10 +430,18 @@ final class VTPlayerViewModel {
         }
     }
     
+    /// Whether the pipeline needs to be rebuilt on the next resume.
+    private var enhancementsPendingRestart = false
+
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
-        if isPlaying {
+        if isPlaying && !isPaused {
             startPlaybackLoop()
+        } else if isPlaying && isPaused {
+            // Don't restart the pipeline while paused — the cache clear
+            // would cause a visible freeze on resume.  Flag it so play()
+            // rebuilds the pipeline when the user unpauses.
+            enhancementsPendingRestart = true
         }
     }
     
@@ -456,6 +464,11 @@ final class VTPlayerViewModel {
         
         player.rate = Float(self.playbackSpeed)
         
+        // Always rebuild the pipeline if enhancements were changed while
+        // paused.  Otherwise, just start the loop normally.
+        if enhancementsPendingRestart {
+            enhancementsPendingRestart = false
+        }
         startPlaybackLoop()
         self.userActivityDetected()
     }
