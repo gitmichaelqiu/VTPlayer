@@ -658,8 +658,8 @@ final class VTPlayerViewModel {
                     // ANE usage not yet measurable via public API — placeholder for future telemetry
                     self.aneUsagePercent = 0.0
 
-                    if outputFrames.count < 2 && (self.frameInterpolationLevel > 0 || self.superResolutionLevel > 0) {
-                        print("⚠️ FI/SR: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
+                    if outputFrames.count < 2 && self.frameInterpolationLevel > 0 {
+                        print("⚠️ FI: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
                     }
 
                     // Insert output frames in PTS-sorted order using binary
