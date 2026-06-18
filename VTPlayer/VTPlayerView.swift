@@ -96,6 +96,7 @@ final class VTPlayerViewModel {
     // Fullscreen and Auto-hide HUD controls state
     var isFullScreen = false
     var showControls = true
+    var isHoveringControlBar = false
     
     var currentBackgroundColor: Color {
         if isFullScreen {
@@ -142,7 +143,8 @@ final class VTPlayerViewModel {
     private let audioSyncRecoveryFrameCount: Int = 5
     
     let renderer: VTMetalRenderer
-    
+    let modelManager = VTModelManager()
+
     init() {
         self.renderer = VTMetalRenderer(frame: .zero, device: nil)
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
@@ -349,10 +351,10 @@ final class VTPlayerViewModel {
     
     private func startInactivityTimer() {
         inactivityTask?.cancel()
-        inactivityTask = Task {
+        inactivityTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            guard !Task.isCancelled else { return }
-            if self.isFullScreen && self.isPlaying && !self.isPaused {
+            guard !Task.isCancelled, let self = self else { return }
+            if self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar {
                 self.showControls = false
                 if !self.cursorHidden {
                     NSCursor.hide()
@@ -492,13 +494,36 @@ final class VTPlayerViewModel {
         let dnStrength = self.denoiseStrength
         let qualPrior = self.qualityPrioritization
 
-        producerTask = Task {
+        producerTask = Task { [weak self] in
+            guard let self = self else { return }
+
+            // Check Quality SR model availability before starting
+            var effectiveQualitySR = qualitySR
+            if qualitySR > 0 {
+                if #available(macOS 26.0, *),
+                   let checkConfig = VTSuperResolutionScalerConfiguration(
+                    frameWidth: videoWidth, frameHeight: videoHeight,
+                    scaleFactor: qualitySR, inputType: .video,
+                    usePrecomputedFlow: false, qualityPrioritization: .normal,
+                    revision: .revision1
+                ) {
+                    await self.modelManager.checkStatus(for: checkConfig)
+                    if case .downloadRequired = self.modelManager.status {
+                        print("Quality SR model download required, starting download and falling back to LL SR")
+                        Task { @MainActor in
+                            self.modelManager.downloadModel(for: checkConfig)
+                        }
+                        effectiveQualitySR = 0
+                    }
+                }
+            }
+
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: srLevel,
                 frameInterpolationLevel: fiLevel,
                 useHighQualityDownsampling: highQuality,
                 useRealTimePriority: realTime,
-                qualitySuperResolutionScaleFactor: qualitySR,
+                qualitySuperResolutionScaleFactor: effectiveQualitySR,
                 motionBlurStrength: mbStrength,
                 denoiseStrength: dnStrength,
                 qualityPrioritization: qualPrior
@@ -874,6 +899,25 @@ struct VTPlayerView: View {
             return String(format: "%02d:%02d", mins, secs)
         }
     }
+
+    private func modelStatusLabel(_ status: VTModelManager.Status) -> String {
+        switch status {
+        case .notChecked: return "Not Checked"
+        case .ready: return "Ready"
+        case .downloadRequired: return "Download Required"
+        case .downloading(let progress): return String(format: "Downloading (%.0f%%)", progress * 100)
+        case .failed(let error): return "Failed: \(error)"
+        }
+    }
+
+    private func modelStatusColor(_ status: VTModelManager.Status) -> Color {
+        switch status {
+        case .ready: return .green
+        case .downloading: return .orange
+        case .downloadRequired, .notChecked: return .secondary
+        case .failed: return .red
+        }
+    }
 }
 
 // MARK: - Extracted SwiftUI Components
@@ -1015,6 +1059,16 @@ extension VTPlayerView {
                     LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
                         .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
                     LabeledContent("Scales", value: viewModel.srSupportedScales)
+                    if viewModel.qualitySuperResolutionScaleFactor > 0 {
+                        let modelStatus = viewModel.modelManager.status
+                        LabeledContent("QL Model", value: modelStatusLabel(modelStatus))
+                            .foregroundColor(modelStatusColor(modelStatus))
+                        if case .downloading(let progress) = modelStatus {
+                            ProgressView(value: progress)
+                                .progressViewStyle(.linear)
+                                .frame(maxWidth: 200)
+                        }
+                    }
                     if let initError = viewModel.srInitializationError {
                         LabeledContent("SR Status", value: "Error")
                             .foregroundColor(.red)
@@ -1023,8 +1077,10 @@ extension VTPlayerView {
                             .foregroundColor(.red)
                             .lineLimit(3)
                     } else {
-                        LabeledContent("SR Status", value: viewModel.superResolutionLevel > 0 ? "Active (\(viewModel.superResolutionLevel)x)" : "Inactive")
-                            .foregroundColor(viewModel.superResolutionLevel > 0 ? .blue : .secondary)
+                        let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                        let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                        LabeledContent("Active", value: scale > 0 ? "\(isQL ? "QL" : "LL") \(scale)x" : "None")
+                            .foregroundColor(scale > 0 ? .blue : .secondary)
                     }
                 }
                 .font(.system(.subheadline, design: .default))
@@ -1124,29 +1180,57 @@ extension VTPlayerView {
                     Divider()
                         .frame(height: 20)
 
-                    // Super Resolution
+                    // Super Resolution (LL SR + Quality SR)
                     Menu {
                         Picker(selection: Binding(
-                            get: { viewModel.superResolutionLevel },
-                            set: { viewModel.superResolutionLevel = $0; viewModel.updateEnhancements() }
+                            get: {
+                                if viewModel.qualitySuperResolutionScaleFactor > 0 {
+                                    viewModel.qualitySuperResolutionScaleFactor == 4 ? 4 : 3
+                                } else if viewModel.superResolutionLevel > 0 {
+                                    viewModel.superResolutionLevel == 4 ? 2 : 1
+                                } else {
+                                    0
+                                }
+                            },
+                            set: { tag in
+                                switch tag {
+                                case 1: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
+                                case 2: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
+                                case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
+                                case 4: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
+                                default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
+                                }
+                                viewModel.updateEnhancements()
+                            }
                         )) {
                             Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
+                            Divider()
+                            Text("LL SR 2x").tag(1)
+                            Text("LL SR 4x").tag(2)
+                            Divider()
+                            Text("QL SR 2x").tag(3)
+                            Text("QL SR 4x").tag(4)
                         } label: {
                             EmptyView()
                         }
                         .pickerStyle(.inline)
                     } label: {
+                        let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                        let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                        let isActive = scale > 0
                         Text(hoverSR
-                            ? "Super Resolution: \(viewModel.superResolutionLevel > 0 ? "\(viewModel.superResolutionLevel)x" : "Off")"
-                            : "SR: \(viewModel.superResolutionLevel > 0 ? "\(viewModel.superResolutionLevel)x" : "Off")"
+                            ? (isQL
+                                ? "Quality SR: \(scale)x"
+                                : (isActive ? "LL Super Resolution: \(scale)x" : "Super Resolution: Off"))
+                            : (isQL
+                                ? "SR: \(scale)x QL"
+                                : "SR: \(isActive ? "\(scale)x" : "Off")")
                         )
                         .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.superResolutionLevel > 0 ? .cyan : .secondary)
+                        .foregroundColor(isActive ? (isQL ? Color.blue : .cyan) : .secondary)
                         .frame(width: 148, alignment: .leading)
                         .padding(.vertical, 5)
-                        .background(viewModel.superResolutionLevel > 0 ? Color.cyan.opacity(0.15) : Color.white.opacity(0.05))
+                        .background(isActive ? (isQL ? Color.blue.opacity(0.15) : Color.cyan.opacity(0.15)) : Color.white.opacity(0.05))
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
@@ -1253,6 +1337,7 @@ extension VTPlayerView {
                     fullscreenButton
                 }
             }
+            .onHover { viewModel.isHoveringControlBar = $0 }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(
@@ -1293,7 +1378,7 @@ extension VTPlayerView {
             )
             .font(.caption.weight(.medium))
             .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
-            .frame(width: 110, alignment: .leading)
+            .frame(width: hoverSH ? 90 : 22, alignment: .leading)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                 .accentColor(.cyan)
                 .labelsHidden()
