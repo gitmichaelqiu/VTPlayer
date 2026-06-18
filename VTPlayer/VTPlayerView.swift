@@ -664,20 +664,20 @@ final class VTPlayerViewModel {
 
                 let currentTime = player.currentTime()
                 let currentSecs = CMTimeGetSeconds(currentTime)
-                let cacheCount = self.processedFrameCache.count
 
-                if cacheCount > 0 {
+                // Render the first frame if its PTS is within 5ms of current time.
+                // Always re-read the cache count — do not store it across operations
+                // that may mutate the cache (removeFirst), to avoid IndexOutOfRange.
+                while self.processedFrameCache.count > 0 {
                     let firstFrame = self.processedFrameCache[0]
                     let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
+                    guard frameTime <= currentSecs + 0.005 else { break }
 
-                    if frameTime <= currentSecs + 0.005 {
-                        self.renderer.render(pixelBuffer: firstFrame.buffer)
-                        self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                        processedFramesCount += 1
-
-                        self.processedFrameCache.removeFirst()
-                        self.currentTime = currentSecs
-                    }
+                    self.renderer.render(pixelBuffer: firstFrame.buffer)
+                    self.lastRenderedPTS = firstFrame.presentationTimeStamp
+                    processedFramesCount += 1
+                    self.processedFrameCache.removeFirst()
+                    self.currentTime = currentSecs
                 }
 
                 let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
@@ -690,19 +690,23 @@ final class VTPlayerViewModel {
                 // Diagnostic log every 5 seconds
                 let diagElapsed = Double(DispatchTime.now().uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
                 if diagElapsed >= 5.0 {
-                    if cacheCount > 0 {
-                        let ft = CMTimeGetSeconds(self.processedFrameCache[0].presentationTimeStamp)
-                        print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(player.rate) rendered=\(self.fps)")
+                    let curRate = player.rate
+                    let curFPS = self.fps
+                    if let first = self.processedFrameCache.first {
+                        let ft = CMTimeGetSeconds(first.presentationTimeStamp)
+                        print("DIAG: cache=\(self.processedFrameCache.count) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) rendered=\(curFPS)")
                     } else {
-                        print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(player.rate) rendered=\(self.fps)")
+                        print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) rendered=\(curFPS)")
                     }
                     diagTimer = DispatchTime.now()
                 }
 
-                if cacheCount > 0 {
-                    let nextFrame = self.processedFrameCache[0]
+                // Cache-safe sleep calculation.
+                if let nextFrame = self.processedFrameCache.first {
                     let nextPTS = CMTimeGetSeconds(nextFrame.presentationTimeStamp)
-                    let sleepDuration = max(0.001, nextPTS - currentSecs - 0.002)
+                    // Re-read currentSecs for a more accurate sleep duration.
+                    let updatedSecs = CMTimeGetSeconds(player.currentTime())
+                    let sleepDuration = max(0.001, nextPTS - updatedSecs - 0.002)
                     try? await Task.sleep(nanoseconds: UInt64(sleepDuration * 1_000_000_000))
                 } else {
                     try? await Task.sleep(nanoseconds: 4_000_000)
@@ -722,14 +726,17 @@ final class VTPlayerViewModel {
                 let latency = currentSecs - lastSecs
 
                 // Log desync for diagnostics but never pause the player.
-                // Pausing freezes currentTime(), which prevents the consumer
-                // from rendering any frames (their PTS > frozen time), causing
-                // a death spiral: pause → no frames rendered → resume →
-                // immediate re-pause. This also fights the speed slider.
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {
                     self.audioSyncLatency = 0
+                }
+
+                // AVPlayer may stop playback (rate → 0) if its audio decoder fails
+                // on certain file formats. Periodically re-assert the desired rate
+                // to kickstart the decoder. This does NOT pause — it only recovers.
+                if player.rate == 0 && self.isPlaying {
+                    player.rate = Float(self.playbackSpeed)
                 }
             }
         }
