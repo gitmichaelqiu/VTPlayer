@@ -142,6 +142,7 @@ final class VTPlayerViewModel {
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
     private var playbackGeneration: UInt64 = 0
+    private var isInitializingPipeline = false
 
     // Audio sync monitoring (diagnostic only — never pauses player)
     private var lastRenderedPTS: CMTime = .zero
@@ -575,6 +576,7 @@ final class VTPlayerViewModel {
             // doesn't advance while the cache is empty.  Without this, the
             // consumer stalls (empty cache) while audio keeps running,
             // creating an audible gap followed by a video jump.
+            self.isInitializingPipeline = true
             let wasRate = self.player?.rate ?? 0
             self.player?.pause()
 
@@ -598,6 +600,7 @@ final class VTPlayerViewModel {
                 self.lastRenderedPTS = resumeTime
                 player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+                self.isInitializingPipeline = false
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
@@ -792,7 +795,7 @@ final class VTPlayerViewModel {
                 // AVPlayer may stop playback (rate → 0) if its audio decoder fails
                 // on certain file formats. Periodically re-assert the desired rate
                 // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying {
+                if player.rate == 0 && self.isPlaying && !self.isInitializingPipeline {
                     player.rate = Float(self.playbackSpeed)
                 }
             }
