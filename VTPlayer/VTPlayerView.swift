@@ -641,8 +641,23 @@ final class VTPlayerViewModel {
                         print("⚠️ FI/SR: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
                     }
 
-                    self.processedFrameCache.append(contentsOf: outputFrames)
-                    self.processedFrameCache.sort { $0.presentationTimeStamp < $1.presentationTimeStamp }
+                    // Insert output frames in PTS-sorted order using binary
+                    // search.  The cache is already sorted and output frames
+                    // arrive roughly in order, so this is O(log n) per frame
+                    // instead of re-sorting the entire array every time.
+                    for outFrame in outputFrames {
+                        let pts = outFrame.presentationTimeStamp
+                        var lo = 0, hi = self.processedFrameCache.count
+                        while lo < hi {
+                            let mid = (lo + hi) / 2
+                            if self.processedFrameCache[mid].presentationTimeStamp < pts {
+                                lo = mid + 1
+                            } else {
+                                hi = mid
+                            }
+                        }
+                        self.processedFrameCache.insert(outFrame, at: lo)
+                    }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
                     self.processedFrameCache.append(vtFrame)
