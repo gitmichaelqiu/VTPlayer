@@ -777,6 +777,11 @@ final class VTPlayerViewModel {
         }
         renderer.sharpness = Float(sharpness)
         qualitySuperResolutionScaleFactor = settings["qualitySuperResolutionScaleFactor"] as? Int ?? 0
+        // Migrate: QL SR only supports 4x, convert old 2x setting to LL SR 2x
+        if qualitySuperResolutionScaleFactor == 2 {
+            qualitySuperResolutionScaleFactor = 0
+            if superResolutionLevel == 0 { superResolutionLevel = 2 }
+        }
         motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
         qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
@@ -1199,8 +1204,9 @@ extension VTPlayerView {
                     Menu {
                         Picker(selection: Binding(
                             get: {
-                                if viewModel.qualitySuperResolutionScaleFactor > 0 {
-                                    viewModel.qualitySuperResolutionScaleFactor == 4 ? 4 : 3
+                                // Tags: 0=Off, 1=LL2, 2=LL4, 3=QL4
+                                if viewModel.qualitySuperResolutionScaleFactor == 4 {
+                                    3
                                 } else if viewModel.superResolutionLevel > 0 {
                                     viewModel.superResolutionLevel == 4 ? 2 : 1
                                 } else {
@@ -1211,8 +1217,7 @@ extension VTPlayerView {
                                 switch tag {
                                 case 1: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
                                 case 2: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
-                                case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
-                                case 4: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
+                                case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
                                 default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
                                 }
                                 viewModel.updateEnhancements()
@@ -1223,8 +1228,7 @@ extension VTPlayerView {
                             Text("Low Latency 2x").tag(1)
                             Text("Low Latency 4x").tag(2)
                             Divider()
-                            Text("Quality 2x").tag(3)
-                            Text("Quality 4x").tag(4)
+                            Text("Quality 4x").tag(3)
                         } label: {
                             EmptyView()
                         }
