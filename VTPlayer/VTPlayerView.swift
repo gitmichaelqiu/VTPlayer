@@ -647,6 +647,7 @@ final class VTPlayerViewModel {
             let myGen = gen
             var processedFramesCount = 0
             var fpsTimer = DispatchTime.now()
+            var diagTimer = DispatchTime.now()
 
             while !Task.isCancelled {
                 guard myGen == self.playbackGeneration else { break }
@@ -655,16 +656,17 @@ final class VTPlayerViewModel {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
-                
+
                 guard let player = self.player else {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
-                
+
                 let currentTime = player.currentTime()
                 let currentSecs = CMTimeGetSeconds(currentTime)
-                
-                if !self.processedFrameCache.isEmpty {
+                let cacheCount = self.processedFrameCache.count
+
+                if cacheCount > 0 {
                     let firstFrame = self.processedFrameCache[0]
                     let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
 
@@ -677,15 +679,28 @@ final class VTPlayerViewModel {
                         self.currentTime = currentSecs
                     }
                 }
-                
+
                 let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
                 if elapsedFPSTime >= 1.0 {
                     self.fps = Double(processedFramesCount) / elapsedFPSTime
                     processedFramesCount = 0
                     fpsTimer = DispatchTime.now()
                 }
-                
-                if let nextFrame = self.processedFrameCache.first {
+
+                // Diagnostic log every 5 seconds
+                let diagElapsed = Double(DispatchTime.now().uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
+                if diagElapsed >= 5.0 {
+                    if cacheCount > 0 {
+                        let ft = CMTimeGetSeconds(self.processedFrameCache[0].presentationTimeStamp)
+                        print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(player.rate) rendered=\(self.fps)")
+                    } else {
+                        print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(player.rate) rendered=\(self.fps)")
+                    }
+                    diagTimer = DispatchTime.now()
+                }
+
+                if cacheCount > 0 {
+                    let nextFrame = self.processedFrameCache[0]
                     let nextPTS = CMTimeGetSeconds(nextFrame.presentationTimeStamp)
                     let sleepDuration = max(0.001, nextPTS - currentSecs - 0.002)
                     try? await Task.sleep(nanoseconds: UInt64(sleepDuration * 1_000_000_000))
