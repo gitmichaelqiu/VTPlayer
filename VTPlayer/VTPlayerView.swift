@@ -674,19 +674,31 @@ final class VTPlayerViewModel {
                 let currentTime = player.currentTime()
                 let currentSecs = CMTimeGetSeconds(currentTime)
 
-                // Render the first frame if its PTS is within 5ms of current time.
-                // Always re-read the cache count — do not store it across operations
-                // that may mutate the cache (removeFirst), to avoid IndexOutOfRange.
+                // Drain all frames whose PTS ≤ current player time, but only
+                // render the *last* one.  When catching up (e.g. after a
+                // pipeline restart), the loop may drain many frames at once;
+                // calling renderer.render() for each one wastes GPU cycles and
+                // can stall on Metal drawable contention, making playback
+                // appear slow — especially with FI generating 2–4× more frames.
+                var lastFrameToRender: VTFrame? = nil
+                var drained = 0
                 while self.processedFrameCache.count > 0 {
                     let firstFrame = self.processedFrameCache[0]
                     let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
                     guard frameTime <= currentSecs + 0.005 else { break }
 
-                    self.renderer.render(pixelBuffer: firstFrame.buffer)
+                    lastFrameToRender = firstFrame
                     self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                    processedFramesCount += 1
+                    drained += 1
                     self.processedFrameCache.removeFirst()
+                }
+                if let frame = lastFrameToRender {
+                    self.renderer.render(pixelBuffer: frame.buffer)
+                    processedFramesCount += drained
                     self.currentTime = currentSecs
+                    if drained > 1 {
+                        self.droppedFrames += drained - 1
+                    }
                 }
 
                 let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
