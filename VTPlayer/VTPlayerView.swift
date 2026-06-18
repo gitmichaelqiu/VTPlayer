@@ -499,14 +499,25 @@ final class VTPlayerViewModel {
 
             // Check Quality SR model availability before starting
             var effectiveQualitySR = qualitySR
+            var effectiveSRLevel = srLevel
             if qualitySR > 0 {
+                var qlConfig: VTSuperResolutionScalerConfiguration? = nil
                 if #available(macOS 26.0, *),
-                   let checkConfig = VTSuperResolutionScalerConfiguration(
-                    frameWidth: videoWidth, frameHeight: videoHeight,
-                    scaleFactor: qualitySR, inputType: .video,
-                    usePrecomputedFlow: false, qualityPrioritization: .normal,
-                    revision: .revision1
-                ) {
+                   VTSuperResolutionScalerConfiguration.isSupported {
+                    qlConfig = VTSuperResolutionScalerConfiguration(
+                        frameWidth: videoWidth, frameHeight: videoHeight,
+                        scaleFactor: qualitySR, inputType: .video,
+                        usePrecomputedFlow: false, qualityPrioritization: .normal,
+                        revision: .revision1
+                    )
+                    if qlConfig == nil {
+                        self.srInitializationError = "Quality SR unavailable for \(videoWidth)x\(videoHeight)"
+                        print("Quality SR not available for \(videoWidth)x\(videoHeight) @ \(qualitySR)x, falling back to LL SR")
+                    }
+                } else {
+                    print("VTSuperResolutionScaler not supported on this system, falling back to LL SR")
+                }
+                if let checkConfig = qlConfig {
                     await self.modelManager.checkStatus(for: checkConfig)
                     if case .downloadRequired = self.modelManager.status {
                         print("Quality SR model download required, starting download and falling back to LL SR")
@@ -514,12 +525,16 @@ final class VTPlayerViewModel {
                             self.modelManager.downloadModel(for: checkConfig)
                         }
                         effectiveQualitySR = 0
+                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
                     }
+                } else {
+                    effectiveQualitySR = 0
+                    effectiveSRLevel = qualitySR == 4 ? 4 : 2
                 }
             }
 
             let coordinator = VTFrameProcessorCoordinator(
-                superResolutionLevel: srLevel,
+                superResolutionLevel: effectiveSRLevel,
                 frameInterpolationLevel: fiLevel,
                 useHighQualityDownsampling: highQuality,
                 useRealTimePriority: realTime,
@@ -1205,11 +1220,11 @@ extension VTPlayerView {
                         )) {
                             Text("Off").tag(0)
                             Divider()
-                            Text("LL SR 2x").tag(1)
-                            Text("LL SR 4x").tag(2)
+                            Text("Low Latency 2x").tag(1)
+                            Text("Low Latency 4x").tag(2)
                             Divider()
-                            Text("QL SR 2x").tag(3)
-                            Text("QL SR 4x").tag(4)
+                            Text("Quality 2x").tag(3)
+                            Text("Quality 4x").tag(4)
                         } label: {
                             EmptyView()
                         }
