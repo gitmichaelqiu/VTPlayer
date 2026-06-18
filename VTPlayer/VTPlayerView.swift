@@ -920,24 +920,6 @@ struct VTPlayerView: View {
         }
     }
 
-    private func modelStatusLabel(_ status: VTModelManager.Status) -> String {
-        switch status {
-        case .notChecked: return "Not Checked"
-        case .ready: return "Ready"
-        case .downloadRequired: return "Download Required"
-        case .downloading(let progress): return String(format: "Downloading (%.0f%%)", progress * 100)
-        case .failed(let error): return "Failed: \(error)"
-        }
-    }
-
-    private func modelStatusColor(_ status: VTModelManager.Status) -> Color {
-        switch status {
-        case .ready: return .green
-        case .downloading: return .orange
-        case .downloadRequired, .notChecked: return .secondary
-        case .failed: return .red
-        }
-    }
 }
 
 // MARK: - Extracted SwiftUI Components
@@ -1080,14 +1062,7 @@ extension VTPlayerView {
                         .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
                     LabeledContent("Scales", value: viewModel.srSupportedScales)
                     if viewModel.qualitySuperResolutionScaleFactor > 0 {
-                        let modelStatus = viewModel.modelManager.status
-                        LabeledContent("QL Model", value: modelStatusLabel(modelStatus))
-                            .foregroundColor(modelStatusColor(modelStatus))
-                        if case .downloading(let progress) = modelStatus {
-                            ProgressView(value: progress)
-                                .progressViewStyle(.linear)
-                                .frame(maxWidth: 200)
-                        }
+                        QLModelStatusView(modelManager: viewModel.modelManager)
                     }
                     if let initError = viewModel.srInitializationError {
                         LabeledContent("SR Status", value: "Error")
@@ -1440,6 +1415,43 @@ extension VTPlayerView {
         .help("Toggle Fullscreen (F)")
     }
 
+}
+
+/// Displays Quality SR model download status with live progress tracking.
+/// Must be a separate struct to create a direct observation dependency on the
+/// `@Observable VTModelManager`, avoiding nested-Observable tracking issues.
+struct QLModelStatusView: View {
+    let modelManager: VTModelManager
+
+    var body: some View {
+        let modelStatus = modelManager.status
+        LabeledContent("QL Model", value: modelStatusLabel(modelStatus))
+            .foregroundColor(modelStatusColor(modelStatus))
+        if case .downloading(let progress) = modelStatus {
+            ProgressView(value: progress)
+                .progressViewStyle(.linear)
+                .frame(maxWidth: 200)
+        }
+    }
+
+    private func modelStatusLabel(_ status: VTModelManager.Status) -> String {
+        switch status {
+        case .notChecked: return "Not Checked"
+        case .ready: return "Ready"
+        case .downloadRequired: return "Download Required"
+        case .downloading(let progress): return String(format: "Downloading (%.0f%%)", progress * 100)
+        case .failed(let error): return "Failed: \(error)"
+        }
+    }
+
+    private func modelStatusColor(_ status: VTModelManager.Status) -> Color {
+        switch status {
+        case .ready: return .green
+        case .downloading: return .orange
+        case .downloadRequired, .notChecked: return .secondary
+        case .failed: return .red
+        }
+    }
 }
 
 /// Helper view for macOS blur/visual effect backgrounds.
