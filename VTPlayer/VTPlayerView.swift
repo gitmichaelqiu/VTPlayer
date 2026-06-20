@@ -246,7 +246,19 @@ final class VTPlayerViewModel {
                 let output = AVPlayerItemVideoOutput(pixelBufferAttributes: outputSettings)
                 let item = AVPlayerItem(asset: asset)
                 item.add(output)
-                
+
+                // Disable the video track on AVPlayer so it only decodes
+                // audio.  Video frames are read separately via
+                // VTFrameSequence (AVAssetReader).  Without this, the
+                // AVPlayer's internal video decoder competes with the
+                // VTFrameProcessor for ANE/hardware resources, starving
+                // FI and making the video appear to play in slow motion.
+                for track in item.tracks {
+                    if track.assetTrack?.mediaType == .video {
+                        track.isEnabled = false
+                    }
+                }
+
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
                 
@@ -381,9 +393,17 @@ final class VTPlayerViewModel {
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        let targetRate = Float(self.playbackSpeed)
+        let shouldPlay = self.isPlaying && !self.isPaused
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
             guard completed, let self = self else { return }
             Task { @MainActor in
+                // Re-assert player rate — AVPlayer can transiently drop
+                // rate to 0 during seek, causing arrow-key seeks to
+                // unexpectedly pause playback.
+                if shouldPlay {
+                    self.player?.rate = targetRate
+                }
                 await self.triggerSingleFrameUpdate(at: time)
             }
         }
@@ -399,11 +419,11 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-        
-        // Pull and render frame immediately
-        var presentationTime = CMTime.zero
-        if let videoOutput = videoOutput,
-           let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: &presentationTime) {
+
+        // Read a single frame via AVAssetReader (video track is disabled
+        // on AVPlayer, so copyPixelBuffer won't work).
+        if let url = videoURL,
+           let pixelBuffer = readSingleFrame(from: url, at: time) {
             self.renderer.render(pixelBuffer: pixelBuffer)
         }
     }
@@ -415,20 +435,30 @@ final class VTPlayerViewModel {
     }
 
     private func triggerSingleFrameUpdate(at time: CMTime) async {
-        guard let videoOutput = videoOutput else { return }
-        var attempts = 0
-        while attempts < 5 {
-            if videoOutput.hasNewPixelBuffer(forItemTime: time) {
-                break
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
-            attempts += 1
-        }
-        
-        var presentationTime = CMTime.zero
-        if let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: &presentationTime) {
+        guard let url = videoURL else { return }
+        // Small delay to let the seek settle
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        if let pixelBuffer = readSingleFrame(from: url, at: time) {
             self.renderer.render(pixelBuffer: pixelBuffer)
         }
+    }
+
+    /// Reads a single decoded video frame at the given time using AVAssetReader.
+    private func readSingleFrame(from url: URL, at time: CMTime) -> CVPixelBuffer? {
+        let asset = AVURLAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .video).first else { return nil }
+        guard let reader = try? AVAssetReader(asset: asset) else { return nil }
+        reader.timeRange = CMTimeRange(start: time, duration: CMTime(value: 1, timescale: 30))
+        let settings: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        ]
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
+        output.alwaysCopiesSampleData = false
+        guard reader.canAdd(output) else { return nil }
+        reader.add(output)
+        guard reader.startReading() else { return nil }
+        guard let sample = output.copyNextSampleBuffer() else { return nil }
+        return CMSampleBufferGetImageBuffer(sample)
     }
     
     /// Whether the pipeline needs to be rebuilt on the next resume.
