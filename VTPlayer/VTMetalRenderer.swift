@@ -58,8 +58,12 @@ public final class VTMetalRenderer: MTKView {
     /// - Parameter pixelBuffer: The new CVPixelBuffer frame to display.
     public func render(pixelBuffer: CVPixelBuffer) {
         self.currentPixelBuffer = pixelBuffer
-        // Trigger a draw pass on the next screen refresh cycle
-        self.draw()
+        // Schedule a draw pass on the next display refresh cycle rather
+        // than drawing synchronously.  draw() blocks on currentDrawable
+        // and CIContext.render(); for large SR-upscaled frames this can
+        // take 5-10ms, stalling the consumer's timing loop and causing
+        // visible stutter even though FPS averages look correct.
+        self.setNeedsDisplay(self.bounds)
     }
     
     public override func draw(_ rect: CGRect) {
