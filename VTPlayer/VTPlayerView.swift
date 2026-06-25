@@ -752,7 +752,8 @@ final class VTPlayerViewModel {
                 // appear slow — especially with FI generating 2–4× more frames.
                 var lastFrameToRender: VTFrame? = nil
                 var drained = 0
-                while let firstFrame = self.processedFrameCache.first {
+                while !self.processedFrameCache.isEmpty {
+                    let firstFrame = self.processedFrameCache[0]
                     let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
                     guard frameTime <= currentSecs + 0.005 else { break }
 
