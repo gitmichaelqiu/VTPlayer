@@ -927,7 +927,7 @@ final class VTPlayerViewModel {
 /// The premium media player user interface view.
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1117,119 +1117,113 @@ extension VTPlayerView {
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(
-            VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
-        )
     }
     
     @ViewBuilder
     private var rightSidebar: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("DIAGNOSTICS & METADATA")
-                .font(.system(.footnote, design: .default)).bold()
-                .foregroundColor(.secondary)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Real-Time Metrics")
-                    .font(.system(.subheadline, design: .default).bold())
-                    .foregroundColor(.secondary)
-
-                Group {
-                    LabeledContent("Frame Processing") {
-                        Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
-                            .monospacedDigit()
-                    }
-                    LabeledContent("Display Rate") {
-                        Text(String(format: "%.1f Hz", viewModel.fps))
-                            .monospacedDigit()
-                            .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                    }
-                    LabeledContent("Cached Frames") {
-                        Text("\(viewModel.frameCacheCount)")
-                            .monospacedDigit()
-                            .foregroundColor(viewModel.frameCacheCount > 10 ? .blue : .secondary)
-                    }
-                }
-                .font(.system(.subheadline, design: .default))
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Video Metadata")
-                    .font(.system(.subheadline, design: .default).bold())
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("DIAGNOSTICS & METADATA")
+                    .font(.system(.footnote, design: .default)).bold()
                     .foregroundColor(.secondary)
                 
-                Group {
-                    LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
-                    LabeledContent("Source Rate") {
-                        Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
-                            .monospacedDigit()
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Real-Time Metrics")
+                        .font(.system(.subheadline, design: .default).bold())
+                        .foregroundColor(.secondary)
+
+                    Group {
+                        LabeledContent("Frame Processing") {
+                            Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Display Rate") {
+                            Text(String(format: "%.1f Hz", viewModel.fps))
+                                .monospacedDigit()
+                                .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                        }
+                        LabeledContent("Cached Frames") {
+                            Text("\(viewModel.frameCacheCount)")
+                                .monospacedDigit()
+                                .foregroundColor(viewModel.frameCacheCount > 10 ? .blue : .secondary)
+                        }
                     }
-                    LabeledContent("Target Rate") {
-                        let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
-                        let rate = viewModel.sourceFrameRate * scale
-                        Text(String(format: "%.2f fps", rate))
-                            .monospacedDigit()
-                    }
-                    LabeledContent("Video Codec", value: viewModel.videoFormat)
+                    .font(.system(.subheadline, design: .default))
                 }
-                .font(.system(.subheadline, design: .default))
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Super Resolution Specs")
-                    .font(.system(.subheadline, design: .default).bold())
-                    .foregroundColor(.secondary)
                 
-                Group {
-                    LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
-                        .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
-                    LabeledContent("Scales", value: viewModel.srSupportedScales)
-                    if viewModel.qualitySuperResolutionScaleFactor > 0 {
-                        QLModelStatusView(modelManager: viewModel.modelManager)
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Video Metadata")
+                        .font(.system(.subheadline, design: .default).bold())
+                        .foregroundColor(.secondary)
+                    
+                    Group {
+                        LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
+                        LabeledContent("Source Rate") {
+                            Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Target Rate") {
+                            let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
+                            let rate = viewModel.sourceFrameRate * scale
+                            Text(String(format: "%.2f fps", rate))
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Video Codec", value: viewModel.videoFormat)
                     }
-                    if let initError = viewModel.srInitializationError {
-                        LabeledContent("SR Status", value: "Error")
-                            .foregroundColor(.red)
-                        Text(initError)
-                            .font(.system(.caption2, design: .default))
-                            .foregroundColor(.red)
-                            .lineLimit(3)
-                    } else {
-                        let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
-                        let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
-                        LabeledContent("Active", value: scale > 0 ? "\(isQL ? "QL" : "LL") \(scale)x" : "None")
-                            .foregroundColor(scale > 0 ? .blue : .secondary)
-                    }
+                    .font(.system(.subheadline, design: .default))
                 }
-                .font(.system(.subheadline, design: .default))
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Image Processing")
-                    .font(.system(.subheadline, design: .default).bold())
-                    .foregroundColor(.secondary)
-
-                Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Super Resolution Specs")
+                        .font(.system(.subheadline, design: .default).bold())
+                        .foregroundColor(.secondary)
+                    
+                    Group {
+                        LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
+                            .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
+                        LabeledContent("Scales", value: viewModel.srSupportedScales)
+                        if viewModel.qualitySuperResolutionScaleFactor > 0 {
+                            QLModelStatusView(modelManager: viewModel.modelManager)
+                        }
+                        if let initError = viewModel.srInitializationError {
+                            LabeledContent("SR Status", value: "Error")
+                                .foregroundColor(.red)
+                            Text(initError)
+                                .font(.system(.caption2, design: .default))
+                                .foregroundColor(.red)
+                                .lineLimit(3)
+                        } else {
+                            let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                            let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                            LabeledContent("Active", value: scale > 0 ? "\(isQL ? "QL" : "LL") \(scale)x" : "None")
+                                .foregroundColor(scale > 0 ? .blue : .secondary)
+                        }
+                    }
                     .font(.system(.subheadline, design: .default))
-                    .help("Use high-quality chroma downsampling when scaling")
+                }
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Image Processing")
+                        .font(.system(.subheadline, design: .default).bold())
+                        .foregroundColor(.secondary)
 
-                Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
-                    .font(.system(.subheadline, design: .default))
-                    .help("Hint VideoToolbox to prioritize real-time processing")
+                    Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
+                        .font(.system(.subheadline, design: .default))
+                        .help("Use high-quality chroma downsampling when scaling")
+
+                    Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
+                        .font(.system(.subheadline, design: .default))
+                        .help("Hint VideoToolbox to prioritize real-time processing")
+                }
             }
-            
-            Spacer()
+            .padding()
         }
-        .padding(20)
-        .background(
-            VisualEffectView(material: .sidebar, blendingMode: .withinWindow)
-        )
     }
     
     @ViewBuilder
