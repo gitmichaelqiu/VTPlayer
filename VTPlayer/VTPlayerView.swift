@@ -552,7 +552,7 @@ final class VTPlayerViewModel {
         let dnStrength = self.denoiseStrength
         let qualPrior = self.qualityPrioritization
 
-        producerTask = Task { [weak self] in
+        producerTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
 
             // Check Quality SR model availability before starting
@@ -721,7 +721,8 @@ final class VTPlayerViewModel {
             await coordinator.endSession()
         }
         
-        consumerTask = Task {
+        consumerTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
             let myGen = gen
             var processedFramesCount = 0
             var fpsTimer = DispatchTime.now()
@@ -751,8 +752,7 @@ final class VTPlayerViewModel {
                 // appear slow — especially with FI generating 2–4× more frames.
                 var lastFrameToRender: VTFrame? = nil
                 var drained = 0
-                while self.processedFrameCache.count > 0 {
-                    let firstFrame = self.processedFrameCache[0]
+                while let firstFrame = self.processedFrameCache.first {
                     let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
                     guard frameTime <= currentSecs + 0.005 else { break }
 
