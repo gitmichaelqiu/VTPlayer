@@ -551,20 +551,28 @@ public actor VTFrameProcessorCoordinator {
 
     private func processSpatial(instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {
         guard let pool = instance.pixelBufferPool else { return inputFrames }
+        let finalPool = self.secondSpatialPool ?? pool
 
         // Process each frame through spatial upscaling
         var outputFrames: [VTFrame] = []
 
         for (idx, f) in inputFrames.enumerated() {
             let isSourceFrame = idx == inputFrames.count - 1
-            
-            if !isSourceFrame {
-                // Keep interpolated frames at original resolution to bypass upscaling overhead
-                outputFrames.append(f)
+            var currentBuffer = f.buffer
+
+            if !isSourceFrame, let transferSession = interpolationTransferSession {
+                // Upscale interpolated frames directly to the final target size in a single step
+                // to prevent GPU/bandwidth starvation, while keeping output resolution consistent.
+                var outBuf: CVPixelBuffer?
+                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, finalPool, &outBuf) == kCVReturnSuccess,
+                      let destinationBuffer = outBuf else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                        userInfo: [NSLocalizedDescriptionKey: "Spatial pool allocation failed for interpolated frame"])
+                }
+                VTPixelTransferSessionTransferImage(transferSession, from: currentBuffer, to: destinationBuffer)
+                outputFrames.append(VTFrame(buffer: destinationBuffer, presentationTimeStamp: f.presentationTimeStamp))
                 continue
             }
-            
-            var currentBuffer = f.buffer
 
             // Stage 1: LL SR or Quality SR
             var buf1: CVPixelBuffer?
