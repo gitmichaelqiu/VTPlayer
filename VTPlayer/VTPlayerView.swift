@@ -927,6 +927,7 @@ final class VTPlayerViewModel {
 /// The premium media player user interface view.
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -941,11 +942,9 @@ struct VTPlayerView: View {
 
     var body: some View {
         if !viewModel.isFullScreen {
-            NavigationSplitView {
-                if viewModel.showLeftSidebar {
-                    leftSidebar
-                        .frame(minWidth: 180, idealWidth: 240, maxWidth: 500)
-                }
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                leftSidebar
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
             } detail: {
                 videoContent
                     .inspector(isPresented: Binding(
@@ -953,7 +952,7 @@ struct VTPlayerView: View {
                         set: { viewModel.showSidebar = $0 }
                     )) {
                         rightSidebar
-                            .frame(minWidth: 200, idealWidth: 260, maxWidth: 500)
+                            .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
                     }
             }
             .navigationSplitViewStyle(.balanced)
@@ -1114,7 +1113,7 @@ extension VTPlayerView {
                     .buttonStyle(.plain)
                     .help(url.path)
                 }
-                .listStyle(.inset)
+                .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
             }
         }
