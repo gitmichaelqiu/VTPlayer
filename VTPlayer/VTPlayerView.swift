@@ -714,6 +714,7 @@ final class VTPlayerViewModel {
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
+                    print("⚠️ Pipeline processing error: \(error)")
                     self.processedFrameCache.append(vtFrame)
                 }
             }
@@ -760,7 +761,9 @@ final class VTPlayerViewModel {
                     lastFrameToRender = firstFrame
                     self.lastRenderedPTS = firstFrame.presentationTimeStamp
                     drained += 1
-                    self.processedFrameCache.removeFirst()
+                    if !self.processedFrameCache.isEmpty {
+                        self.processedFrameCache.removeFirst()
+                    }
                 }
                 if let frame = lastFrameToRender {
                     self.renderer.render(pixelBuffer: frame.buffer)
