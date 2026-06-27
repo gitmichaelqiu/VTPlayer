@@ -13,8 +13,8 @@ import CoreVideo
 /// Ordered pipeline stages for frame processing.
 public enum PipelineStage: Int, Comparable, CaseIterable {
     case denoise    // Temporal noise filter (VTTemporalNoiseFilter)
-    case spatial    // Super resolution (LL SR or Quality SR)
     case temporal   // Frame interpolation or frame rate conversion
+    case spatial    // Super resolution (LL SR or Quality SR)
     case motionBlur // Motion blur post-process (VTMotionBlur)
 
     public static func < (lhs: PipelineStage, rhs: PipelineStage) -> Bool {
@@ -83,6 +83,9 @@ public actor VTFrameProcessorCoordinator {
 
     // Fallback transfer session (for unsupported 2nd stage SR scaler)
     private var fallbackTransferSession: VTPixelTransferSession?
+
+    // Transfer session for upscaling interpolated frames in spatial stage
+    private var interpolationTransferSession: VTPixelTransferSession?
 
     // Second spatial stage for 4x LL SR cascading (2x → 2x)
     private var secondSpatialProcessor: VTFrameProcessor?
@@ -171,15 +174,69 @@ public actor VTFrameProcessorCoordinator {
             }
         }
 
-        // ── 2. Spatial Stage ──────────────────────────────────────────
+        // ── 2. Temporal Stage ─────────────────────────────────────────
+        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
+
+        if frameInterpolationLevel > 0 {
+            if inCombinedMode {
+                // Combined 2x spatial + 2x temporal
+                let scale: Int = 2
+                guard let config = VTLowLatencyFrameInterpolationConfiguration(
+                    frameWidth: currentWidth,
+                    frameHeight: currentHeight,
+                    spatialScaleFactor: scale
+                ) else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to create combined FI config"])
+                }
+                let proc = VTFrameProcessor()
+                try proc.startSession(configuration: config)
+                let pool = makePool(width: currentWidth * scale, height: currentHeight * scale, from: config.destinationPixelBufferAttributes)
+                guard pool != nil else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to create combined pool"])
+                }
+                addStage(.temporal, processor: proc, pool: pool, outW: currentWidth * scale, outH: currentHeight * scale)
+                currentWidth *= scale
+                currentHeight *= scale
+            } else {
+                // Pure temporal interpolation (LL FI)
+                let numFrames = frameInterpolationLevel == 4 ? 3 : 1
+                guard let config = VTLowLatencyFrameInterpolationConfiguration(
+                    frameWidth: currentWidth,
+                    frameHeight: currentHeight,
+                    numberOfInterpolatedFrames: numFrames
+                ) else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FI config"])
+                }
+                let proc = VTFrameProcessor()
+                try proc.startSession(configuration: config)
+                let pool = makePool(width: currentWidth, height: currentHeight, from: config.destinationPixelBufferAttributes)
+                guard pool != nil else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FI pool"])
+                }
+                addStage(.temporal, processor: proc, pool: pool, outW: currentWidth, outH: currentHeight)
+            }
+        }
+
+        // ── 3. Spatial Stage ──────────────────────────────────────────
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel >= 2
-        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
 
         let needsSpatial = hasQualitySR || (hasLLSR && !inCombinedMode)
 
         if needsSpatial {
             if hasQualitySR {
+                // Create transfer session for scaling interpolated frames (Quality SR only runs on source frames)
+                var transferSession: VTPixelTransferSession?
+                let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
+                if status == kCVReturnSuccess, let session = transferSession {
+                    configureTransferSession(session)
+                    self.interpolationTransferSession = session
+                }
+
                 // Quality SR — single stage at requested scale
                 let scale = qualitySuperResolutionScaleFactor
                 guard #available(macOS 26.0, *),
@@ -225,6 +282,14 @@ public actor VTFrameProcessorCoordinator {
 
                 // Second stage for 4x LL SR
                 if superResolutionLevel == 4 {
+                    // Create transfer session for scaling interpolated frames (from 2K to 4K)
+                    var transferSession: VTPixelTransferSession?
+                    let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
+                    if status == kCVReturnSuccess, let session = transferSession {
+                        configureTransferSession(session)
+                        self.interpolationTransferSession = session
+                    }
+
                     let secondStageSupported = VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: currentWidth, frameHeight: currentHeight).contains(2.0)
                     if secondStageSupported {
                         let config2 = VTLowLatencySuperResolutionScalerConfiguration(
@@ -243,9 +308,9 @@ public actor VTFrameProcessorCoordinator {
                         self.secondSpatialPool = pool2
                     } else {
                         // Fallback: VTPixelTransferSession
-                        var transferSession: VTPixelTransferSession?
-                        let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession)
-                        if status == kCVReturnSuccess, let session = transferSession {
+                        var fallbackSession: VTPixelTransferSession?
+                        let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &fallbackSession)
+                        if status == kCVReturnSuccess, let session = fallbackSession {
                             configureTransferSession(session)
                             self.fallbackTransferSession = session
                         } else {
@@ -256,51 +321,6 @@ public actor VTFrameProcessorCoordinator {
                     currentWidth *= 2
                     currentHeight *= 2
                 }
-            }
-        }
-
-        // ── 3. Temporal Stage ─────────────────────────────────────────
-        if frameInterpolationLevel > 0 {
-            if inCombinedMode {
-                // Combined 2x spatial + 2x temporal
-                let scale: Int = 2
-                guard let config = VTLowLatencyFrameInterpolationConfiguration(
-                    frameWidth: currentWidth,
-                    frameHeight: currentHeight,
-                    spatialScaleFactor: scale
-                ) else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create combined FI config"])
-                }
-                let proc = VTFrameProcessor()
-                try proc.startSession(configuration: config)
-                let pool = makePool(width: currentWidth * scale, height: currentHeight * scale, from: config.destinationPixelBufferAttributes)
-                guard pool != nil else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create combined pool"])
-                }
-                addStage(.temporal, processor: proc, pool: pool, outW: currentWidth * scale, outH: currentHeight * scale)
-                currentWidth *= scale
-                currentHeight *= scale
-            } else {
-                // Pure temporal interpolation (LL FI)
-                let numFrames = frameInterpolationLevel == 4 ? 3 : 1
-                guard let config = VTLowLatencyFrameInterpolationConfiguration(
-                    frameWidth: currentWidth,
-                    frameHeight: currentHeight,
-                    numberOfInterpolatedFrames: numFrames
-                ) else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FI config"])
-                }
-                let proc = VTFrameProcessor()
-                try proc.startSession(configuration: config)
-                let pool = makePool(width: currentWidth, height: currentHeight, from: config.destinationPixelBufferAttributes)
-                guard pool != nil else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FI pool"])
-                }
-                addStage(.temporal, processor: proc, pool: pool, outW: currentWidth, outH: currentHeight)
             }
         }
 
@@ -422,9 +442,8 @@ public actor VTFrameProcessorCoordinator {
 
         // Get the previous source frame (ring buffer index 1 = the frame before current)
         let prevSourceFP: VTFrameProcessorFrame
-        let historyToUse = stages.keys.contains(.spatial) ? upscaledFrameHistory : frameHistory
-        if historyToUse.count >= 2 {
-            prevSourceFP = historyToUse[1]
+        if frameHistory.count >= 2 {
+            prevSourceFP = frameHistory[1]
         } else {
             // First frame: use dummy
             let offsetTime = CMTimeSubtract(sourcePTS, CMTime(value: 1, timescale: 30))
@@ -543,100 +562,157 @@ public actor VTFrameProcessorCoordinator {
         // Process each frame through spatial upscaling
         var outputFrames: [VTFrame] = []
 
-        for f in inputFrames {
+        for (idx, f) in inputFrames.enumerated() {
+            let isSourceFrame = idx == inputFrames.count - 1
             var currentBuffer = f.buffer
 
-            // Stage 1: LL SR or Quality SR
-            var buf1: CVPixelBuffer?
-            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,
-                  let outBuf1 = buf1 else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                    userInfo: [NSLocalizedDescriptionKey: "Spatial pool allocation failed"])
-            }
-
-            guard let sourceFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
-                  let destFP = VTFrameProcessorFrame(buffer: outBuf1, presentationTimeStamp: f.presentationTimeStamp) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial frames"])
-            }
-
             if qualitySuperResolutionScaleFactor > 0 {
-                // Quality SR
-                let prevFP = frameHistory.dropFirst().first
-                let prevOutFP = outputHistory.first
-                guard let params = VTSuperResolutionScalerParameters(
-                    sourceFrame: sourceFP,
-                    previousFrame: prevFP,
-                    previousOutputFrame: prevOutFP,
-                    opticalFlow: nil,
-                    submissionMode: .sequential,
-                    destinationFrame: destFP
-                ) else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create Quality SR params"])
+                if isSourceFrame {
+                    // Quality SR (source frame only)
+                    var buf1: CVPixelBuffer?
+                    guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,
+                          let outBuf1 = buf1 else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                            userInfo: [NSLocalizedDescriptionKey: "Spatial pool allocation failed"])
+                    }
+                    guard let sourceFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
+                          let destFP = VTFrameProcessorFrame(buffer: outBuf1, presentationTimeStamp: f.presentationTimeStamp) else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial frames"])
+                    }
+                    let prevFP = frameHistory.dropFirst().first
+                    let prevOutFP = outputHistory.first
+                    guard let params = VTSuperResolutionScalerParameters(
+                        sourceFrame: sourceFP,
+                        previousFrame: prevFP,
+                        previousOutputFrame: prevOutFP,
+                        opticalFlow: nil,
+                        submissionMode: .sequential,
+                        destinationFrame: destFP
+                    ) else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to create Quality SR params"])
+                    }
+                    _ = try await instance.processor.process(parameters: params)
+                    currentBuffer = outBuf1
+                } else {
+                    // Interpolated frame: upscale using hardware transfer session
+                    var buf1: CVPixelBuffer?
+                    guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,
+                          let outBuf1 = buf1 else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                            userInfo: [NSLocalizedDescriptionKey: "Spatial pool allocation failed"])
+                    }
+                    if let transfer = interpolationTransferSession {
+                        VTPixelTransferSessionTransferImage(transfer, from: currentBuffer, to: outBuf1)
+                    }
+                    currentBuffer = outBuf1
                 }
-                _ = try await instance.processor.process(parameters: params)
             } else {
-                // LL SR
+                // LL SR - Stage 1 2x (on all frames)
+                var buf1: CVPixelBuffer?
+                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,
+                      let outBuf1 = buf1 else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                        userInfo: [NSLocalizedDescriptionKey: "Spatial pool allocation failed"])
+                }
+                guard let sourceFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
+                      let destFP = VTFrameProcessorFrame(buffer: outBuf1, presentationTimeStamp: f.presentationTimeStamp) else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial frames"])
+                }
                 let params = VTLowLatencySuperResolutionScalerParameters(
                     sourceFrame: sourceFP,
                     destinationFrame: destFP
                 )
                 _ = try await instance.processor.process(parameters: params)
-            }
+                currentBuffer = outBuf1
 
-            currentBuffer = outBuf1
-
-            // Stage 2: Second 2x step for 4x LL SR
-            if superResolutionLevel == 4 && qualitySuperResolutionScaleFactor == 0 {
-                if let proc2 = secondSpatialProcessor,
-                   let pool2 = secondSpatialPool {
-                    var buf2: CVPixelBuffer?
-                    guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool2, &buf2) == kCVReturnSuccess,
-                          let outBuf2 = buf2 else {
-                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                            userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 pool allocation failed"])
+                // Stage 2: Second 2x step for 4x LL SR
+                if superResolutionLevel == 4 {
+                    if isSourceFrame {
+                        if let proc2 = secondSpatialProcessor,
+                           let pool2 = secondSpatialPool {
+                            var buf2: CVPixelBuffer?
+                            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool2, &buf2) == kCVReturnSuccess,
+                                  let outBuf2 = buf2 else {
+                                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                                    userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 pool allocation failed"])
+                            }
+                            guard let sourceFP2 = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
+                                  let destFP2 = VTFrameProcessorFrame(buffer: outBuf2, presentationTimeStamp: f.presentationTimeStamp) else {
+                                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                                    userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial stage 2 frames"])
+                            }
+                            let params2 = VTLowLatencySuperResolutionScalerParameters(
+                                sourceFrame: sourceFP2,
+                                destinationFrame: destFP2
+                            )
+                            _ = try await proc2.process(parameters: params2)
+                            currentBuffer = outBuf2
+                        } else if let fallbackSession = fallbackTransferSession {
+                            var buf2: CVPixelBuffer?
+                            let outW = CVPixelBufferGetWidth(currentBuffer) * 2
+                            let outH = CVPixelBufferGetHeight(currentBuffer) * 2
+                            let attrs: [String: Any] = [
+                                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                                kCVPixelBufferWidthKey as String: outW,
+                                kCVPixelBufferHeightKey as String: outH,
+                                kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any]
+                            ]
+                            guard CVPixelBufferCreate(kCFAllocatorDefault, outW, outH, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, attrs as CFDictionary, &buf2) == kCVReturnSuccess,
+                                  let outBuf2 = buf2 else {
+                                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                                    userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 fallback allocation failed"])
+                            }
+                            VTPixelTransferSessionTransferImage(fallbackSession, from: currentBuffer, to: outBuf2)
+                            currentBuffer = outBuf2
+                        }
+                    } else {
+                        // Interpolated frame: scale 2K to 4K using transfer session
+                        var buf2: CVPixelBuffer?
+                        if let pool2 = secondSpatialPool {
+                            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool2, &buf2) == kCVReturnSuccess,
+                                  let outBuf2 = buf2 else {
+                                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                                    userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 interpolation pool allocation failed"])
+                            }
+                            if let transfer = interpolationTransferSession {
+                                VTPixelTransferSessionTransferImage(transfer, from: currentBuffer, to: outBuf2)
+                            }
+                            currentBuffer = outBuf2
+                        } else {
+                            let outW = CVPixelBufferGetWidth(currentBuffer) * 2
+                            let outH = CVPixelBufferGetHeight(currentBuffer) * 2
+                            let attrs: [String: Any] = [
+                                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                                kCVPixelBufferWidthKey as String: outW,
+                                kCVPixelBufferHeightKey as String: outH,
+                                kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any]
+                            ]
+                            guard CVPixelBufferCreate(kCFAllocatorDefault, outW, outH, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, attrs as CFDictionary, &buf2) == kCVReturnSuccess,
+                                  let outBuf2 = buf2 else {
+                                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                                    userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 interpolation fallback allocation failed"])
+                            }
+                            if let transfer = interpolationTransferSession {
+                                VTPixelTransferSessionTransferImage(transfer, from: currentBuffer, to: outBuf2)
+                            }
+                            currentBuffer = outBuf2
+                        }
                     }
-                    guard let sourceFP2 = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp),
-                          let destFP2 = VTFrameProcessorFrame(buffer: outBuf2, presentationTimeStamp: f.presentationTimeStamp) else {
-                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                            userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial stage 2 frames"])
-                    }
-                    let params2 = VTLowLatencySuperResolutionScalerParameters(
-                        sourceFrame: sourceFP2,
-                        destinationFrame: destFP2
-                    )
-                    _ = try await proc2.process(parameters: params2)
-                    currentBuffer = outBuf2
-                } else if let fallbackSession = fallbackTransferSession {
-                    var buf2: CVPixelBuffer?
-                    let outW = CVPixelBufferGetWidth(currentBuffer) * 2
-                    let outH = CVPixelBufferGetHeight(currentBuffer) * 2
-                    let attrs: [String: Any] = [
-                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-                        kCVPixelBufferWidthKey as String: outW,
-                        kCVPixelBufferHeightKey as String: outH,
-                        kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any]
-                    ]
-                    guard CVPixelBufferCreate(kCFAllocatorDefault, outW, outH, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, attrs as CFDictionary, &buf2) == kCVReturnSuccess,
-                          let outBuf2 = buf2 else {
-                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                            userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 fallback allocation failed"])
-                    }
-                    VTPixelTransferSessionTransferImage(fallbackSession, from: currentBuffer, to: outBuf2)
-                    currentBuffer = outBuf2
                 }
             }
 
             outputFrames.append(VTFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp))
 
-            if let outFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp) {
+            if isSourceFrame, let outFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp) {
                 outputHistory.insert(outFP, at: 0)
                 if outputHistory.count > maxHistoryLength {
                     outputHistory.removeLast()
                 }
 
-                // Track in upscaled frame history for the temporal interpolation stage
+                // Track in upscaled frame history for the temporal interpolation stage / motion blur
                 upscaledFrameHistory.insert(outFP, at: 0)
                 if upscaledFrameHistory.count > maxHistoryLength {
                     upscaledFrameHistory.removeLast()
@@ -721,6 +797,11 @@ public actor VTFrameProcessorCoordinator {
             VTPixelTransferSessionInvalidate(session)
         }
         fallbackTransferSession = nil
+
+        if let session = interpolationTransferSession {
+            VTPixelTransferSessionInvalidate(session)
+        }
+        interpolationTransferSession = nil
 
         frameHistory.removeAll()
         outputHistory.removeAll()
