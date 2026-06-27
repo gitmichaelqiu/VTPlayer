@@ -10,6 +10,7 @@ import AVFoundation
 import MetalKit
 import VideoToolbox
 import AppKit
+import CoreVideo
 
 /// SwiftUI Representable wrapper for the VTMetalRenderer.
 struct VTMetalRendererView: NSViewRepresentable {
@@ -138,6 +139,10 @@ final class VTPlayerViewModel {
     private var videoOutput: AVPlayerItemVideoOutput?
     private var producerTask: Task<Void, Never>?
     private var consumerTask: Task<Void, Never>?
+    private var displayLink: CVDisplayLink?
+    private var processedFramesCount = 0
+    private var fpsTimer = DispatchTime.now()
+    private var diagTimer = DispatchTime.now()
     private var processedFrameCache: [VTFrame] = []
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
@@ -509,6 +514,10 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         player.pause()
         self.isPaused = true
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            self.displayLink = nil
+        }
         self.saveProgress()
         self.saveVideoSettings()
         self.userActivityDetected()
@@ -733,90 +742,29 @@ final class VTPlayerViewModel {
             await coordinator.endSession()
         }
         
-        consumerTask = Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            let myGen = gen
-            var processedFramesCount = 0
-            var fpsTimer = DispatchTime.now()
-            var diagTimer = DispatchTime.now()
-
-            while !Task.isCancelled {
-                guard myGen == self.playbackGeneration else { break }
-
-                if self.isPaused {
-                    try? await Task.sleep(nanoseconds: 10_000_000)
-                    continue
+        // Start CVDisplayLink to drive the rendering consumer
+        if let link = self.displayLink {
+            CVDisplayLinkStop(link)
+            self.displayLink = nil
+        }
+        
+        self.processedFramesCount = 0
+        self.fpsTimer = DispatchTime.now()
+        self.diagTimer = DispatchTime.now()
+        
+        var newLink: CVDisplayLink?
+        if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
+            let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
+                let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext!).takeUnretainedValue()
+                DispatchQueue.main.async {
+                    vm.tickDisplayLink()
                 }
-
-                guard let player = self.player else {
-                    try? await Task.sleep(nanoseconds: 10_000_000)
-                    continue
-                }
-
-                let currentTime = player.currentTime()
-                let currentSecs = CMTimeGetSeconds(currentTime)
-
-                // Drain all frames whose PTS ≤ current player time, but only
-                // render the *last* one.  When catching up (e.g. after a
-                // pipeline restart), the loop may drain many frames at once;
-                // calling renderer.render() for each one wastes GPU cycles and
-                // can stall on Metal drawable contention, making playback
-                // appear slow — especially with FI generating 2–4× more frames.
-                var lastFrameToRender: VTFrame? = nil
-                var drained = 0
-                while !self.processedFrameCache.isEmpty {
-                    let firstFrame = self.processedFrameCache[0]
-                    let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                    guard frameTime <= currentSecs + 0.005 else { break }
-
-                    lastFrameToRender = firstFrame
-                    self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                    drained += 1
-                    if !self.processedFrameCache.isEmpty {
-                        self.processedFrameCache.removeFirst()
-                    }
-                }
-                if let frame = lastFrameToRender {
-                    self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
-                    processedFramesCount += drained
-                    self.currentTime = currentSecs
-                    if drained > 1 {
-                        self.droppedFrames += drained - 1
-                    }
-                }
-
-                let elapsedFPSTime = Double(DispatchTime.now().uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
-                if elapsedFPSTime >= 1.0 {
-                    self.fps = Double(processedFramesCount) / elapsedFPSTime
-                    processedFramesCount = 0
-                    fpsTimer = DispatchTime.now()
-                }
-
-                // Diagnostic log every 5 seconds
-                let diagElapsed = Double(DispatchTime.now().uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
-                if diagElapsed >= 5.0 {
-                    let curRate = player.rate
-                    let curFPS = self.fps
-                    if let first = self.processedFrameCache.first {
-                        let ft = CMTimeGetSeconds(first.presentationTimeStamp)
-                        print("DIAG: cache=\(self.processedFrameCache.count) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) rendered=\(curFPS)")
-                    } else {
-                        print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) rendered=\(curFPS)")
-                    }
-                    diagTimer = DispatchTime.now()
-                }
-
-                // Cache-safe sleep calculation.
-                if let nextFrame = self.processedFrameCache.first {
-                    let nextPTS = CMTimeGetSeconds(nextFrame.presentationTimeStamp)
-                    // Re-read currentSecs for a more accurate sleep duration.
-                    let updatedSecs = CMTimeGetSeconds(player.currentTime())
-                    let sleepDuration = max(0.001, nextPTS - updatedSecs - 0.002)
-                    try? await Task.sleep(nanoseconds: UInt64(sleepDuration * 1_000_000_000))
-                } else {
-                    try? await Task.sleep(nanoseconds: 4_000_000)
-                }
+                return kCVReturnSuccess
             }
+            let context = Unmanaged.passUnretained(self).toOpaque()
+            CVDisplayLinkSetOutputCallback(link, callback, context)
+            CVDisplayLinkStart(link)
+            self.displayLink = link
         }
 
         audioSyncTask?.cancel()
@@ -847,6 +795,61 @@ final class VTPlayerViewModel {
         }
     }
 
+    @MainActor
+    private func tickDisplayLink() {
+        guard isPlaying && !isPaused, let player = self.player else { return }
+        
+        let currentTime = player.currentTime()
+        let currentSecs = CMTimeGetSeconds(currentTime)
+        
+        // Drain all frames whose PTS ≤ current player time, but only render the last one.
+        var lastFrameToRender: VTFrame? = nil
+        var drained = 0
+        while !self.processedFrameCache.isEmpty {
+            let firstFrame = self.processedFrameCache[0]
+            let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
+            guard frameTime <= currentSecs + 0.005 else { break }
+
+            lastFrameToRender = firstFrame
+            self.lastRenderedPTS = firstFrame.presentationTimeStamp
+            drained += 1
+            if !self.processedFrameCache.isEmpty {
+                self.processedFrameCache.removeFirst()
+            }
+        }
+        
+        if let frame = lastFrameToRender {
+            self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
+            processedFramesCount += drained
+            self.currentTime = currentSecs
+            if drained > 1 {
+                self.droppedFrames += drained - 1
+            }
+        }
+        
+        // Stats calculations
+        let now = DispatchTime.now()
+        let elapsedFPSTime = Double(now.uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
+        if elapsedFPSTime >= 1.0 {
+            self.fps = Double(processedFramesCount) / elapsedFPSTime
+            processedFramesCount = 0
+            fpsTimer = now
+        }
+        
+        let diagElapsed = Double(now.uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
+        if diagElapsed >= 5.0 {
+            let curRate = player.rate
+            let curFPS = self.fps
+            if let first = self.processedFrameCache.first {
+                let ft = CMTimeGetSeconds(first.presentationTimeStamp)
+                print("DIAG: cache=\(self.processedFrameCache.count) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) rendered=\(curFPS)")
+            } else {
+                print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) rendered=\(curFPS)")
+            }
+            diagTimer = now
+        }
+    }
+
     /// Pauses/stops playback entirely.
     func stop() {
         if self.currentTime > 0 {
@@ -857,6 +860,10 @@ final class VTPlayerViewModel {
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            self.displayLink = nil
+        }
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
