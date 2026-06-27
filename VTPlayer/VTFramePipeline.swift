@@ -14,10 +14,12 @@ import CoreMedia
 nonisolated public struct VTFrame: @unchecked Sendable {
     public let buffer: CVPixelBuffer
     public let presentationTimeStamp: CMTime
+    public let isInterpolated: Bool
     
-    public init(buffer: CVPixelBuffer, presentationTimeStamp: CMTime) {
+    public init(buffer: CVPixelBuffer, presentationTimeStamp: CMTime, isInterpolated: Bool = false) {
         self.buffer = buffer
         self.presentationTimeStamp = presentationTimeStamp
+        self.isInterpolated = isInterpolated
     }
 }
 

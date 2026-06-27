@@ -19,6 +19,7 @@ public final class VTMetalRenderer: MTKView {
     
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
+    private var currentFrameIsInterpolated = false
 
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
     public var sharpness: Float = 0.0
@@ -55,9 +56,12 @@ public final class VTMetalRenderer: MTKView {
     }
     
     /// Updates the renderer with a new frame and schedules it to draw.
-    /// - Parameter pixelBuffer: The new CVPixelBuffer frame to display.
-    public func render(pixelBuffer: CVPixelBuffer) {
+    /// - Parameters:
+    ///   - pixelBuffer: The new CVPixelBuffer frame to display.
+    ///   - isInterpolated: True if this is an interpolated frame.
+    public func render(pixelBuffer: CVPixelBuffer, isInterpolated: Bool = false) {
         self.currentPixelBuffer = pixelBuffer
+        self.currentFrameIsInterpolated = isInterpolated
         // Schedule a draw pass on the next display refresh cycle rather
         // than drawing synchronously.  draw() blocks on currentDrawable
         // and CIContext.render(); for large SR-upscaled frames this can
@@ -82,9 +86,10 @@ public final class VTMetalRenderer: MTKView {
 
         // Apply optional sharpness filter
         let sharpenedImage: CIImage
-        if sharpness > 0 {
+        let activeSharpness = currentFrameIsInterpolated ? max(sharpness, 1.25) : sharpness
+        if activeSharpness > 0 {
             sharpenedImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
-                kCIInputIntensityKey: sharpness,
+                kCIInputIntensityKey: activeSharpness,
                 kCIInputRadiusKey: 0.5
             ]))
         } else {

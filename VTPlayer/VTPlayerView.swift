@@ -777,7 +777,7 @@ final class VTPlayerViewModel {
                     }
                 }
                 if let frame = lastFrameToRender {
-                    self.renderer.render(pixelBuffer: frame.buffer)
+                    self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
                     processedFramesCount += drained
                     self.currentTime = currentSecs
                     if drained > 1 {
