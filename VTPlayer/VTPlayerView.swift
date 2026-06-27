@@ -678,6 +678,17 @@ final class VTPlayerViewModel {
                     continue
                 }
 
+                // Drop late frames to maintain real-time audio-video synchronization
+                if let player = self.player, !self.isPaused, player.rate > 0 {
+                    let currentSecs = CMTimeGetSeconds(player.currentTime())
+                    let frameSecs = CMTimeGetSeconds(vtFrame.presentationTimeStamp)
+                    // If the frame is late by more than 100ms, skip processing it
+                    if frameSecs < currentSecs - 0.10 {
+                        self.droppedFrames += 1
+                        continue
+                    }
+                }
+
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()
                 do {
