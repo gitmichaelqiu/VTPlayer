@@ -1186,6 +1186,7 @@ struct VTPlayerView: View {
     #endif
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var showSettingsSheet = false
+    @State private var showDiagnosticsSheet = false
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1479,10 +1480,6 @@ extension VTPlayerView {
 
             // Enhancement status pills overlaid at top
             iosEnhancementPills
-
-            if viewModel.showSidebar {
-                iosDiagnosticsOverlay
-            }
         }
         .onTapGesture {
             viewModel.userActivityDetected()
@@ -1504,18 +1501,20 @@ extension VTPlayerView {
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    withAnimation { viewModel.showSidebar.toggle() }
+                    showDiagnosticsSheet = true
                 } label: {
-                    Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
+                    Label("Diagnostics", systemImage: "chart.bar")
                 }
                 .labelStyle(.iconOnly)
-                .tint(viewModel.showSidebar ? .cyan : nil)
             }
         }
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showDiagnosticsSheet) {
+            iosDiagnosticsSheet
         }
         .onDisappear {
             viewModel.stop()
@@ -1595,100 +1594,64 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    private var iosDiagnosticsOverlay: some View {
-        VStack {
-            HStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Label("Diagnostics", systemImage: "chart.bar")
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(.cyan)
-                        Spacer()
-                        Button {
-                            withAnimation { viewModel.showSidebar = false }
-                        } label: {
-                            Label("Close", systemImage: "xmark.circle.fill")
-                                .labelStyle(.iconOnly)
-                        }
-                        .font(.body)
-                        .foregroundColor(.secondary)
+    private var iosDiagnosticsSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Video metadata") {
+                    LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
+                    LabeledContent("Source rate") {
+                        Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
+                            .monospacedDigit()
                     }
+                    let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
+                    LabeledContent("Target rate") {
+                        Text(String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
+                            .monospacedDigit()
+                    }
+                    LabeledContent("Codec", value: viewModel.videoFormat)
+                }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        LabeledContent {
-                            Text("\(viewModel.videoWidth)×\(viewModel.videoHeight)")
-                                .font(.system(.caption2, design: .monospaced))
-                        } label: {
-                            Text("Resolution")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
+                Section("Real-time metrics") {
+                    LabeledContent("Display rate") {
+                        Text(String(format: "%.1f Hz", viewModel.fps))
+                            .monospacedDigit()
+                            .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                    }
+                    LabeledContent("Frame latency") {
+                        Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                            .monospacedDigit()
+                    }
+                    LabeledContent("Dropped frames") {
+                        Text("\(viewModel.droppedFrames)")
+                            .monospacedDigit()
+                    }
+                }
 
-                        LabeledContent {
-                            Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
-                                .font(.system(.caption2, design: .monospaced))
-                        } label: {
-                            Text("Source Rate")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-
-                        let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
-                        LabeledContent {
-                            Text(String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
-                                .font(.system(.caption2, design: .monospaced))
-                        } label: {
-                            Text("Target Rate")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-
-                        LabeledContent {
-                            Text(String(format: "%.1f Hz", viewModel.fps))
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                        } label: {
-                            Text("Display Rate")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-
-                        LabeledContent {
-                            Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
-                                .font(.system(.caption2, design: .monospaced))
-                        } label: {
-                            Text("Latency")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-
-                        let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
-                        let activeScale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
-                        LabeledContent {
-                            Text(activeScale > 0 ? "\(isQL ? "QL" : "LL") \(activeScale)x" : "Off")
-                                .font(.system(.caption2, design: .monospaced))
-                        } label: {
-                            Text("SR Mode")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                Section("Super resolution") {
+                    LabeledContent("SR supported", value: viewModel.srIsSupported ? "Yes" : "No")
+                    let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                    let activeScale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                    LabeledContent("Active mode", value: activeScale > 0 ? "\(isQL ? "Quality" : "Low Latency") \(activeScale)x" : "Off")
+                    if let error = viewModel.srInitializationError {
+                        LabeledContent("Error") {
+                            Text(error)
+                                .foregroundColor(.red)
+                                .font(.caption)
                         }
                     }
                 }
-                .frame(width: 220)
-                .padding()
-                .background(.ultraThinMaterial)
-                .cornerRadius(16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                .padding()
             }
-            Spacer()
+            .navigationTitle("Diagnostics")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        showDiagnosticsSheet = false
+                    }
+                }
+            }
         }
-        .padding(.top, 60)
+        .presentationDetents([.medium])
     }
     #endif
 
