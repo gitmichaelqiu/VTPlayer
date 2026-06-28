@@ -1569,75 +1569,81 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var iosGalleryView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                let hasVideos = !viewModel.recentVideos.isEmpty
-
-                // MARK: - Header + Sort + Trash (always visible)
-                HStack {
-                    Text("VTPlayer")
-                        .font(.title2)
-                        .bold()
-                    Spacer()
-                    Picker("Sort", selection: $sortBy) {
-                        Text("Date").tag(SortOption.dateAdded)
-                        Text("Name").tag(SortOption.name)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 140)
-                    .disabled(!hasVideos)
-
-                    Button(action: { showClearAllAlert = true }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(hasVideos ? .red : .secondary)
-                    }
-                    .disabled(!hasVideos)
-                    .padding(.leading, 8)
+        Group {
+            if viewModel.recentVideos.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "video.badge.plus")
+                        .font(.system(size: 56))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("No Videos")
+                        .font(.headline)
+                    Text("Tap the + button to add video files.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.horizontal)
-
-                // MARK: - Videos Grid or Empty Placeholder
-                if hasVideos {
-                    let sortedVideos: [URL] = {
-                        switch sortBy {
-                        case .name:
-                            return viewModel.recentVideos.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-                        case .dateAdded:
-                            return viewModel.recentVideos
-                        }
-                    }()
-
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 20) {
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemGroupedBackground))
+            } else {
+                let sortedVideos: [URL] = {
+                    switch sortBy {
+                    case .name:
+                        return viewModel.recentVideos.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+                    case .dateAdded:
+                        return viewModel.recentVideos
+                    }
+                }()
+                
+                List {
+                    Section("Videos") {
                         ForEach(sortedVideos, id: \.self) { url in
-                            VStack(alignment: .leading, spacing: 8) {
-                                VideoThumbnailView(url: url)
-                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(url.lastPathComponent)
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                        .multilineTextAlignment(.leading)
-                                }
-                                .padding(.horizontal, 4)
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                            Button(action: {
                                 viewModel.openVideo(url)
+                            }) {
+                                HStack(spacing: 12) {
+                                    VideoThumbnailView(url: url)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(url.lastPathComponent)
+                                            .font(.body)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                            .lineLimit(2)
+                                        
+                                        Text(formatDateAdded(for: url))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                                        viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
+                                    }
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
                             }
                             .contextMenu {
                                 ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
-
+                                
                                 Button {
                                     UIPasteboard.general.string = url.lastPathComponent
                                 } label: {
                                     Label("Copy Name", systemImage: "doc.on.doc")
                                 }
-
+                                
                                 Divider()
-
+                                
                                 Button(role: .destructive) {
                                     if let idx = viewModel.recentVideos.firstIndex(of: url) {
                                         viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
@@ -1648,25 +1654,52 @@ extension VTPlayerView {
                             }
                         }
                     }
-                    .padding(.horizontal)
-                } else {
-                    // Subtle empty state — layout stays stable
-                    VStack(spacing: 8) {
-                        Image(systemName: "play.rectangle.on.rectangle")
-                            .font(.system(size: 36))
-                            .foregroundColor(.secondary.opacity(0.4))
-                            .padding(.top, 48)
-                        Text("Tap + to add a video")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+        .navigationTitle("Gallery")
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                // Clear all button (only shown/enabled when list is not empty)
+                if !viewModel.recentVideos.isEmpty {
+                    Button(action: { showClearAllAlert = true }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
                     }
-                    .frame(maxWidth: .infinity)
+                    
+                    // Sort option menu
+                    Menu {
+                        Picker("Sort By", selection: $sortBy) {
+                            Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
+                            Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                }
+                
+                // Native Plus button (aggregated selection menu)
+                Menu {
+                    Button(action: { showFileImporter = true }) {
+                        Label("Browse Files", systemImage: "folder")
+                    }
+                    
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        Label("Photos Library", systemImage: "photo")
+                    }
+                    #endif
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.body.bold())
                 }
             }
-            .padding(.vertical)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Gallery")
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
@@ -1762,37 +1795,66 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-        }
-        .navigationTitle(viewModel.showControls ? (viewModel.videoURL?.lastPathComponent ?? "Video") : "")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        // Keep toolbar visible so the frame never collapses — collapsing
-        // causes the player overlay to jump upward abruptly.
-        .toolbar(.visible, for: .navigationBar)
-        .navigationBarBackButtonHidden(!viewModel.showControls)
-        .toolbar {
-            if viewModel.showControls {
-                ToolbarItem(placement: .navigationBarTrailing) {
+            
+            // Custom Top Overlay Navigation Bar (Fades with controls, never shifts layout)
+            VStack {
+                HStack(spacing: 16) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.body.bold())
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    Text(viewModel.videoURL?.lastPathComponent ?? "Video")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.4))
+                        .cornerRadius(8)
+                    
+                    Spacer()
+                    
                     Button {
                         showSettingsSheet = true
                     } label: {
-                        Label("Settings", systemImage: "gearshape")
+                        Image(systemName: "gearshape")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
                     }
-                    .labelStyle(.iconOnly)
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
+                    
                     Button {
                         showDiagnosticsSheet = true
                     } label: {
-                        Label("Diagnostics", systemImage: "chart.bar")
+                        Image(systemName: "chart.bar")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
                     }
-                    .labelStyle(.iconOnly)
                 }
+                .padding(.horizontal)
+                .padding(.top, 12)
+                
+                Spacer()
             }
+            .opacity(viewModel.showControls ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
@@ -2830,38 +2892,35 @@ struct VideoThumbnailView: View {
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let thumbnail = thumbnail {
-                    thumbnail
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Color(.secondarySystemGroupedBackground)
-                        .overlay(
-                            Image(systemName: "video.fill")
-                                .font(.title)
-                                .foregroundColor(.secondary)
-                        )
-                }
+            if let thumbnail = thumbnail {
+                thumbnail
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 90, height: 60)
+                    .clipped()
+            } else {
+                Color(.secondarySystemGroupedBackground)
+                    .frame(width: 90, height: 60)
+                    .overlay(
+                        Image(systemName: "video.fill")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    )
             }
-            .frame(height: 100)
-            .frame(maxWidth: .infinity)
-            .clipped()
-
+            
             if let duration = durationString {
                 Text(duration)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
                     .background(Color.black.opacity(0.75))
-                    .cornerRadius(4)
-                    .padding(6)
+                    .cornerRadius(3)
+                    .padding(4)
             }
         }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .frame(width: 90, height: 60)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .onAppear {
             loadMetadata()
         }
@@ -2888,7 +2947,7 @@ struct VideoThumbnailView: View {
             
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 320, height: 200)
+            generator.maximumSize = CGSize(width: 180, height: 120)
             
             // Request frame at 1.0 second or start
             let time = CMTime(seconds: 1.0, preferredTimescale: 600)
