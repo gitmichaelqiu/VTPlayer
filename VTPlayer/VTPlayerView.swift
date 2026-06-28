@@ -365,6 +365,12 @@ final class VTPlayerViewModel {
                 }
             } catch {
                 print("Error loading video properties: \(error.localizedDescription)")
+                #if os(iOS)
+                // Remove stale URL from recents so it won't be retried
+                if let idx = self.recentVideos.firstIndex(of: url) {
+                    self.deleteRecentVideoIOS(at: IndexSet(integer: idx))
+                }
+                #endif
             }
         }
     }
@@ -427,6 +433,14 @@ final class VTPlayerViewModel {
     }
     
     func openRecentVideo(_ url: URL) {
+        #if os(iOS)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            if let idx = recentVideos.firstIndex(of: url) {
+                deleteRecentVideoIOS(at: IndexSet(integer: idx))
+            }
+            return
+        }
+        #endif
         self.openVideo(url)
     }
     
@@ -1096,7 +1110,10 @@ final class VTPlayerViewModel {
     #if os(iOS)
     private func loadRecentVideosIOS() {
         let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideos") ?? []
+        // Filter out stale temp URLs whose files no longer exist
         self.recentVideos = paths.compactMap { URL(string: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        saveRecentVideosIOS() // persist cleaned list
     }
     
     private func saveRecentVideosIOS() {
@@ -1393,8 +1410,7 @@ extension VTPlayerView {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .cornerRadius(12)
+                        .glassEffect(in: .rect(cornerRadius: 12))
                     }
 
                     #if canImport(PhotosUI)
@@ -1413,8 +1429,7 @@ extension VTPlayerView {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .cornerRadius(12)
+                        .glassEffect(in: .rect(cornerRadius: 12))
                     }
                     #endif
                 }
@@ -1565,29 +1580,28 @@ extension VTPlayerView {
         }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showSettingsSheet = true
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .labelStyle(.iconOnly)
-            }
-
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    withAnimation { viewModel.showSidebar.toggle() }
-                } label: {
-                    Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
-                        .symbolRenderingMode(.hierarchical)
+                HStack(spacing: 2) {
+                    Button {
+                        withAnimation { viewModel.showSidebar.toggle() }
+                    } label: {
+                        Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .labelStyle(.iconOnly)
+                    .tint(viewModel.showSidebar ? .cyan : nil)
+
+                    Button {
+                        showSettingsSheet = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .labelStyle(.iconOnly)
-                .tint(viewModel.showSidebar ? .cyan : nil)
             }
         }
         .sheet(isPresented: $showSettingsSheet) {
@@ -1646,24 +1660,11 @@ extension VTPlayerView {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial.opacity(0.85))
-            .cornerRadius(20)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.35), .white.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+            .glassEffect(in: .rect(cornerRadius: 20))
 
             Spacer()
         }
-        .padding(.top, 8)
+        .safeAreaPadding(.top, 8)
     }
 
     private func enhancementPill(label: String, color: Color) -> some View {
@@ -1672,9 +1673,7 @@ extension VTPlayerView {
             .foregroundColor(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Capsule().fill(color.opacity(0.15)))
-            .overlay(Capsule().stroke(color.opacity(0.4), lineWidth: 1))
-            .shadow(color: color.opacity(0.25), radius: 4, x: 0, y: 0)
+            .glassEffect(.regular.tint(color), in: .capsule)
     }
 
     @ViewBuilder
@@ -1760,13 +1759,7 @@ extension VTPlayerView {
                 }
                 .frame(width: 220)
                 .padding()
-                .background(.ultraThinMaterial)
-                .cornerRadius(16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                .glassEffect(in: .rect(cornerRadius: 16))
                 .padding()
             }
             Spacer()
