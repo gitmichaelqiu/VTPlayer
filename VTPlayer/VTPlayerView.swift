@@ -1230,6 +1230,7 @@ struct VTPlayerView: View {
         }
     }
 
+    #if os(iOS)
     @ViewBuilder
     private var iphoneLayout: some View {
         if viewModel.videoURL == nil {
@@ -1238,6 +1239,7 @@ struct VTPlayerView: View {
             iosPlayerView
         }
     }
+    #endif
 
 
 
