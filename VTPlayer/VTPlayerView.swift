@@ -1783,8 +1783,19 @@ extension VTPlayerView {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.15))
+                                .background(.ultraThinMaterial)
                                 .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [.white.opacity(0.3), .white.opacity(0.05)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                )
                             }
                             
                             Spacer()
@@ -1800,61 +1811,67 @@ extension VTPlayerView {
                                 if hasSR {
                                     Text("SR \(viewModel.superResolutionLevel)x")
                                         .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.cyan.opacity(0.25))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.cyan.opacity(0.15)))
+                                        .overlay(Capsule().stroke(Color.cyan.opacity(0.4), lineWidth: 1))
                                         .foregroundColor(.cyan)
+                                        .shadow(color: Color.cyan.opacity(0.25), radius: 4, x: 0, y: 0)
                                 }
                                 
                                 if hasQLSR {
                                     Text("SR \(viewModel.qualitySuperResolutionScaleFactor)x QL")
                                         .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.blue.opacity(0.25))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.blue.opacity(0.15)))
+                                        .overlay(Capsule().stroke(Color.blue.opacity(0.4), lineWidth: 1))
                                         .foregroundColor(.blue)
+                                        .shadow(color: Color.blue.opacity(0.25), radius: 4, x: 0, y: 0)
                                 }
                                 
                                 if hasFI {
                                     Text("FI \(viewModel.frameInterpolationLevel)x")
                                         .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.green.opacity(0.25))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.green.opacity(0.15)))
+                                        .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 1))
                                         .foregroundColor(.green)
+                                        .shadow(color: Color.green.opacity(0.25), radius: 4, x: 0, y: 0)
                                 }
                                 
                                 if hasHDR {
                                     Text("HDR")
                                         .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.yellow.opacity(0.25))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.yellow.opacity(0.15)))
+                                        .overlay(Capsule().stroke(Color.yellow.opacity(0.4), lineWidth: 1))
                                         .foregroundColor(.yellow)
+                                        .shadow(color: Color.yellow.opacity(0.25), radius: 4, x: 0, y: 0)
                                 }
                                 
                                 if hasMB {
                                     Text("MB")
                                         .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.purple.opacity(0.25))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.purple.opacity(0.15)))
+                                        .overlay(Capsule().stroke(Color.purple.opacity(0.4), lineWidth: 1))
                                         .foregroundColor(.purple)
+                                        .shadow(color: Color.purple.opacity(0.25), radius: 4, x: 0, y: 0)
                                 }
                                 
                                 if hasDN {
                                     Text("DN")
                                         .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.orange.opacity(0.25))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.orange.opacity(0.15)))
+                                        .overlay(Capsule().stroke(Color.orange.opacity(0.4), lineWidth: 1))
                                         .foregroundColor(.orange)
+                                        .shadow(color: Color.orange.opacity(0.25), radius: 4, x: 0, y: 0)
                                 }
                             }
                             
@@ -1865,8 +1882,19 @@ extension VTPlayerView {
                                     .font(.title3)
                                     .foregroundColor(.white)
                                     .padding(8)
-                                    .background(Color.white.opacity(0.15))
+                                    .background(.ultraThinMaterial)
                                     .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [.white.opacity(0.3), .white.opacity(0.05)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
                             }
                         }
                     }
