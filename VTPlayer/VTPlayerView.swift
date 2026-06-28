@@ -1897,10 +1897,7 @@ extension VTPlayerView {
                     }) {
                         Image(systemName: "chart.bar.xaxis")
                             .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(viewModel.showSidebar ? Color.cyan.opacity(0.3) : Color.white.opacity(0.15))
-                            .clipShape(Circle())
+                            .foregroundColor(viewModel.showSidebar ? .cyan : .white)
                     }
                     .transition(.opacity)
                 }
