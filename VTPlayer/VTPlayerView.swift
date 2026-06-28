@@ -1571,81 +1571,39 @@ extension VTPlayerView {
     private var iosGalleryView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // MARK: - Import Buttons with native Liquid Glass styling
-                VStack(spacing: 12) {
-                    Button(action: { showFileImporter = true }) {
-                        HStack(spacing: 14) {
-                            Image(systemName: "folder.fill")
-                                .font(.title3)
-                                .foregroundStyle(.blue)
-                                .frame(width: 28)
-
-                            Text("Browse Files")
-                                .font(.body.weight(.semibold))
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-
-                    #if canImport(PhotosUI)
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .videos,
-                        photoLibrary: .shared()
-                    ) {
-                        HStack(spacing: 14) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.title3)
-                                .foregroundStyle(.purple)
-                                .frame(width: 28)
-
-                            Text("Photos Library")
-                                .font(.body.weight(.semibold))
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                    #endif
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                
-                // MARK: - Recents Grid (Responsive layout)
+                // MARK: - Empty State
                 if viewModel.recentVideos.isEmpty {
-                    VStack(spacing: 12) {
-                        Spacer(minLength: 60)
-                        Image(systemName: "play.rectangle.on.rectangle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary.opacity(0.6))
-                        Text("No Videos")
-                            .font(.headline)
-                        Text("Open a video to get started.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        Spacer()
+                    ContentUnavailableView {
+                        Label("No Videos", systemImage: "play.rectangle.on.rectangle")
+                    } description: {
+                        Text("Open a video file or import from your photo library to get started.")
+                    } actions: {
+                        VStack(spacing: 10) {
+                            Button(action: { showFileImporter = true }) {
+                                Label("Browse Files", systemImage: "folder.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.blue)
+
+                            #if canImport(PhotosUI)
+                            PhotosPicker(
+                                selection: $selectedPhotoItem,
+                                matching: .videos,
+                                photoLibrary: .shared()
+                            ) {
+                                Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.purple)
+                            #endif
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
-                } else {
+                }
+
+                // MARK: - Videos Grid
+                if !viewModel.recentVideos.isEmpty {
                     HStack {
                         Text("Videos")
                             .font(.title2)
@@ -1680,8 +1638,7 @@ extension VTPlayerView {
                         ForEach(sortedVideos, id: \.self) { url in
                             VStack(alignment: .leading, spacing: 8) {
                                 VideoThumbnailView(url: url)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(url.lastPathComponent)
@@ -1725,6 +1682,28 @@ extension VTPlayerView {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Gallery")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: { showFileImporter = true }) {
+                        Label("Browse Files", systemImage: "folder.fill")
+                    }
+
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                    }
+                    #endif
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                }
+            }
+        }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
@@ -2904,8 +2883,7 @@ struct VideoThumbnailView: View {
             }
             .frame(height: 100)
             .frame(maxWidth: .infinity)
-            .clipped()
-            
+
             if let duration = durationString {
                 Text(duration)
                     .font(.caption2)
@@ -2918,6 +2896,8 @@ struct VideoThumbnailView: View {
                     .padding(6)
             }
         }
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .onAppear {
             loadMetadata()
         }
