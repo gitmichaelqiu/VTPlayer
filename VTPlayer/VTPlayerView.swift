@@ -1706,21 +1706,52 @@ extension VTPlayerView {
                                 .foregroundColor(.white)
                                 .frame(width: 50, alignment: .leading)
                             
-                            Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
-                                isScrubbing = editing
-                                if !editing {
-                                    viewModel.seek(to: scrubTime)
+                            GeometryReader { sliderGeo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.15))
+                                        .frame(height: 6)
+                                    
+                                    Capsule()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [.blue, .cyan],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(width: max(0, min(sliderGeo.size.width, CGFloat((isScrubbing ? scrubTime : viewModel.currentTime) / (viewModel.duration > 0 ? viewModel.duration : 1.0)) * sliderGeo.size.width)), height: 6)
+                                        .shadow(color: Color.cyan.opacity(0.5), radius: 4, x: 0, y: 0)
+                                    
+                                    Circle()
+                                        .fill(Color.white)
+                                        .frame(width: 14, height: 14)
+                                        .overlay(Circle().stroke(Color.cyan, lineWidth: 1.5))
+                                        .shadow(color: Color.cyan.opacity(0.6), radius: 6, x: 0, y: 0)
+                                        .offset(x: max(0, min(sliderGeo.size.width - 14, CGFloat((isScrubbing ? scrubTime : viewModel.currentTime) / (viewModel.duration > 0 ? viewModel.duration : 1.0)) * sliderGeo.size.width - 7)))
                                 }
-                            })
-                            .accentColor(.cyan)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            isScrubbing = true
+                                            let percentage = Double(value.location.x / sliderGeo.size.width)
+                                            let newTime = max(0, min(viewModel.duration, percentage * viewModel.duration))
+                                            scrubTime = newTime
+                                            viewModel.scrub(to: newTime)
+                                        }
+                                        .onEnded { value in
+                                            isScrubbing = false
+                                            let percentage = Double(value.location.x / sliderGeo.size.width)
+                                            let newTime = max(0, min(viewModel.duration, percentage * viewModel.duration))
+                                            viewModel.seek(to: newTime)
+                                        }
+                                )
+                            }
+                            .frame(height: 14)
                             .onChange(of: viewModel.currentTime) { _, newValue in
                                 if !isScrubbing {
                                     scrubTime = newValue
-                                }
-                            }
-                            .onChange(of: scrubTime) { _, newValue in
-                                if isScrubbing {
-                                    viewModel.scrub(to: newValue)
                                 }
                             }
                             
