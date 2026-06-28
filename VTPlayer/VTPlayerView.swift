@@ -178,7 +178,7 @@ final class VTPlayerViewModel {
     private var inactivityTask: Task<Void, Never>?
     
     // AVPlayer components
-    private var player: AVPlayer?
+    private(set) var player: AVPlayer?
     private var videoOutput: AVPlayerItemVideoOutput?
     private var producerTask: Task<Void, Never>?
     private var consumerTask: Task<Void, Never>?
@@ -575,6 +575,7 @@ final class VTPlayerViewModel {
 
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
+        #if os(macOS)
         if isPlaying && !isPaused {
             startPlaybackLoop()
         } else if isPlaying && isPaused {
@@ -583,6 +584,7 @@ final class VTPlayerViewModel {
             // rebuilds the pipeline when the user unpauses.
             enhancementsPendingRestart = true
         }
+        #endif
     }
     
     /// Toggles play and pause state.
@@ -598,18 +600,20 @@ final class VTPlayerViewModel {
     /// Starts playback and the VideoToolbox processing loop.
     func play() {
         guard let player = player else { return }
-        
+
         self.isPlaying = true
         self.isPaused = false
-        
+
         player.rate = Float(self.playbackSpeed)
-        
+
+        #if os(macOS)
         // Always rebuild the pipeline if enhancements were changed while
         // paused.  Otherwise, just start the loop normally.
         if enhancementsPendingRestart {
             enhancementsPendingRestart = false
         }
         startPlaybackLoop()
+        #endif
         self.userActivityDetected()
     }
     
@@ -927,6 +931,7 @@ final class VTPlayerViewModel {
             }
         }
     }
+    #endif
 
     @MainActor
     private func tickDisplayLink() {
@@ -981,7 +986,6 @@ final class VTPlayerViewModel {
             }
             diagTimer = now
         }
-        #endif
     }
 
     #if !os(macOS)
@@ -1486,7 +1490,7 @@ extension VTPlayerView {
 
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundColor(.tertiary)
+                                    .foregroundColor(.secondary)
                             }
                         }
                         .buttonStyle(.plain)
