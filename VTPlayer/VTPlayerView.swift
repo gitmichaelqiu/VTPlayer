@@ -1550,20 +1550,23 @@ extension VTPlayerView {
                     LabeledContent("Codec", value: viewModel.videoFormat)
                 }
 
-                Section("Real-time metrics") {
-                    LabeledContent("Display rate") {
-                        Text(String(format: "%.1f Hz", viewModel.fps))
-                            .monospacedDigit()
-                            .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                    }
-                    LabeledContent("Frame latency") {
-                        Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                Section {
+                    LabeledContent("Playback speed") {
+                        Text(String(format: "%.2fx", viewModel.playbackSpeed))
                             .monospacedDigit()
                     }
-                    LabeledContent("Dropped frames") {
-                        Text("\(viewModel.droppedFrames)")
+                    LabeledContent("Current time") {
+                        Text(formatTime(viewModel.currentTime))
                             .monospacedDigit()
                     }
+                    LabeledContent("Duration") {
+                        Text(formatTime(viewModel.duration))
+                            .monospacedDigit()
+                    }
+                } header: {
+                    Text("Playback status")
+                } footer: {
+                    Text("Frame processing metrics (display rate, latency) are available on macOS where the VideoToolbox pipeline runs.")
                 }
 
                 Section("Super resolution") {
