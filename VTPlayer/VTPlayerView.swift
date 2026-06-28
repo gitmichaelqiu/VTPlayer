@@ -2672,7 +2672,9 @@ struct PlaybackSettingsView: View {
                 }
             }
             .navigationTitle("Playback Settings")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
