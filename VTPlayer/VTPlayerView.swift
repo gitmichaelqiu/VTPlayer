@@ -188,6 +188,9 @@ final class VTPlayerViewModel {
     private var diagTimer = DispatchTime.now()
     private var processedFrameCache: [VTFrame] = []
     private var securityScopedURL: URL?
+    #if os(iOS)
+    private var tempLocalURL: URL?
+    #endif
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
     private var playbackGeneration: UInt64 = 0
@@ -371,13 +374,41 @@ final class VTPlayerViewModel {
     
     func openVideo(_ url: URL) {
         self.stop()
+        
+        var targetURL = url
+        
         #if os(iOS)
-        if url.startAccessingSecurityScopedResource() {
-            self.securityScopedURL = url
+        if let oldTemp = tempLocalURL {
+            try? FileManager.default.removeItem(at: oldTemp)
+            self.tempLocalURL = nil
+        }
+        
+        let isSecurityScoped = url.startAccessingSecurityScopedResource()
+        defer {
+            if isSecurityScoped {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let destinationURL = tempDir.appendingPathComponent(url.lastPathComponent)
+        
+        do {
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try? FileManager.default.removeItem(at: destinationURL)
+            }
+            try FileManager.default.copyItem(at: url, to: destinationURL)
+            self.tempLocalURL = destinationURL
+            targetURL = destinationURL
+            print("Successfully copied video to sandbox temp: \(destinationURL.path)")
+        } catch {
+            print("Failed to copy video to sandbox: \(error.localizedDescription)")
+            targetURL = url
         }
         #endif
-        self.videoURL = url
-        self.setupPlayer(with: url)
+        
+        self.videoURL = targetURL
+        self.setupPlayer(with: targetURL)
     }
     
     func openRecentVideo(_ url: URL) {
@@ -964,9 +995,9 @@ final class VTPlayerViewModel {
         }
         #endif
         #if os(iOS)
-        if let secUrl = securityScopedURL {
-            secUrl.stopAccessingSecurityScopedResource()
-            self.securityScopedURL = nil
+        if let temp = tempLocalURL {
+            try? FileManager.default.removeItem(at: temp)
+            self.tempLocalURL = nil
         }
         #endif
         audioSyncTask?.cancel()
@@ -1075,11 +1106,7 @@ struct VTPlayerView: View {
     var body: some View {
         Group {
             #if os(iOS)
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                iphoneLayout
-            } else {
-                splitViewLayout
-            }
+            iphoneLayout
             #else
             splitViewLayout
             #endif
@@ -1104,11 +1131,8 @@ struct VTPlayerView: View {
         .onChange(of: selectedPhotoItem) { item in
             guard let item = item else { return }
             Task {
-                if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
-                    viewModel.openVideo(movie.url)
-                    withAnimation {
-                        columnVisibility = .detailOnly
-                    }
+                if let tempURL = try? await item.loadTransferable(type: URL.self) {
+                    viewModel.openVideo(tempURL)
                 }
             }
         }
@@ -2037,27 +2061,7 @@ extension View {
     }
 }
 
-#if canImport(PhotosUI)
-struct PhotosMovie: Transferable {
-    let url: URL
 
-    static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(contentType: .movie) { movie in
-            SentTransferredFile(movie.url)
-        } importing: { receivedData in
-            let fileName = receivedData.file.lastPathComponent
-            let copy = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            
-            if FileManager.default.fileExists(atPath: copy.path) {
-                try? FileManager.default.removeItem(at: copy)
-            }
-            
-            try FileManager.default.copyItem(at: receivedData.file, to: copy)
-            return .init(url: copy)
-        }
-    }
-}
-#endif
 
 struct PlaybackSettingsView: View {
     @Bindable var viewModel: VTPlayerViewModel
