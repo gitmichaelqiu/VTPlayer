@@ -315,8 +315,10 @@ final class VTPlayerViewModel {
                 
                 // Update properties on @MainActor
                 await MainActor.run {
+                    #if os(macOS)
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                     self.reloadRecentVideos()
+                    #endif
                     
                     self.duration = durationSecs
                     self.videoWidth = width
@@ -370,9 +372,11 @@ final class VTPlayerViewModel {
         UserDefaults.standard.set(self.currentTime, forKey: "VTPlaybackProgress_\(url.path)")
     }
     
-    @objc func reloadRecentVideos() {
+    #if os(macOS)
+    @objc private func reloadRecentVideos() {
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
     }
+    #endif
     
     func openRecentVideo(_ url: URL) {
         self.stop()
@@ -625,9 +629,11 @@ final class VTPlayerViewModel {
         producerTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
 
-            // Check Quality SR model availability before starting
+            // Check Quality SR model availability before starting (macOS only)
             var effectiveQualitySR = qualitySR
             var effectiveSRLevel = srLevel
+            
+            #if os(macOS)
             if qualitySR > 0 {
                 var qlConfig: VTSuperResolutionScalerConfiguration? = nil
                 if #available(macOS 26.0, *),
@@ -660,6 +666,12 @@ final class VTPlayerViewModel {
                     effectiveSRLevel = qualitySR == 4 ? 4 : 2
                 }
             }
+            #else
+            if qualitySR > 0 {
+                effectiveQualitySR = 0
+                effectiveSRLevel = qualitySR == 4 ? 4 : 2
+            }
+            #endif
 
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: effectiveSRLevel,
@@ -1079,7 +1091,7 @@ struct VTPlayerView: View {
                     .help("Toggle diagnostics and metadata sidebar panel")
                 }
             }
-            .windowToolbarFullScreenVisibility(.onHover)
+            .macWindowToolbarFullScreenVisibility()
         } else {
             videoContent
                 .toolbar {
@@ -1096,7 +1108,7 @@ struct VTPlayerView: View {
                         .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
-                .windowToolbarFullScreenVisibility(.onHover)
+                .macWindowToolbarFullScreenVisibility()
         }
     }
 
@@ -1174,8 +1186,10 @@ extension VTPlayerView {
                 Spacer()
                 if !viewModel.recentVideos.isEmpty {
                     Button("Clear") {
+                        #if os(macOS)
                         NSDocumentController.shared.clearRecentDocuments(nil)
                         viewModel.reloadRecentVideos()
+                        #endif
                     }
                     .buttonStyle(.plain)
                     .font(.caption)
@@ -1460,7 +1474,7 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .onHover { hoverSR = $0 }
+                    .macOnHover { hoverSR = $0 }
 
                     // Frame Interpolation (LL FI)
                     Menu {
@@ -1488,7 +1502,7 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .onHover { hoverFI = $0 }
+                    .macOnHover { hoverFI = $0 }
 
                     // Motion Blur
                     Menu {
@@ -1518,7 +1532,7 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .onHover { hoverMB = $0 }
+                    .macOnHover { hoverMB = $0 }
 
                     // Denoise
                     Menu {
@@ -1548,7 +1562,7 @@ extension VTPlayerView {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .onHover { hoverDN = $0 }
+                    .macOnHover { hoverDN = $0 }
 
                     // Sharpness Slider
                     sharpnessControl
@@ -1569,7 +1583,7 @@ extension VTPlayerView {
                             .opacity(hoverHDR ? 1 : 0)
                             .allowsHitTesting(hoverHDR)
                     }
-                    .onHover { hoverHDR = $0 }
+                    .macOnHover { hoverHDR = $0 }
                     .help("SDR to HDR tone mapping — expands highlights into display EDR headroom")
 
                     Spacer()
@@ -1582,7 +1596,7 @@ extension VTPlayerView {
                     fullscreenButton
                 }
             }
-            .onHover { viewModel.isHoveringControlBar = $0 }
+            .macOnHover { viewModel.isHoveringControlBar = $0 }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(
@@ -1631,7 +1645,7 @@ extension VTPlayerView {
                 .opacity(hoverSH ? 1 : 0)
                 .allowsHitTesting(hoverSH)
         }
-        .onHover { hoverSH = $0 }
+        .macOnHover { hoverSH = $0 }
         .help("Adjust sharpness intensity (CIUnsharpMask)")
     }
 
@@ -1741,3 +1755,24 @@ struct VisualEffectView: UIViewRepresentable {
     func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
 }
 #endif
+
+// MARK: - Cross-Platform SwiftUI View Extensions
+extension View {
+    @ViewBuilder
+    func macOnHover(perform action: @escaping (Bool) -> Void) -> some View {
+        #if os(macOS)
+        self.onHover(perform: action)
+        #else
+        self
+        #endif
+    }
+    
+    @ViewBuilder
+    func macWindowToolbarFullScreenVisibility() -> some View {
+        #if os(macOS)
+        self.windowToolbarFullScreenVisibility(.onHover)
+        #else
+        self
+        #endif
+    }
+}

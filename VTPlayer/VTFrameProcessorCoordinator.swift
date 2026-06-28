@@ -10,6 +10,8 @@ import VideoToolbox
 import CoreMedia
 import CoreVideo
 
+#if os(macOS)
+
 /// Ordered pipeline stages for frame processing.
 public enum PipelineStage: Int, Comparable, CaseIterable {
     case denoise    // Temporal noise filter (VTTemporalNoiseFilter)
@@ -746,3 +748,62 @@ public actor VTFrameProcessorCoordinator {
         VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_RealTime, value: realTimeValue)
     }
 }
+#else
+public enum PipelineStage: Int, Comparable, CaseIterable {
+    case denoise
+    case spatial
+    case temporal
+    case motionBlur
+    
+    public static func < (lhs: PipelineStage, rhs: PipelineStage) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+public actor VTFrameProcessorCoordinator {
+    public static func isSuperResolutionSupported() -> Bool {
+        return false
+    }
+
+    public static func supportedSuperResolutionScaleFactors(width: Int, height: Int) -> [Float] {
+        return []
+    }
+
+    public let superResolutionLevel: Int
+    public let frameInterpolationLevel: Int
+    public let useHighQualityDownsampling: Bool
+    public let useRealTimePriority: Bool
+    public let qualitySuperResolutionScaleFactor: Int
+    public let motionBlurStrength: Int
+    public let denoiseStrength: Double
+    public let qualityPrioritization: Int
+
+    public init(
+        superResolutionLevel: Int,
+        frameInterpolationLevel: Int,
+        useHighQualityDownsampling: Bool = true,
+        useRealTimePriority: Bool = true,
+        qualitySuperResolutionScaleFactor: Int = 0,
+        motionBlurStrength: Int = 0,
+        denoiseStrength: Double = 0.0,
+        qualityPrioritization: Int = 1
+    ) {
+        self.superResolutionLevel = superResolutionLevel
+        self.frameInterpolationLevel = frameInterpolationLevel
+        self.useHighQualityDownsampling = useHighQualityDownsampling
+        self.useRealTimePriority = useRealTimePriority
+        self.qualitySuperResolutionScaleFactor = qualitySuperResolutionScaleFactor
+        self.motionBlurStrength = motionBlurStrength
+        self.denoiseStrength = denoiseStrength
+        self.qualityPrioritization = qualityPrioritization
+    }
+
+    public func startSession(width: Int, height: Int) async throws {}
+    
+    public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
+        return [frame]
+    }
+    
+    public func endSession() async {}
+}
+#endif
