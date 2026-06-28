@@ -398,33 +398,43 @@ final class VTPlayerViewModel {
             self.tempLocalURL = nil
         }
         
+        // Release any previously held security-scoped resource
+        if let prev = securityScopedURL {
+            prev.stopAccessingSecurityScopedResource()
+            self.securityScopedURL = nil
+        }
+        
         let isSecurityScoped = url.startAccessingSecurityScopedResource()
-        defer {
-            if isSecurityScoped {
-                url.stopAccessingSecurityScopedResource()
-            }
+        if isSecurityScoped {
+            self.securityScopedURL = url
         }
         
         let tempDir = FileManager.default.temporaryDirectory
         let destinationURL = tempDir.appendingPathComponent(url.lastPathComponent)
         
-        if url.standardizedFileURL != destinationURL.standardizedFileURL {
-            do {
-                if FileManager.default.fileExists(atPath: destinationURL.path) {
-                    try? FileManager.default.removeItem(at: destinationURL)
-                }
-                try FileManager.default.copyItem(at: url, to: destinationURL)
-                self.tempLocalURL = destinationURL
-                targetURL = destinationURL
-                print("Successfully copied video to sandbox temp: \(destinationURL.path)")
-            } catch {
-                print("Failed to copy video to sandbox: \(error.localizedDescription)")
-                targetURL = url
+        // Always copy to temp — even if the URL already points there, the
+        // previous copy may be stale or the security-scoped grant could be
+        // revoked before async setupPlayer finishes loading properties.
+        do {
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try? FileManager.default.removeItem(at: destinationURL)
             }
-        } else {
-            self.tempLocalURL = url
+            if url.standardizedFileURL != destinationURL.standardizedFileURL {
+                try FileManager.default.copyItem(at: url, to: destinationURL)
+            }
+            self.tempLocalURL = destinationURL
+            targetURL = destinationURL
+            print("Successfully copied video to sandbox temp: \(destinationURL.path)")
+        } catch {
+            print("Failed to copy video to sandbox: \(error.localizedDescription)")
+            // Fall back to using the original URL directly
             targetURL = url
-            print("Video is already in sandbox temp: \(url.path)")
+        }
+        
+        // Release security-scoped access now that the copy is complete
+        if isSecurityScoped {
+            url.stopAccessingSecurityScopedResource()
+            self.securityScopedURL = nil
         }
         #endif
         
@@ -1033,6 +1043,10 @@ final class VTPlayerViewModel {
         if let temp = tempLocalURL {
             try? FileManager.default.removeItem(at: temp)
             self.tempLocalURL = nil
+        }
+        if let scoped = securityScopedURL {
+            scoped.stopAccessingSecurityScopedResource()
+            self.securityScopedURL = nil
         }
         #endif
         audioSyncTask?.cancel()
