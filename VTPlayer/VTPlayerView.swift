@@ -1367,6 +1367,7 @@ struct VTPlayerView: View {
         var id: Self { self }
     }
     @State private var sortBy: SortOption = .dateAdded
+    @State private var selectedTab = 0
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1562,16 +1563,62 @@ extension VTPlayerView {
     #if os(iOS)
     @ViewBuilder
     private var iosHomeView: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             iosGalleryView
+                .tag(0)
                 .tabItem {
                     Label("Gallery", systemImage: "play.square.stack.fill")
                 }
 
             iosAboutView
+                .tag(1)
                 .tabItem {
                     Label("About", systemImage: "info.circle.fill")
                 }
+        }
+        .navigationTitle(selectedTab == 0 ? "Gallery" : "About")
+        .toolbar {
+            if selectedTab == 0 {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    // Clear all button (only shown/enabled when list is not empty)
+                    if !viewModel.recentVideos.isEmpty {
+                        Button(action: { showClearAllAlert = true }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
+                        
+                        // Sort option menu
+                        Menu {
+                            Picker("Sort By", selection: $sortBy) {
+                                Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
+                                Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                        }
+                    }
+                    
+                    // Native Plus button (aggregated selection menu)
+                    Menu {
+                        Button(action: { showFileImporter = true }) {
+                            Label("Browse Files", systemImage: "folder")
+                        }
+                        
+                        #if canImport(PhotosUI)
+                        PhotosPicker(
+                            selection: $selectedPhotoItem,
+                            matching: .videos,
+                            photoLibrary: .shared()
+                        ) {
+                            Label("Photos Library", systemImage: "photo")
+                        }
+                        #endif
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.body.bold())
+                    }
+                }
+            }
         }
     }
 
@@ -1662,48 +1709,6 @@ extension VTPlayerView {
                     }
                 }
                 .listStyle(.insetGrouped)
-            }
-        }
-        .navigationTitle("Gallery")
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                // Clear all button (only shown/enabled when list is not empty)
-                if !viewModel.recentVideos.isEmpty {
-                    Button(action: { showClearAllAlert = true }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                    
-                    // Sort option menu
-                    Menu {
-                        Picker("Sort By", selection: $sortBy) {
-                            Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
-                            Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                    }
-                }
-                
-                // Native Plus button (aggregated selection menu)
-                Menu {
-                    Button(action: { showFileImporter = true }) {
-                        Label("Browse Files", systemImage: "folder")
-                    }
-                    
-                    #if canImport(PhotosUI)
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .videos,
-                        photoLibrary: .shared()
-                    ) {
-                        Label("Photos Library", systemImage: "photo")
-                    }
-                    #endif
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.body.bold())
-                }
             }
         }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
@@ -2732,7 +2737,9 @@ class CustomAVPlayerViewController: AVPlayerViewController {
     
     private func startTimer() {
         checkTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.checkControlsVisibility()
+            guard let self = self else { return }
+            self.checkControlsVisibility()
+            self.disableFullscreenButton(in: self.view)
         }
     }
     
