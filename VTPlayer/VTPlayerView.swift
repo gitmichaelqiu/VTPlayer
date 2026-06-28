@@ -1543,6 +1543,18 @@ struct VTPlayerView: View {
         }
     }
 
+    private func formatDateAdded(for url: URL) -> String {
+        let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDates") as? [String: Double] ?? [:]
+        guard let timeInterval = dates[url.lastPathComponent] else {
+            return "Added recently"
+        }
+        let date = Date(timeIntervalSince1970: timeInterval)
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return "Added " + formatter.string(from: date)
+    }
+
 }
 
 // MARK: - Extracted SwiftUI Components
