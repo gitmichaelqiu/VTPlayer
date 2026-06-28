@@ -1131,8 +1131,8 @@ struct VTPlayerView: View {
         .onChange(of: selectedPhotoItem) { item in
             guard let item = item else { return }
             Task {
-                if let tempURL = try? await item.loadTransferable(type: URL.self) {
-                    viewModel.openVideo(tempURL)
+                if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
+                    viewModel.openVideo(movie.url)
                 }
             }
         }
@@ -1209,9 +1209,117 @@ struct VTPlayerView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
                 
-                if viewModel.showControls {
-                    iphoneBackButton
-                    iphoneControlBar
+                VStack {
+                    if viewModel.showControls {
+                        // Top back button row (respecting top safe area/notch)
+                        HStack {
+                            Button(action: {
+                                withAnimation {
+                                    viewModel.stop()
+                                    viewModel.videoURL = nil
+                                }
+                            }) {
+                                Image(systemName: "chevron.left")
+                                    .font(.body.weight(.bold))
+                                    .foregroundColor(.white)
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.5))
+                                    .clipShape(Circle())
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        
+                        Spacer()
+                        
+                        // Bottom control bar (respecting bottom safe area/home indicator)
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                
+                                Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
+                                    isScrubbing = editing
+                                    if !editing {
+                                        viewModel.seek(to: scrubTime)
+                                    }
+                                })
+                                .accentColor(.cyan)
+                                .onChange(of: viewModel.currentTime) { _, newValue in
+                                    if !isScrubbing {
+                                        scrubTime = newValue
+                                    }
+                                }
+                                .onChange(of: scrubTime) { _, newValue in
+                                    if isScrubbing {
+                                        viewModel.scrub(to: newValue)
+                                    }
+                                }
+                                
+                                Text(formatTime(viewModel.duration))
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 10)
+                            
+                            HStack {
+                                Button(action: { viewModel.togglePlayPause() }) {
+                                    Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
+                                        .font(.title3.weight(.bold))
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(Color.white.opacity(0.15))
+                                        .clipShape(Circle())
+                                }
+                                
+                                Spacer()
+                                
+                                HStack(spacing: 6) {
+                                    if viewModel.superResolutionLevel > 0 {
+                                        Text("SR: \(viewModel.superResolutionLevel)x")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(Color.cyan)
+                                            .cornerRadius(4)
+                                            .foregroundColor(.black)
+                                    }
+                                    
+                                    if viewModel.frameInterpolationLevel > 0 {
+                                        Text("FI: \(viewModel.frameInterpolationLevel)x")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(Color.green)
+                                            .cornerRadius(4)
+                                            .foregroundColor(.black)
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: { showSettingsSheet = true }) {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.title3)
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(Color.white.opacity(0.15))
+                                        .clipShape(Circle())
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            Color.black.opacity(0.65)
+                                .cornerRadius(16)
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                    }
                 }
             }
             .gesture(
@@ -1228,128 +1336,7 @@ struct VTPlayerView: View {
         }
     }
 
-    @ViewBuilder
-    private var iphoneBackButton: some View {
-        VStack {
-            HStack {
-                Button(action: {
-                    withAnimation {
-                        viewModel.stop()
-                        viewModel.videoURL = nil
-                    }
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.body.weight(.bold))
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(Color.black.opacity(0.5))
-                        .clipShape(Circle())
-                }
-                .padding(.leading, 16)
-                .padding(.top, 16)
-                
-                Spacer()
-            }
-            Spacer()
-        }
-    }
 
-    @ViewBuilder
-    private var iphoneControlBar: some View {
-        VStack {
-            Spacer()
-            
-            VStack(spacing: 8) {
-                // Time progress timeline
-                HStack(spacing: 8) {
-                    Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.white)
-                    
-                    Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
-                        isScrubbing = editing
-                        if !editing {
-                            viewModel.seek(to: scrubTime)
-                        }
-                    })
-                    .accentColor(.cyan)
-                    .onChange(of: viewModel.currentTime) { _, newValue in
-                        if !isScrubbing {
-                            scrubTime = newValue
-                        }
-                    }
-                    .onChange(of: scrubTime) { _, newValue in
-                        if isScrubbing {
-                            viewModel.scrub(to: newValue)
-                        }
-                    }
-                    
-                    Text(formatTime(viewModel.duration))
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 10)
-                
-                HStack {
-                    // Play/Pause button
-                    Button(action: { viewModel.togglePlayPause() }) {
-                        Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                            .font(.title3.weight(.bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Circle())
-                    }
-                    
-                    Spacer()
-                    
-                    // Current Status indicators (pill shapes)
-                    HStack(spacing: 6) {
-                        if viewModel.superResolutionLevel > 0 {
-                            Text("SR: \(viewModel.superResolutionLevel)x")
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Color.cyan)
-                                .cornerRadius(4)
-                                .foregroundColor(.black)
-                        }
-                        
-                        if viewModel.frameInterpolationLevel > 0 {
-                            Text("FI: \(viewModel.frameInterpolationLevel)x")
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Color.green)
-                                .cornerRadius(4)
-                                .foregroundColor(.black)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // Settings gear button
-                    Button(action: { showSettingsSheet = true }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.title3)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, 10)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                Color.black.opacity(0.65)
-                    .cornerRadius(16)
-            )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
-        }
-    }
 
     @ViewBuilder
     private var videoContent: some View {
@@ -2062,6 +2049,28 @@ extension View {
         #endif
     }
 }
+
+#if canImport(PhotosUI)
+struct PhotosMovie: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { receivedData in
+            let fileName = receivedData.file.lastPathComponent
+            let copy = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            
+            if FileManager.default.fileExists(atPath: copy.path) {
+                try? FileManager.default.removeItem(at: copy)
+            }
+            
+            try FileManager.default.copyItem(at: receivedData.file, to: copy)
+            return .init(url: copy)
+        }
+    }
+}
+#endif
 
 
 
