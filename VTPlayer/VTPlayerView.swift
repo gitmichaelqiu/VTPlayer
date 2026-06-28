@@ -1214,7 +1214,7 @@ struct VTPlayerView: View {
                 
                 VStack {
                     if viewModel.showControls {
-                        // Top back button row (respecting top safe area/notch)
+                        // Top back button row
                         HStack {
                             Button(action: {
                                 withAnimation {
@@ -1231,12 +1231,10 @@ struct VTPlayerView: View {
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
                         
                         Spacer()
                         
-                        // Bottom control bar (respecting bottom safe area/home indicator)
+                        // Bottom control bar
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
@@ -1320,10 +1318,9 @@ struct VTPlayerView: View {
                             Color.black.opacity(0.65)
                                 .cornerRadius(16)
                         )
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
                     }
                 }
+                .safeAreaPadding()
             }
             .gesture(
                 TapGesture().onEnded {
