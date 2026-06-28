@@ -1351,6 +1351,7 @@ struct VTPlayerView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var showSettingsSheet = false
     @State private var showDiagnosticsSheet = false
+    @State private var showClearAllAlert = false
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1555,7 +1556,7 @@ extension VTPlayerView {
     private var iosGalleryView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // MARK: - Import Buttons Card Actions
+                // MARK: - Import Buttons Card Actions (Uniform height)
                 HStack(spacing: 16) {
                     Button(action: { showFileImporter = true }) {
                         HStack {
@@ -1568,7 +1569,8 @@ extension VTPlayerView {
                                 .foregroundColor(.primary)
                             Spacer()
                         }
-                        .padding()
+                        .frame(height: 44)
+                        .padding(.horizontal)
                         .background(Color(.secondarySystemGroupedBackground))
                         .cornerRadius(12)
                         .overlay(
@@ -1594,7 +1596,8 @@ extension VTPlayerView {
                                 .foregroundColor(.primary)
                             Spacer()
                         }
-                        .padding()
+                        .frame(height: 44)
+                        .padding(.horizontal)
                         .background(Color(.secondarySystemGroupedBackground))
                         .cornerRadius(12)
                         .overlay(
@@ -1608,7 +1611,7 @@ extension VTPlayerView {
                 .padding(.horizontal)
                 .padding(.top, 16)
                 
-                // MARK: - Recents Grid
+                // MARK: - Recents Grid (Responsive layout)
                 if viewModel.recentVideos.isEmpty {
                     VStack(spacing: 12) {
                         Spacer(minLength: 60)
@@ -1631,16 +1634,15 @@ extension VTPlayerView {
                             .font(.title2)
                             .bold()
                         Spacer()
-                        Button("Clear All") {
-                            viewModel.clearRecentVideosIOS()
+                        Button(action: { showClearAllAlert = true }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
                         }
-                        .font(.subheadline)
-                        .foregroundColor(.red)
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
                     
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 20) {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 20) {
                         ForEach(viewModel.recentVideos, id: \.self) { url in
                             VStack(alignment: .leading, spacing: 8) {
                                 VideoThumbnailView(url: url)
@@ -1688,47 +1690,56 @@ extension VTPlayerView {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Gallery")
+        .alert("Clear Recent Videos?", isPresented: $showClearAllAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear All", role: .destructive) {
+                viewModel.clearRecentVideosIOS()
+            }
+        } message: {
+            Text("This will clear your recent playback history. The original video files will not be deleted.")
+        }
     }
 
     @ViewBuilder
     private var iosAboutView: some View {
         List {
-            // App Identity Header section
+            // App Identity Header section (Apple left-oriented HIG style)
             Section {
-                VStack(spacing: 12) {
+                HStack(spacing: 16) {
                     if let icon = viewModel.appIcon {
                         icon
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
                             )
-                            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                     } else {
                         Image(systemName: "cpu.fill")
-                            .font(.system(size: 36))
+                            .font(.system(size: 24))
                             .foregroundColor(.blue)
-                            .frame(width: 80, height: 80)
+                            .frame(width: 60, height: 60)
                             .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     
-                    VStack(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("VTPlayer")
-                            .font(.title2)
+                            .font(.headline)
                             .bold()
+                        Text("Hardware-Accelerated AI Enhancer")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                         Text("Version 1.0")
-                            .font(.footnote)
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
-            .listRowBackground(Color.clear)
             
             // Engine Details
             Section("Neural Engine Status") {
