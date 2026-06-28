@@ -1680,34 +1680,78 @@ extension VTPlayerView {
                 Spacer()
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Text("DIAGNOSTICS")
-                            .font(.system(.caption, design: .default)).bold()
+                        Label("DIAGNOSTICS", systemImage: "chart.bar")
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.cyan)
                         Spacer()
-                        Button(action: {
-                            withAnimation {
-                                viewModel.showSidebar = false
-                            }
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.body)
-                                .foregroundColor(.secondary)
+                        Button {
+                            withAnimation { viewModel.showSidebar = false }
+                        } label: {
+                            Label("Close", systemImage: "xmark.circle.fill")
+                                .labelStyle(.iconOnly)
                         }
+                        .font(.body)
+                        .foregroundColor(.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        LabeledValueRow(label: "Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
-                        LabeledValueRow(label: "Source Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate))
+                        LabeledContent {
+                            Text("\(viewModel.videoWidth)×\(viewModel.videoHeight)")
+                                .font(.system(.caption2, design: .monospaced))
+                        } label: {
+                            Text("Resolution")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        LabeledContent {
+                            Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
+                                .font(.system(.caption2, design: .monospaced))
+                        } label: {
+                            Text("Source Rate")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
 
                         let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
-                        LabeledValueRow(label: "Target Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
+                        LabeledContent {
+                            Text(String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
+                                .font(.system(.caption2, design: .monospaced))
+                        } label: {
+                            Text("Target Rate")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
 
-                        LabeledValueRow(label: "Display Rate", value: String(format: "%.1f Hz", viewModel.fps), valueColor: viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                        LabeledValueRow(label: "Latency", value: String(format: "%.1f ms", viewModel.frameProcessingTime))
+                        LabeledContent {
+                            Text(String(format: "%.1f Hz", viewModel.fps))
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                        } label: {
+                            Text("Display Rate")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        LabeledContent {
+                            Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                                .font(.system(.caption2, design: .monospaced))
+                        } label: {
+                            Text("Latency")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
 
                         let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                         let activeScale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
-                        LabeledValueRow(label: "SR Mode", value: activeScale > 0 ? "\(isQL ? "QL" : "LL") \(activeScale)x" : "Off")
+                        LabeledContent {
+                            Text(activeScale > 0 ? "\(isQL ? "QL" : "LL") \(activeScale)x" : "Off")
+                                .font(.system(.caption2, design: .monospaced))
+                        } label: {
+                            Text("SR Mode")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 .frame(width: 220)
@@ -1724,24 +1768,6 @@ extension VTPlayerView {
             Spacer()
         }
         .padding(.top, 60)
-    }
-
-    struct LabeledValueRow: View {
-        let label: String
-        let value: String
-        var valueColor: Color = .white
-
-        var body: some View {
-            HStack {
-                Text(label)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(value)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundColor(valueColor)
-            }
-        }
     }
     #endif
 
