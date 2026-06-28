@@ -1551,6 +1551,10 @@ extension VTPlayerView {
                     
                     VTMetalRendererView(renderer: viewModel.renderer)
                         .ignoresSafeArea()
+                    
+                    // Transparent overlay to capture tap gestures without being blocked by UIKit's MTKView
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
                         .onTapGesture {
                             viewModel.toggleControls()
                         }
