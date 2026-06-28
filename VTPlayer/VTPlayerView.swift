@@ -1363,7 +1363,7 @@ extension VTPlayerView {
                 }
                 #endif
             } header: {
-                Text("LOAD VIDEO")
+                Text("Load video")
             }
 
             // MARK: - Device Performance
@@ -1371,7 +1371,7 @@ extension VTPlayerView {
                 LabeledContent("Neural Engine", value: "Enabled")
                 LabeledContent("Supported SR", value: viewModel.srIsSupported ? "2x, 4x" : "None")
             } header: {
-                Text("DEVICE PERFORMANCE")
+                Text("Device performance")
             }
 
             // MARK: - Recent Videos
@@ -1421,7 +1421,7 @@ extension VTPlayerView {
                 }
             } header: {
                 HStack {
-                    Text("RECENT VIDEOS")
+                    Text("Recent videos")
                     Spacer()
                     if !viewModel.recentVideos.isEmpty {
                         Button("Clear All") {
@@ -1571,7 +1571,7 @@ extension VTPlayerView {
                 Spacer()
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Label("DIAGNOSTICS", systemImage: "chart.bar")
+                        Label("Diagnostics", systemImage: "chart.bar")
                             .font(.caption.weight(.bold))
                             .foregroundColor(.cyan)
                         Spacer()
