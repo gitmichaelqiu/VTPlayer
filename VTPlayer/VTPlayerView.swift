@@ -1675,11 +1675,6 @@ extension VTPlayerView {
                                         .foregroundColor(.primary)
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
-                                    
-                                    Text(url.deletingLastPathComponent().lastPathComponent)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
                                 }
                                 .padding(.horizontal, 4)
                             }
