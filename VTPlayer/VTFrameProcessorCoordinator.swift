@@ -10,7 +10,7 @@ import VideoToolbox
 import CoreMedia
 import CoreVideo
 
-#if os(macOS) || os(iOS)
+#if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
 
 /// Ordered pipeline stages for frame processing.
 public enum PipelineStage: Int, Comparable, CaseIterable {

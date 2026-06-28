@@ -208,6 +208,7 @@ final class VTPlayerViewModel {
     #endif
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
+    private var rateObserver: NSKeyValueObservation?
     private var playbackGeneration: UInt64 = 0
     private var isInitializingPipeline = false
 
@@ -357,6 +358,23 @@ final class VTPlayerViewModel {
                         }
                     }
                     self.playerItemObserver = observer
+                    
+                    // Observe AVPlayer's timeControlStatus to sync player state with isPaused
+                    self.rateObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, change in
+                        guard let self = self else { return }
+                        Task { @MainActor in
+                            switch player.timeControlStatus {
+                            case .paused:
+                                self.isPaused = true
+                            case .playing:
+                                self.isPaused = false
+                            case .waitingToPlayAtSpecifiedRate:
+                                break
+                            @unknown default:
+                                break
+                            }
+                        }
+                    }
                     
                     // Retrieve and apply saved playback progress
                     let savedProgress = UserDefaults.standard.double(forKey: "VTPlaybackProgress_\(url.path)")
@@ -635,7 +653,7 @@ final class VTPlayerViewModel {
 
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
-        #if os(macOS) || os(iOS)
+        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
             startPlaybackLoop()
         } else if isPlaying && isPaused {
@@ -666,13 +684,14 @@ final class VTPlayerViewModel {
 
         player.rate = Float(self.playbackSpeed)
 
-        #if os(macOS) || os(iOS)
-        // Always rebuild the pipeline if enhancements were changed while
-        // paused.  Otherwise, just start the loop normally.
-        if enhancementsPendingRestart {
+        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+        // Rebuild the pipeline if enhancements were changed while paused,
+        // or if the loop has not yet been initialized. Otherwise, the existing
+        // active loop will automatically resume processing when isPaused is false.
+        if enhancementsPendingRestart || producerTask == nil {
             enhancementsPendingRestart = false
+            startPlaybackLoop()
         }
-        startPlaybackLoop()
         #endif
         self.userActivityDetected()
     }
@@ -698,7 +717,7 @@ final class VTPlayerViewModel {
         self.userActivityDetected()
     }
     
-    #if os(macOS) || os(iOS)
+    #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
     private func startPlaybackLoop() {
         playbackGeneration += 1
         let gen = playbackGeneration
@@ -871,12 +890,14 @@ final class VTPlayerViewModel {
                     continue
                 }
 
-                // Drop late frames to maintain real-time audio-video synchronization
+                // Drop late frames to maintain real-time audio-video synchronization.
+                // Do not drop frames if the cache is completely empty (e.g. after seek or startup),
+                // to avoid getting stuck in a dropping loop before the rendering loop recovers.
                 if let player = self.player, !self.isPaused, player.rate > 0 {
                     let currentSecs = CMTimeGetSeconds(player.currentTime())
                     let frameSecs = CMTimeGetSeconds(vtFrame.presentationTimeStamp)
                     // If the frame is late by more than 100ms, skip processing it
-                    if frameSecs < currentSecs - 0.10 {
+                    if !self.processedFrameCache.isEmpty && frameSecs < currentSecs - 0.10 {
                         self.droppedFrames += 1
                         continue
                     }
@@ -985,7 +1006,7 @@ final class VTPlayerViewModel {
                 // AVPlayer may stop playback (rate → 0) if its audio decoder fails
                 // on certain file formats. Periodically re-assert the desired rate
                 // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying && !self.isInitializingPipeline {
+                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline {
                     player.rate = Float(self.playbackSpeed)
                 }
             }
@@ -1092,6 +1113,8 @@ final class VTPlayerViewModel {
             NotificationCenter.default.removeObserver(observer)
             playerItemObserver = nil
         }
+        rateObserver?.invalidate()
+        rateObserver = nil
         player?.pause()
         player = nil
         videoOutput = nil
@@ -1193,8 +1216,11 @@ final class VTPlayerViewModel {
     }
     
     func addToRecentVideosIOS(_ url: URL) {
-        var list = self.recentVideos.filter { $0.absoluteString != url.absoluteString }
-        list.insert(url, at: 0)
+        let standardURL = url.resolvingSymlinksInPath().standardizedFileURL
+        var list = self.recentVideos.filter { item in
+            item.resolvingSymlinksInPath().standardizedFileURL.absoluteString != standardURL.absoluteString
+        }
+        list.insert(standardURL, at: 0)
         if list.count > 15 {
             // Delete temp files of items falling off the list
             for staleURL in list.suffix(from: 15) {
