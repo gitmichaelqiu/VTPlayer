@@ -1161,12 +1161,6 @@ struct VTPlayerView: View {
     #endif
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var showSettingsSheet = false
-    #if os(iOS)
-    @State private var showSeekIndicatorLeft = false
-    @State private var showSeekIndicatorRight = false
-    @State private var seekTaskLeft: Task<Void, Never>?
-    @State private var seekTaskRight: Task<Void, Never>?
-    #endif
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1329,37 +1323,7 @@ struct VTPlayerView: View {
             viewModel.userActivityDetected()
         }
     }
-    
-    #if os(iOS)
-    private func triggerSeekLeft() {
-        viewModel.seekRelative(-10)
-        showSeekIndicatorLeft = true
-        seekTaskLeft?.cancel()
-        seekTaskLeft = Task {
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            if !Task.isCancelled {
-                withAnimation {
-                    showSeekIndicatorLeft = false
-                }
-            }
-        }
-    }
-    
-    private func triggerSeekRight() {
-        viewModel.seekRelative(10)
-        showSeekIndicatorRight = true
-        seekTaskRight?.cancel()
-        seekTaskRight = Task {
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            if !Task.isCancelled {
-                withAnimation {
-                    showSeekIndicatorRight = false
-                }
-            }
-        }
-    }
-    #endif
-    
+
     private func formatTime(_ seconds: Double) -> String {
         guard !seconds.isNaN && !seconds.isInfinite else { return "00:00" }
         let totalSeconds = Int(seconds)
