@@ -1745,7 +1745,7 @@ extension VTPlayerView {
                             .background(Color(.secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("VTPlayer")
                             .font(.headline)
@@ -1760,33 +1760,7 @@ extension VTPlayerView {
                 }
                 .padding(.vertical, 4)
             }
-            
-            // Engine Details
-            Section("Neural Engine Status") {
-                HStack {
-                    Text("Optimization State")
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                        Text("Active")
-                            .foregroundColor(.green)
-                    }
-                    .font(.subheadline)
-                }
-                
-                LabeledContent("Super Resolution", value: viewModel.srIsSupported ? "2x, 4x Supported" : "None")
-                LabeledContent("Frame Interpolation", value: "Low-Latency Supported")
-            }
-            
-            // Capabilities description
-            Section("Pipeline Details") {
-                Text("VTPlayer is a high-performance video player powered by Core Video, Metal, and Apple Neural Engine. It dynamically interpolates and enhances frames in real-time using custom metal shader pipelines.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            }
-            
+
             // Copyright Row
             Section {
                 HStack {
