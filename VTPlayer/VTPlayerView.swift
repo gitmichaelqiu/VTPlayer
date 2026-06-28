@@ -2405,179 +2405,79 @@ struct PlaybackSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Picker(selection: $viewModel.superResolutionLevel) {
+                Section("Neural Engine Enhancements") {
+                    Picker("Super Resolution", selection: $viewModel.superResolutionLevel) {
                         Text("Off").tag(0)
                         Text("2x").tag(2)
                         Text("4x").tag(4)
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Super Resolution")
-                                Text("Enhance spatial resolution using the Neural Engine")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
-                                .foregroundColor(.blue)
-                        }
                     }
                     .onChange(of: viewModel.superResolutionLevel) { _ in
                         viewModel.updateEnhancements()
                     }
                     
-                    Picker(selection: $viewModel.frameInterpolationLevel) {
+                    Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
                         Text("Off").tag(0)
                         Text("2x").tag(2)
                         Text("4x").tag(4)
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Frame Interpolation")
-                                    .font(.body)
-                                Text("Increase frame rate (Hz) using motion vectors")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "square.stack.3d.down.right")
-                                .foregroundColor(.green)
-                        }
                     }
                     .onChange(of: viewModel.frameInterpolationLevel) { _ in
                         viewModel.updateEnhancements()
                     }
                     
-                    Picker(selection: $viewModel.motionBlurStrength) {
+                    Picker("Motion Blur", selection: $viewModel.motionBlurStrength) {
                         Text("Off").tag(0)
                         Text("5").tag(5)
                         Text("10").tag(10)
                         Text("20").tag(20)
                         Text("30").tag(30)
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Motion Blur")
-                                    .font(.body)
-                                Text("Apply realistic temporal motion blur")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "wind")
-                                .foregroundColor(.purple)
-                        }
                     }
                     .onChange(of: viewModel.motionBlurStrength) { _ in
                         viewModel.updateEnhancements()
                     }
                     
-                    Picker(selection: $viewModel.denoiseStrength) {
+                    Picker("Denoise Strength", selection: $viewModel.denoiseStrength) {
                         Text("Off").tag(0.0)
                         Text("0.25").tag(0.25)
                         Text("0.50").tag(0.5)
                         Text("0.75").tag(0.75)
                         Text("1.00").tag(1.0)
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Denoise Strength")
-                                    .font(.body)
-                                Text("Reduce sensor noise using temporal references")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "sparkles")
-                                .foregroundColor(.orange)
-                        }
                     }
                     .onChange(of: viewModel.denoiseStrength) { _ in
                         viewModel.updateEnhancements()
                     }
-                } header: {
-                    Label("Neural Engine Enhancements", systemImage: "cpu")
                 }
                 
-                Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Label("Sharpness", systemImage: "dial.low.fill")
-                                .foregroundColor(.cyan)
-                            Spacer()
-                            Text(String(format: "%.2f", viewModel.sharpness))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                Section("Filters & Adjustments") {
+                    HStack {
+                        Text("Sharpness")
+                        Spacer()
                         Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                            .frame(width: 150)
+                        Text(String(format: "%.2f", viewModel.sharpness))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .frame(width: 36, alignment: .trailing)
                     }
                     
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Label("SDR-to-HDR Boost", systemImage: "sun.max.fill")
-                                .foregroundColor(.yellow)
-                            Spacer()
-                            Text(String(format: "%.2f", viewModel.hdrStrength))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                    HStack {
+                        Text("SDR-to-HDR Boost")
+                        Spacer()
                         Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                            .frame(width: 150)
+                        Text(String(format: "%.2f", viewModel.hdrStrength))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .frame(width: 36, alignment: .trailing)
                     }
-                } header: {
-                    Label("Filters & Adjustments", systemImage: "slider.horizontal.3")
                 }
                 
-                Section {
-                    Toggle(isOn: $viewModel.useHighQualityDownsampling) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("High Quality Downsampling")
-                                Text("Use advanced chroma downsampling algorithms")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "arrow.down.right.and.arrow.up.left")
-                                .foregroundColor(.teal)
-                        }
-                    }
-                    
-                    Toggle(isOn: $viewModel.useRealTimePriority) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Real-Time Priority")
-                                Text("Prioritize frame-rate stability over quality")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "clock.fill")
-                                .foregroundColor(.indigo)
-                        }
-                    }
-                } header: {
-                    Label("System Optimizations", systemImage: "gearshape.2")
-                }
-                
-                Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Label("Playback Speed", systemImage: "speedometer")
-                                .foregroundColor(.red)
-                            Spacer()
-                            Text(String(format: "%.2fx", viewModel.playbackSpeed))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: $viewModel.playbackSpeed, in: 0.25...4.0, step: 0.25)
-                    }
-                } header: {
-                    Label("Playback Configuration", systemImage: "play.circle")
+                Section("System Optimizations") {
+                    Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
+                    Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
                 }
             }
             .navigationTitle("Playback Settings")
-            .macNavigationBarTitleDisplayMode()
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
