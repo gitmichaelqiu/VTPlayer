@@ -1054,6 +1054,7 @@ final class VTPlayerViewModel {
 /// The premium media player user interface view.
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
+    @Environment(\.horizontalSizeClass) var sizeClass
     @State private var showFileImporter = false
     #if canImport(PhotosUI)
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
@@ -1073,50 +1074,15 @@ struct VTPlayerView: View {
 
     var body: some View {
         Group {
-            if !viewModel.isFullScreen {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    leftSidebar
-                        .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
-                        .toolbar {
-                            ToolbarItem(placement: .primaryAction) {
-                                Button(action: { showFileImporter = true }) {
-                                    Label("Open Video", systemImage: "plus")
-                                }
-                                .help("Open a local video file")
-                            }
-                        }
-                } detail: {
-                    videoContent
-                        .inspector(isPresented: Binding(
-                            get: { viewModel.showSidebar && viewModel.videoURL != nil },
-                            set: { viewModel.showSidebar = $0 }
-                        )) {
-                            rightSidebar
-                                .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
-                        }
-                        .toolbar {
-                            ToolbarItem(placement: .primaryAction) {
-                                Button(action: { viewModel.showSidebar.toggle() }) {
-                                    Label("Toggle Sidebar", systemImage: "sidebar.right")
-                                }
-                                .help("Toggle diagnostics and metadata sidebar panel")
-                            }
-                        }
-                }
-                .navigationSplitViewStyle(.balanced)
-                .macWindowToolbarFullScreenVisibility()
+            #if os(iOS)
+            if sizeClass == .compact {
+                iphoneLayout
             } else {
-                videoContent
-                    .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button(action: { viewModel.showSidebar.toggle() }) {
-                                Label("Toggle Sidebar", systemImage: "sidebar.right")
-                            }
-                            .help("Toggle diagnostics and metadata sidebar panel")
-                        }
-                    }
-                    .macWindowToolbarFullScreenVisibility()
+                splitViewLayout
             }
+            #else
+            splitViewLayout
+            #endif
         }
         .fileImporter(
             isPresented: $showFileImporter,
@@ -1147,6 +1113,95 @@ struct VTPlayerView: View {
             }
         }
         #endif
+    }
+
+    @ViewBuilder
+    private var splitViewLayout: some View {
+        if !viewModel.isFullScreen {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                leftSidebar
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: { showFileImporter = true }) {
+                                Label("Open Video", systemImage: "plus")
+                            }
+                            .help("Open a local video file")
+                        }
+                    }
+            } detail: {
+                videoContent
+                    .inspector(isPresented: Binding(
+                        get: { viewModel.showSidebar && viewModel.videoURL != nil },
+                        set: { viewModel.showSidebar = $0 }
+                    )) {
+                        rightSidebar
+                            .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: { viewModel.showSidebar.toggle() }) {
+                                Label("Toggle Sidebar", systemImage: "sidebar.right")
+                            }
+                            .help("Toggle diagnostics and metadata sidebar panel")
+                        }
+                    }
+            }
+            .navigationSplitViewStyle(.balanced)
+            .macWindowToolbarFullScreenVisibility()
+        } else {
+            videoContent
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { viewModel.showSidebar.toggle() }) {
+                            Label("Toggle Sidebar", systemImage: "sidebar.right")
+                        }
+                        .help("Toggle diagnostics and metadata sidebar panel")
+                    }
+                }
+                .macWindowToolbarFullScreenVisibility()
+        }
+    }
+
+    @ViewBuilder
+    private var iphoneLayout: some View {
+        if viewModel.videoURL == nil {
+            NavigationStack {
+                leftSidebar
+                    .navigationTitle("Recents")
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: { showFileImporter = true }) {
+                                Label("Open Video", systemImage: "plus")
+                            }
+                        }
+                    }
+            }
+        } else {
+            NavigationStack {
+                videoContent
+                    .toolbar {
+                        ToolbarItem(placement: .navigation) {
+                            Button(action: {
+                                withAnimation {
+                                    viewModel.stop()
+                                    viewModel.videoURL = nil
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Library")
+                                }
+                            }
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: { viewModel.showSidebar.toggle() }) {
+                                Label("Toggle Sidebar", systemImage: "sidebar.right")
+                            }
+                        }
+                    }
+            }
+        }
     }
 
     @ViewBuilder
