@@ -1301,6 +1301,13 @@ final class VTPlayerViewModel {
             item.resolvingSymlinksInPath().standardizedFileURL.absoluteString != standardURL.absoluteString
         }
         list.insert(standardURL, at: 0)
+        
+        // Save the date added timestamp
+        let datesKey = "VTRecentVideosDates"
+        var dates = UserDefaults.standard.dictionary(forKey: datesKey) as? [String: Double] ?? [:]
+        dates[standardURL.lastPathComponent] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(dates, forKey: datesKey)
+        
         if list.count > 15 {
             // Delete temp files of items falling off the list
             for staleURL in list.suffix(from: 15) {
@@ -1352,6 +1359,14 @@ struct VTPlayerView: View {
     @State private var showSettingsSheet = false
     @State private var showDiagnosticsSheet = false
     @State private var showClearAllAlert = false
+    @Environment(\.dismiss) private var dismiss
+    
+    enum SortOption: String, CaseIterable, Identifiable {
+        case dateAdded = "Date Added"
+        case name = "Name"
+        var id: Self { self }
+    }
+    @State private var sortBy: SortOption = .dateAdded
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1814,9 +1829,12 @@ extension VTPlayerView {
         }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(viewModel.showControls ? .ultraThinMaterial : .hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
+        // Keep toolbar always visible to prevent the navigation bar frame
+        // from collapsing during fullscreen controls animation — hiding the
+        // frame causes the video + controls overlay to jump up abruptly.
+        .toolbar(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
