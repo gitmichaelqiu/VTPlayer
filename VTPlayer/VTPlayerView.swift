@@ -1553,27 +1553,6 @@ extension VTPlayerView {
         TabView {
             NavigationStack {
                 iosGalleryView
-                    .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
-                            Menu {
-                                Button(action: { showFileImporter = true }) {
-                                    Label("Browse Files", systemImage: "folder.fill")
-                                }
-
-                                #if canImport(PhotosUI)
-                                PhotosPicker(
-                                    selection: $selectedPhotoItem,
-                                    matching: .videos,
-                                    photoLibrary: .shared()
-                                ) {
-                                    Label("Photos Library", systemImage: "photo.on.rectangle.angled")
-                                }
-                                #endif
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-                        }
-                    }
             }
             .tabItem {
                 Label("Gallery", systemImage: "play.square.stack.fill")
@@ -1585,19 +1564,6 @@ extension VTPlayerView {
             .tabItem {
                 Label("About", systemImage: "info.circle.fill")
             }
-        }
-        // Floating add button — always visible regardless of toolbar state
-        .overlay(alignment: .bottomTrailing) {
-            Button(action: { showFileImporter = true }) {
-                Image(systemName: "plus")
-                    .font(.title2.weight(.semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 56, height: 56)
-                    .background(.blue, in: Circle())
-                    .shadow(color: .black.opacity(0.2), radius: 6, x: 0, y: 3)
-            }
-            .padding(.trailing, 20)
-            .padding(.bottom, 20)
         }
     }
 
@@ -1701,6 +1667,27 @@ extension VTPlayerView {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Gallery")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(action: { showFileImporter = true }) {
+                        Label("Browse Files", systemImage: "folder.fill")
+                    }
+
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                    }
+                    #endif
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
