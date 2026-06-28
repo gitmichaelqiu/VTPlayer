@@ -321,14 +321,6 @@ final class VTPlayerViewModel {
                         track.isEnabled = false
                     }
                 }
-                #else
-                // On iOS, dynamically enable/disable the native video track
-                // depending on whether the custom enhancement pipeline is active.
-                for track in item.tracks {
-                    if track.assetTrack?.mediaType == .video {
-                        track.isEnabled = !self.isPipelineActive
-                    }
-                }
                 #endif
 
                 let newPlayer = AVPlayer(playerItem: item)
@@ -643,15 +635,6 @@ final class VTPlayerViewModel {
 
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
-        #if os(iOS)
-        if let item = player?.currentItem {
-            for track in item.tracks {
-                if track.assetTrack?.mediaType == .video {
-                    track.isEnabled = !isPipelineActive
-                }
-            }
-        }
-        #endif
         #if os(macOS) || os(iOS)
         if isPlaying && !isPaused {
             startPlaybackLoop()
@@ -1544,46 +1527,35 @@ extension VTPlayerView {
     @ViewBuilder
     private var iosPlayerView: some View {
         ZStack {
+            // Enhanced Metal video renderer sits at the bottom of the ZStack
             if viewModel.isPipelineActive {
-                ZStack {
-                    viewModel.currentBackgroundColor
-                        .ignoresSafeArea()
-                    
-                    VTMetalRendererView(renderer: viewModel.renderer)
-                        .ignoresSafeArea()
-                    
-                    // Transparent overlay to capture tap gestures without being blocked by UIKit's MTKView
-                    Color.black.opacity(0.001)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            viewModel.toggleControls()
-                        }
-                    
-                    if viewModel.showControls {
-                        iosControlOverlay
-                            .transition(.opacity)
-                    }
-                }
-            } else {
-                if let player = viewModel.player {
-                    NativeVideoPlayer(
-                        player: player,
-                        title: viewModel.videoURL?.lastPathComponent ?? "Video",
-                        showControls: $viewModel.showControls
-                    )
+                VTMetalRendererView(renderer: viewModel.renderer)
                     .ignoresSafeArea()
-                } else {
-                    Color.black.ignoresSafeArea()
-                    ProgressView()
-                        .tint(.white)
-                }
+            } else {
+                Color.black
+                    .ignoresSafeArea()
+            }
+            
+            // Native AVPlayerViewController sits on top
+            if let player = viewModel.player {
+                NativeVideoPlayer(
+                    player: player,
+                    title: viewModel.videoURL?.lastPathComponent ?? "Video",
+                    isPipelineActive: viewModel.isPipelineActive,
+                    showControls: $viewModel.showControls
+                )
+                .ignoresSafeArea()
+            } else {
+                Color.black.ignoresSafeArea()
+                ProgressView()
+                    .tint(.white)
             }
         }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar(viewModel.isPipelineActive ? .hidden : (viewModel.showControls ? .visible : .hidden), for: .navigationBar)
+        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -1614,131 +1586,6 @@ extension VTPlayerView {
         .onDisappear {
             viewModel.stop()
             viewModel.videoURL = nil
-        }
-    }
-
-    private var iosControlOverlay: some View {
-        ZStack {
-            // Background dimming
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    viewModel.toggleControls()
-                }
-
-            // Top Bar
-            VStack {
-                HStack {
-                    Button(action: {
-                        viewModel.stop()
-                        viewModel.videoURL = nil
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.title3.bold())
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                    
-                    Spacer()
-                    
-                    Text(viewModel.videoURL?.lastPathComponent ?? "Video")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 12) {
-                        Button(action: { showDiagnosticsSheet = true }) {
-                            Image(systemName: "chart.bar.fill")
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
-                        
-                        Button(action: { showSettingsSheet = true }) {
-                            Image(systemName: "gearshape.fill")
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                
-                Spacer()
-            }
-
-            // Center Controls
-            HStack(spacing: 40) {
-                // Skip backward 15s
-                Button(action: { viewModel.seekRelative(-15) }) {
-                    Image(systemName: "gobackward.15")
-                        .font(.system(size: 32))
-                        .foregroundColor(.white)
-                }
-                
-                // Play / Pause
-                Button(action: { viewModel.togglePlayPause() }) {
-                    Image(systemName: viewModel.isPaused || !viewModel.isPlaying ? "play.fill" : "pause.fill")
-                        .font(.system(size: 36))
-                        .foregroundColor(.white)
-                        .frame(width: 80, height: 80)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                }
-                
-                // Skip forward 15s
-                Button(action: { viewModel.seekRelative(15) }) {
-                    Image(systemName: "goforward.15")
-                        .font(.system(size: 32))
-                        .foregroundColor(.white)
-                }
-            }
-
-            // Bottom Bar (Scrubber)
-            VStack {
-                Spacer()
-                
-                VStack(spacing: 8) {
-                    HStack(spacing: 12) {
-                        Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
-                            .font(.caption2.monospaced())
-                            .foregroundColor(.white.opacity(0.8))
-                        
-                        Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
-                            isScrubbing = editing
-                            if !editing {
-                                viewModel.seek(to: scrubTime)
-                            }
-                        })
-                        .accentColor(.cyan)
-                        .onChange(of: viewModel.currentTime) { _, newValue in
-                            if !isScrubbing {
-                                scrubTime = newValue
-                            }
-                        }
-                        
-                        Text(formatTime(viewModel.duration))
-                            .font(.caption2.monospaced())
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    .padding(.horizontal, 24)
-                }
-                .padding(.vertical, 24)
-                .background(
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.6)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            }
         }
     }
 
@@ -2682,6 +2529,7 @@ struct PlaybackSettingsView: View {
 #if os(iOS)
 class CustomAVPlayerViewController: AVPlayerViewController {
     var onControlsVisibilityChange: ((Bool) -> Void)?
+    var isPipelineActive = false
     private var lastKnownVisibility: Bool = true
     private var checkTimer: Timer?
 
@@ -2698,7 +2546,30 @@ class CustomAVPlayerViewController: AVPlayerViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         disableFullscreenButton(in: view)
+        makeBackgroundsClear(in: view)
+        hideVideoLayer(in: view)
         checkControlsVisibility()
+    }
+    
+    private func hideVideoLayer(in view: UIView) {
+        let className = String(describing: type(of: view))
+        
+        // Hide the view backing the player layer (but keep the controls overlay layer)
+        if className.contains("AVPlayerLayer") || className.contains("AVDisplayView") {
+            view.alpha = self.isPipelineActive ? 0.0 : 1.0
+        }
+        
+        if let sublayers = view.layer.sublayers {
+            for sublayer in sublayers {
+                if sublayer is AVPlayerLayer {
+                    sublayer.isHidden = self.isPipelineActive
+                }
+            }
+        }
+        
+        for subview in view.subviews {
+            hideVideoLayer(in: subview)
+        }
     }
     
     private func startTimer() {
@@ -2768,16 +2639,40 @@ class CustomAVPlayerViewController: AVPlayerViewController {
             disableFullscreenButton(in: subview)
         }
     }
+    
+    private func makeBackgroundsClear(in view: UIView) {
+        let className = String(describing: type(of: view))
+        
+        // Hide the backdrop/video presentation layers so the MTKView underneath is visible
+        if className.contains("AVPlayerLayer") || className.contains("AVDisplayView") || className.contains("AVBackgroundView") {
+            view.backgroundColor = .clear
+            if let layerView = view as? AnyObject, layerView.responds(to: NSSelectorFromString("isOpaque")) {
+                view.isOpaque = false
+            }
+        }
+        
+        // General background clear for main view controller view
+        if view == self.view {
+            view.backgroundColor = .clear
+            view.isOpaque = false
+        }
+        
+        for subview in view.subviews {
+            makeBackgroundsClear(in: subview)
+        }
+    }
 }
 
 struct NativeVideoPlayer: UIViewControllerRepresentable {
     let player: AVPlayer
     let title: String
+    let isPipelineActive: Bool
     @Binding var showControls: Bool
     
     func makeUIViewController(context: Context) -> CustomAVPlayerViewController {
         let controller = CustomAVPlayerViewController()
         controller.player = player
+        controller.isPipelineActive = isPipelineActive
         controller.showsPlaybackControls = true
         
         // Apply title to AVPlayerItem metadata so the system player shows the title natively
@@ -2797,6 +2692,8 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: CustomAVPlayerViewController, context: Context) {
+        uiViewController.isPipelineActive = isPipelineActive
+        
         // Apply title to AVPlayerItem metadata if item changes
         if let currentItem = player.currentItem, currentItem.externalMetadata.isEmpty {
             let titleItem = AVMutableMetadataItem()
