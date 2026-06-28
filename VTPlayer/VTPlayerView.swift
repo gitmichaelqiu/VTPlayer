@@ -1234,10 +1234,19 @@ struct VTPlayerView: View {
     #if os(iOS)
     @ViewBuilder
     private var iphoneLayout: some View {
-        if viewModel.videoURL == nil {
+        NavigationStack {
             iosHomeView
-        } else {
-            iosPlayerView
+                .navigationDestination(isPresented: Binding(
+                    get: { viewModel.videoURL != nil },
+                    set: { show in
+                        if !show {
+                            viewModel.stop()
+                            viewModel.videoURL = nil
+                        }
+                    }
+                )) {
+                    iosPlayerView
+                }
         }
     }
     #endif
@@ -1339,21 +1348,10 @@ extension VTPlayerView {
     #if os(iOS)
     @ViewBuilder
     private var iosHomeView: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("VTPlayer")
-                            .font(.system(size: 40, weight: .black, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.blue, .cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        
-                        Text("Real-Time Video Enhancements")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Real-Time Video Enhancements")
                             .font(.headline)
                             .foregroundColor(.secondary)
                         
@@ -1540,9 +1538,9 @@ extension VTPlayerView {
                     .padding(.bottom, 24)
                 }
             }
-            .navigationBarHidden(true)
+            .navigationTitle("VTPlayer")
+            .navigationBarTitleDisplayMode(.large)
         }
-    }
     #endif
 
     #if os(iOS)
