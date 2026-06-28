@@ -479,7 +479,13 @@ final class VTPlayerViewModel {
     #endif
     
     func userActivityDetected() {
-        if isFullScreen && isPlaying && !isPaused {
+        #if os(iOS)
+        let shouldAutoHide = isPlaying && !isPaused
+        #else
+        let shouldAutoHide = isFullScreen && isPlaying && !isPaused
+        #endif
+        
+        if shouldAutoHide {
             self.showControls = true
             #if os(macOS)
             if self.cursorHidden {
@@ -503,9 +509,14 @@ final class VTPlayerViewModel {
     private func startInactivityTimer() {
         inactivityTask?.cancel()
         inactivityTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
             guard !Task.isCancelled, let self = self else { return }
-            if self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar {
+            #if os(iOS)
+            let shouldHide = self.isPlaying && !self.isPaused
+            #else
+            let shouldHide = self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar
+            #endif
+            if shouldHide {
                 self.showControls = false
                 #if os(macOS)
                 if !self.cursorHidden {
@@ -1473,10 +1484,14 @@ extension VTPlayerView {
                 iosDiagnosticsOverlay
             }
         }
+        .onTapGesture {
+            viewModel.userActivityDetected()
+        }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -1497,6 +1512,7 @@ extension VTPlayerView {
                 .tint(viewModel.showSidebar ? .cyan : nil)
             }
         }
+        .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
                 .presentationDetents([.medium, .large])
