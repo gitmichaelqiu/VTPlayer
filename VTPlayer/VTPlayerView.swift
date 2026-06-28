@@ -1556,8 +1556,8 @@ extension VTPlayerView {
                         }
                     
                     if viewModel.showControls {
-                        controlBar
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        iosControlOverlay
+                            .transition(.opacity)
                     }
                 }
             } else {
@@ -1579,7 +1579,7 @@ extension VTPlayerView {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
+        .toolbar(viewModel.isPipelineActive ? .hidden : (viewModel.showControls ? .visible : .hidden), for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -1610,6 +1610,131 @@ extension VTPlayerView {
         .onDisappear {
             viewModel.stop()
             viewModel.videoURL = nil
+        }
+    }
+
+    private var iosControlOverlay: some View {
+        ZStack {
+            // Background dimming
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    viewModel.toggleControls()
+                }
+
+            // Top Bar
+            VStack {
+                HStack {
+                    Button(action: {
+                        viewModel.stop()
+                        viewModel.videoURL = nil
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.title3.bold())
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    Text(viewModel.videoURL?.lastPathComponent ?? "Video")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 12) {
+                        Button(action: { showDiagnosticsSheet = true }) {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundColor(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                        
+                        Button(action: { showSettingsSheet = true }) {
+                            Image(systemName: "gearshape.fill")
+                                .foregroundColor(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                
+                Spacer()
+            }
+
+            // Center Controls
+            HStack(spacing: 40) {
+                // Skip backward 15s
+                Button(action: { viewModel.seekRelative(-15) }) {
+                    Image(systemName: "gobackward.15")
+                        .font(.system(size: 32))
+                        .foregroundColor(.white)
+                }
+                
+                // Play / Pause
+                Button(action: { viewModel.togglePlayPause() }) {
+                    Image(systemName: viewModel.isPaused || !viewModel.isPlaying ? "play.fill" : "pause.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(.white)
+                        .frame(width: 80, height: 80)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+                
+                // Skip forward 15s
+                Button(action: { viewModel.seekRelative(15) }) {
+                    Image(systemName: "goforward.15")
+                        .font(.system(size: 32))
+                        .foregroundColor(.white)
+                }
+            }
+
+            // Bottom Bar (Scrubber)
+            VStack {
+                Spacer()
+                
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
+                            .font(.caption2.monospaced())
+                            .foregroundColor(.white.opacity(0.8))
+                        
+                        Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
+                            isScrubbing = editing
+                            if !editing {
+                                viewModel.seek(to: scrubTime)
+                            }
+                        })
+                        .accentColor(.cyan)
+                        .onChange(of: viewModel.currentTime) { _, newValue in
+                            if !isScrubbing {
+                                scrubTime = newValue
+                            }
+                        }
+                        
+                        Text(formatTime(viewModel.duration))
+                            .font(.caption2.monospaced())
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .padding(.horizontal, 24)
+                }
+                .padding(.vertical, 24)
+                .background(
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.6)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
         }
     }
 
