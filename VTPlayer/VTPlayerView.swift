@@ -2622,14 +2622,22 @@ struct PhotosMovie: Transferable {
         FileRepresentation(contentType: .movie) { movie in
             SentTransferredFile(movie.url)
         } importing: { receivedData in
-            let fileName = receivedData.file.lastPathComponent
+            let fileURL = receivedData.file
+            let isAccessing = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if isAccessing {
+                    fileURL.stopAccessingSecurityScopedResource()
+                }
+            }
+            
+            let fileName = fileURL.lastPathComponent
             let copy = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             
             if FileManager.default.fileExists(atPath: copy.path) {
                 try? FileManager.default.removeItem(at: copy)
             }
             
-            try FileManager.default.copyItem(at: receivedData.file, to: copy)
+            try FileManager.default.copyItem(at: fileURL, to: copy)
             return .init(url: copy)
         }
     }
