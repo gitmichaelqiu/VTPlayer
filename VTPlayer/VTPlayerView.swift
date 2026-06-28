@@ -1781,7 +1781,7 @@ extension VTPlayerView {
     #if os(iOS)
     @ViewBuilder
     private var iosPlayerView: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             // Enhanced Metal video renderer sits at the bottom of the ZStack
             if viewModel.isPipelineActive {
                 VTMetalRendererView(renderer: viewModel.renderer)
@@ -1805,52 +1805,36 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-
-            // Custom top bar — replaces the native navigation bar so we have
-            // full control over animation and can hide the title + back button
-            // alongside the player controls without frame-collapse issues.
+        }
+        .navigationTitle(viewModel.showControls ? (viewModel.videoURL?.lastPathComponent ?? "Video") : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        // Keep toolbar visible so the frame never collapses — collapsing
+        // causes the player overlay to jump upward abruptly.
+        .toolbar(.visible, for: .navigationBar)
+        .navigationBarBackButtonHidden(!viewModel.showControls)
+        .toolbar {
             if viewModel.showControls {
-                GeometryReader { geometry in
-                    HStack(spacing: 12) {
-                        Button { dismiss() } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.body.weight(.semibold))
-                        }
-
-                        Text(viewModel.videoURL?.lastPathComponent ?? "Video")
-                            .font(.headline)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        Button { showSettingsSheet = true } label: {
-                            Image(systemName: "gearshape")
-                                .font(.body)
-                        }
-
-                        Button { showDiagnosticsSheet = true } label: {
-                            Image(systemName: "chart.bar")
-                                .font(.body)
-                        }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showSettingsSheet = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .padding(.top, geometry.safeAreaInsets.top + 12)
-                    .background {
-                        LinearGradient(
-                            colors: [.black.opacity(0.5), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .labelStyle(.iconOnly)
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showDiagnosticsSheet = true
+                    } label: {
+                        Label("Diagnostics", systemImage: "chart.bar")
+                    }
+                    .labelStyle(.iconOnly)
+                }
             }
         }
-        .ignoresSafeArea(.all)
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
