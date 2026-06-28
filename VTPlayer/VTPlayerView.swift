@@ -236,6 +236,7 @@ final class VTPlayerViewModel {
         #else
         self.recentVideos = []
         loadRecentVideosIOS()
+        self.showSidebar = false
         #endif
         self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
         self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
