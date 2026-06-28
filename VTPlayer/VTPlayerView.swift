@@ -35,16 +35,19 @@ enum PlatformVisualEffectBlendingMode {
 }
 #endif
 
-/// SwiftUI Representable wrapper for the VTMetalRenderer.
 #if canImport(UIKit)
 struct VTMetalRendererView: UIViewRepresentable {
     let renderer: VTMetalRenderer
     
     func makeUIView(context: Context) -> VTMetalRenderer {
+        renderer.isUserInteractionEnabled = false
         return renderer
     }
     
-    func updateUIView(_ uiView: VTMetalRenderer, context: Context) {}
+    func updateUIView(_ uiView: VTMetalRenderer, context: Context) {
+        uiView.setNeedsLayout()
+        uiView.layoutIfNeeded()
+    }
 }
 #elseif canImport(AppKit)
 struct VTMetalRendererView: NSViewRepresentable {
