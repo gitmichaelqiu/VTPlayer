@@ -310,6 +310,14 @@ final class VTPlayerViewModel {
                         track.isEnabled = false
                     }
                 }
+                #else
+                // On iOS, dynamically enable/disable the native video track
+                // depending on whether the custom enhancement pipeline is active.
+                for track in item.tracks {
+                    if track.assetTrack?.mediaType == .video {
+                        track.isEnabled = !self.isPipelineActive
+                    }
+                }
                 #endif
 
                 let newPlayer = AVPlayer(playerItem: item)
@@ -624,7 +632,16 @@ final class VTPlayerViewModel {
 
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
-        #if os(macOS)
+        #if os(iOS)
+        if let item = player?.currentItem {
+            for track in item.tracks {
+                if track.assetTrack?.mediaType == .video {
+                    track.isEnabled = !isPipelineActive
+                }
+            }
+        }
+        #endif
+        #if os(macOS) || os(iOS)
         if isPlaying && !isPaused {
             startPlaybackLoop()
         } else if isPlaying && isPaused {
@@ -655,7 +672,7 @@ final class VTPlayerViewModel {
 
         player.rate = Float(self.playbackSpeed)
 
-        #if os(macOS)
+        #if os(macOS) || os(iOS)
         // Always rebuild the pipeline if enhancements were changed while
         // paused.  Otherwise, just start the loop normally.
         if enhancementsPendingRestart {
@@ -687,7 +704,7 @@ final class VTPlayerViewModel {
         self.userActivityDetected()
     }
     
-    #if os(macOS)
+    #if os(macOS) || os(iOS)
     private func startPlaybackLoop() {
         playbackGeneration += 1
         let gen = playbackGeneration
@@ -1245,6 +1262,18 @@ struct VTPlayerView: View {
     @State private var hoverDN = false
     @State private var hoverSH = false
     @State private var hoverHDR = false
+ 
+    private var isPipelineActive: Bool {
+        #if os(iOS)
+        return (viewModel.superResolutionLevel > 0 || 
+                viewModel.frameInterpolationLevel > 0 || 
+                viewModel.qualitySuperResolutionScaleFactor > 0 || 
+                viewModel.denoiseStrength > 0 || 
+                viewModel.motionBlurStrength > 0)
+        #else
+        return true
+        #endif
+    }
 
     var body: some View {
         Group {
@@ -1516,17 +1545,35 @@ extension VTPlayerView {
     @ViewBuilder
     private var iosPlayerView: some View {
         ZStack {
-            if let player = viewModel.player {
-                NativeVideoPlayer(
-                    player: player,
-                    title: viewModel.videoURL?.lastPathComponent ?? "Video",
-                    showControls: $viewModel.showControls
-                )
-                .ignoresSafeArea()
+            if isPipelineActive {
+                ZStack {
+                    viewModel.currentBackgroundColor
+                        .ignoresSafeArea()
+                    
+                    VTMetalRendererView(renderer: viewModel.renderer)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            viewModel.toggleControls()
+                        }
+                    
+                    if viewModel.showControls {
+                        controlBar
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
             } else {
-                Color.black.ignoresSafeArea()
-                ProgressView()
-                    .tint(.white)
+                if let player = viewModel.player {
+                    NativeVideoPlayer(
+                        player: player,
+                        title: viewModel.videoURL?.lastPathComponent ?? "Video",
+                        showControls: $viewModel.showControls
+                    )
+                    .ignoresSafeArea()
+                } else {
+                    Color.black.ignoresSafeArea()
+                    ProgressView()
+                        .tint(.white)
+                }
             }
         }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")

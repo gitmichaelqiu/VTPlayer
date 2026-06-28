@@ -10,7 +10,7 @@ import VideoToolbox
 import CoreMedia
 import CoreVideo
 
-#if os(macOS)
+#if os(macOS) || os(iOS)
 
 /// Ordered pipeline stages for frame processing.
 public enum PipelineStage: Int, Comparable, CaseIterable {
@@ -159,7 +159,7 @@ public actor VTFrameProcessorCoordinator {
 
         // ── 1. Denoise Stage ──────────────────────────────────────────
         if denoiseStrength > 0 {
-            if #available(macOS 26.0, *),
+            if #available(macOS 26.0, iOS 26.0, *),
                VTTemporalNoiseFilterConfiguration.isSupported,
                let config = VTTemporalNoiseFilterConfiguration(
                    frameWidth: currentWidth,
@@ -184,7 +184,7 @@ public actor VTFrameProcessorCoordinator {
             if hasQualitySR {
                 // Quality SR — single stage at requested scale
                 let scale = qualitySuperResolutionScaleFactor
-                guard #available(macOS 26.0, *),
+                guard #available(macOS 26.0, iOS 26.0, *),
                       let config = VTSuperResolutionScalerConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,
@@ -308,7 +308,7 @@ public actor VTFrameProcessorCoordinator {
 
         // ── 4. Motion Blur Stage ──────────────────────────────────────
         if motionBlurStrength > 0 {
-            guard #available(macOS 26.0, *),
+            guard #available(macOS 26.0, iOS 26.0, *),
                   let config = VTMotionBlurConfiguration(
                 frameWidth: currentWidth,
                 frameHeight: currentHeight,
