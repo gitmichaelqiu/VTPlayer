@@ -1262,17 +1262,17 @@ struct VTPlayerView: View {
     private var iphoneLayout: some View {
         NavigationStack {
             iosHomeView
-                .navigationDestination(isPresented: Binding(
-                    get: { viewModel.videoURL != nil },
-                    set: { show in
-                        if !show {
-                            viewModel.stop()
-                            viewModel.videoURL = nil
-                        }
-                    }
-                )) {
-                    iosPlayerView
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { viewModel.videoURL != nil },
+            set: { show in
+                if !show {
+                    viewModel.stop()
+                    viewModel.videoURL = nil
                 }
+            }
+        )) {
+            iosPlayerView
         }
     }
     #endif
@@ -1374,7 +1374,8 @@ extension VTPlayerView {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
-                        .glassEffect(in: .rect(cornerRadius: 12))
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .cornerRadius(12)
                     }
 
                     #if canImport(PhotosUI)
@@ -1393,7 +1394,8 @@ extension VTPlayerView {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
-                        .glassEffect(in: .rect(cornerRadius: 12))
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .cornerRadius(12)
                     }
                     #endif
                 }
@@ -1535,37 +1537,14 @@ extension VTPlayerView {
                     .tint(.white)
             }
 
-            // Enhancement status pills — Liquid Glass floating bar at top
+            // Floating Liquid Glass control bar at top
+            iosPlayerTopBar
+
+            // Enhancement status pills
             iosEnhancementPills
 
             if viewModel.showSidebar {
                 iosDiagnosticsOverlay
-            }
-        }
-        .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 2) {
-                    Button {
-                        withAnimation { viewModel.showSidebar.toggle() }
-                    } label: {
-                        Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .labelStyle(.iconOnly)
-                    .tint(viewModel.showSidebar ? .cyan : nil)
-
-                    Button {
-                        showSettingsSheet = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .labelStyle(.iconOnly)
-                }
             }
         }
         .sheet(isPresented: $showSettingsSheet) {
@@ -1575,6 +1554,54 @@ extension VTPlayerView {
         .onDisappear {
             viewModel.stop()
             viewModel.videoURL = nil
+        }
+    }
+
+    // MARK: - Player Top Bar (Liquid Glass)
+    @ViewBuilder
+    private var iosPlayerTopBar: some View {
+        VStack {
+            HStack(spacing: 12) {
+                Button {
+                    viewModel.stop()
+                    viewModel.videoURL = nil
+                } label: {
+                    Label("Close", systemImage: "xmark")
+                        .font(.body.weight(.semibold))
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.white)
+
+                Text(viewModel.videoURL?.lastPathComponent ?? "Video")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Button {
+                    withAnimation { viewModel.showSidebar.toggle() }
+                } label: {
+                    Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(viewModel.showSidebar ? .cyan : .white)
+
+                Button {
+                    showSettingsSheet = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .glassEffect(in: .rect(cornerRadius: 20))
+            .padding(.horizontal, 8)
+            .safeAreaPadding(.top, 8)
+
+            Spacer()
         }
     }
 
@@ -1628,7 +1655,7 @@ extension VTPlayerView {
 
             Spacer()
         }
-        .safeAreaPadding(.top, 8)
+        .safeAreaPadding(.top, 52)
     }
 
     private func enhancementPill(label: String, color: Color) -> some View {
