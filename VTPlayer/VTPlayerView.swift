@@ -235,6 +235,7 @@ final class VTPlayerViewModel {
         )
         #else
         self.recentVideos = []
+        loadRecentVideosIOS()
         #endif
         self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
         self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
@@ -381,6 +382,7 @@ final class VTPlayerViewModel {
         var targetURL = url
         
         #if os(iOS)
+        self.addToRecentVideosIOS(url)
         if let oldTemp = tempLocalURL {
             try? FileManager.default.removeItem(at: oldTemp)
             self.tempLocalURL = nil
@@ -1074,6 +1076,38 @@ final class VTPlayerViewModel {
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
         qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
     }
+
+    #if os(iOS)
+    private func loadRecentVideosIOS() {
+        let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideos") ?? []
+        self.recentVideos = paths.compactMap { URL(string: $0) }
+    }
+    
+    private func saveRecentVideosIOS() {
+        let paths = self.recentVideos.map { $0.absoluteString }
+        UserDefaults.standard.set(paths, forKey: "VTRecentVideos")
+    }
+    
+    func addToRecentVideosIOS(_ url: URL) {
+        var list = self.recentVideos.filter { $0.absoluteString != url.absoluteString }
+        list.insert(url, at: 0)
+        if list.count > 15 {
+            list = Array(list.prefix(15))
+        }
+        self.recentVideos = list
+        saveRecentVideosIOS()
+    }
+    
+    func deleteRecentVideoIOS(at indexSet: IndexSet) {
+        self.recentVideos.remove(atOffsets: indexSet)
+        saveRecentVideosIOS()
+    }
+    
+    func clearRecentVideosIOS() {
+        self.recentVideos.removeAll()
+        saveRecentVideosIOS()
+    }
+    #endif
 
     private func fourCharCodeString(_ code: FourCharCode) -> String {
         let n = Int(code)
