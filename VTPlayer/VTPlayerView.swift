@@ -1466,20 +1466,7 @@ struct VTPlayerView: View {
     #if os(iOS)
     @ViewBuilder
     private var iphoneLayout: some View {
-        NavigationStack {
-            iosHomeView
-                .navigationDestination(isPresented: Binding(
-                    get: { viewModel.videoURL != nil },
-                    set: { show in
-                        if !show {
-                            viewModel.stop()
-                            viewModel.videoURL = nil
-                        }
-                    }
-                )) {
-                    iosPlayerView
-                }
-        }
+        iosHomeView
     }
     #endif
 
@@ -1565,6 +1552,17 @@ extension VTPlayerView {
         TabView {
             NavigationStack {
                 iosGalleryView
+                    .navigationDestination(isPresented: Binding(
+                        get: { viewModel.videoURL != nil },
+                        set: { show in
+                            if !show {
+                                viewModel.stop()
+                                viewModel.videoURL = nil
+                            }
+                        }
+                    )) {
+                        iosPlayerView
+                    }
             }
             .tabItem {
                 Label("Gallery", systemImage: "play.square.stack.fill")
@@ -1807,66 +1805,37 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-            
-            // Custom Top Overlay Navigation Bar (Fades with controls, never shifts layout)
-            VStack {
-                HStack(spacing: 16) {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.body.bold())
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                    
-                    Spacer()
-                    
-                    Text(viewModel.videoURL?.lastPathComponent ?? "Video")
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.4))
-                        .cornerRadius(8)
-                    
-                    Spacer()
-                    
+        }
+        .navigationTitle(viewModel.showControls ? (viewModel.videoURL?.lastPathComponent ?? "Video") : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        // Keep toolbar visible so the frame never collapses — collapsing
+        // causes the player overlay to jump upward abruptly.
+        .toolbar(.visible, for: .navigationBar)
+        .navigationBarBackButtonHidden(!viewModel.showControls)
+        .toolbar {
+            if viewModel.showControls {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showSettingsSheet = true
                     } label: {
-                        Image(systemName: "gearshape")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
+                        Label("Settings", systemImage: "gearshape")
                     }
-                    
+                    .labelStyle(.iconOnly)
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showDiagnosticsSheet = true
                     } label: {
-                        Image(systemName: "chart.bar")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
+                        Label("Diagnostics", systemImage: "chart.bar")
                     }
+                    .labelStyle(.iconOnly)
                 }
-                .padding(.horizontal)
-                .padding(.top, 12)
-                
-                Spacer()
             }
-            .opacity(viewModel.showControls ? 1.0 : 0.0)
-            .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
