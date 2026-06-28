@@ -1226,7 +1226,10 @@ final class VTPlayerViewModel {
     }
 
     private func loadVideoSettings(for url: URL) {
-        guard let settings = UserDefaults.standard.dictionary(forKey: Self.videoSettingsKey(for: url.lastPathComponent)) else { return }
+        guard let settings = UserDefaults.standard.dictionary(forKey: Self.videoSettingsKey(for: url.lastPathComponent)) else {
+            applyDefaultPlaybackSettings()
+            return
+        }
         superResolutionLevel = settings["superResolutionLevel"] as? Int ?? 0
         frameInterpolationLevel = settings["frameInterpolationLevel"] as? Int ?? 0
         playbackSpeed = settings["playbackSpeed"] as? Double ?? 1.0
@@ -1246,6 +1249,25 @@ final class VTPlayerViewModel {
         motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
         qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
+    }
+
+    private func applyDefaultPlaybackSettings() {
+        superResolutionLevel = UserDefaults.standard.integer(forKey: "VTDefaultSRLevel")
+        frameInterpolationLevel = UserDefaults.standard.integer(forKey: "VTDefaultFILevel")
+        playbackSpeed = 1.0
+        
+        let defSharp = UserDefaults.standard.double(forKey: "VTDefaultSharpness")
+        sharpness = defSharp
+        renderer.sharpness = Float(defSharp)
+        
+        let defHDR = UserDefaults.standard.double(forKey: "VTDefaultHDRBoost")
+        hdrStrength = defHDR
+        renderer.hdrStrength = Float(defHDR)
+        
+        qualitySuperResolutionScaleFactor = UserDefaults.standard.integer(forKey: "VTDefaultQSRLevel")
+        motionBlurStrength = UserDefaults.standard.integer(forKey: "VTDefaultMBLevel")
+        denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
+        qualityPrioritization = 1
     }
 
     #if os(iOS)
@@ -1290,7 +1312,7 @@ final class VTPlayerViewModel {
         saveRecentVideosIOS() // persist cleaned list
     }
     
-    private func saveRecentVideosIOS() {
+    func saveRecentVideosIOS() {
         let paths = self.recentVideos.map { $0.absoluteString }
         UserDefaults.standard.set(paths, forKey: "VTRecentVideos")
     }
@@ -1368,6 +1390,23 @@ struct VTPlayerView: View {
     }
     @State private var sortBy: SortOption = .dateAdded
     @State private var selectedTab = 0
+
+    @State private var videoToRename: URL? = nil
+    @State private var renameText = ""
+    @State private var showRenameAlert = false
+    
+    @State private var pinnedVideos: Set<String> = {
+        let array = UserDefaults.standard.stringArray(forKey: "VTPinnedVideos") ?? []
+        return Set(array)
+    }()
+    
+    @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
+    @AppStorage("VTDefaultQSRLevel") private var defaultQSRLevel = 0
+    @AppStorage("VTDefaultFILevel") private var defaultFILevel = 0
+    @AppStorage("VTDefaultMBLevel") private var defaultMBLevel = 0
+    @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
+    @AppStorage("VTDefaultSharpness") private var defaultSharpness = 0.0
+    @AppStorage("VTDefaultHDRBoost") private var defaultHDRBoost = 0.0
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1556,6 +1595,83 @@ struct VTPlayerView: View {
         return "Added " + formatter.string(from: date)
     }
 
+    private func renameVideoFile(_ url: URL, to newBaseName: String) {
+        let ext = url.pathExtension
+        let newName = newBaseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty else { return }
+        let newFileName = newName + (ext.isEmpty ? "" : ".\(ext)")
+        let newURL = url.deletingLastPathComponent().appendingPathComponent(newFileName)
+        
+        do {
+            try FileManager.default.moveItem(at: url, to: newURL)
+            
+            // Update recentVideos list
+            if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                viewModel.recentVideos[idx] = newURL
+                viewModel.saveRecentVideosIOS()
+            }
+            
+            // Move Date Added timestamp in UserDefaults
+            let datesKey = "VTRecentVideosDates"
+            var dates = UserDefaults.standard.dictionary(forKey: datesKey) as? [String: Double] ?? [:]
+            if let dateVal = dates[url.lastPathComponent] {
+                dates[newURL.lastPathComponent] = dateVal
+                dates.removeValue(forKey: url.lastPathComponent)
+                UserDefaults.standard.set(dates, forKey: datesKey)
+            }
+            
+            // Move Pin state if pinned
+            let pinnedKey = "VTPinnedVideos"
+            var pinned = UserDefaults.standard.stringArray(forKey: pinnedKey) ?? []
+            if let pIdx = pinned.firstIndex(of: url.lastPathComponent) {
+                pinned[pIdx] = newURL.lastPathComponent
+                UserDefaults.standard.set(pinned, forKey: pinnedKey)
+            }
+            
+            // Update UI set representation
+            if pinnedVideos.contains(url.lastPathComponent) {
+                pinnedVideos.remove(url.lastPathComponent)
+                pinnedVideos.insert(newURL.lastPathComponent)
+            }
+            
+            // Copy saved enhancement settings to the new lastPathComponent key
+            let settingsKeys = [
+                "VTLastSRLevel_", "VTLastFILevel_", "VTLastQSRLevel_",
+                "VTLastMBLevel_", "VTLastDNLevel_", "VTLastSharpness_",
+                "VTLastHDRBoost_", "VTLastPosition_"
+            ]
+            for keyPrefix in settingsKeys {
+                let oldKey = keyPrefix + url.lastPathComponent
+                let newKey = keyPrefix + newURL.lastPathComponent
+                if let val = UserDefaults.standard.value(forKey: oldKey) {
+                    UserDefaults.standard.set(val, forKey: newKey)
+                    UserDefaults.standard.removeObject(forKey: oldKey)
+                }
+            }
+            
+            // Also update the specific dictionary key if it exists
+            let oldDictKey = "VTVideoSettings_" + url.lastPathComponent
+            let newDictKey = "VTVideoSettings_" + newURL.lastPathComponent
+            if let dict = UserDefaults.standard.dictionary(forKey: oldDictKey) {
+                UserDefaults.standard.set(dict, forKey: newDictKey)
+                UserDefaults.standard.removeObject(forKey: oldDictKey)
+            }
+            
+        } catch {
+            print("Failed to rename file: \(error)")
+        }
+    }
+
+    private func togglePin(for url: URL) {
+        let filename = url.lastPathComponent
+        if pinnedVideos.contains(filename) {
+            pinnedVideos.remove(filename)
+        } else {
+            pinnedVideos.insert(filename)
+        }
+        UserDefaults.standard.set(Array(pinnedVideos), forKey: "VTPinnedVideos")
+    }
+
 }
 
 // MARK: - Extracted SwiftUI Components
@@ -1642,12 +1758,22 @@ extension VTPlayerView {
                 .background(Color(.systemGroupedBackground))
             } else {
                 let sortedVideos: [URL] = {
-                    switch sortBy {
-                    case .name:
-                        return viewModel.recentVideos.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-                    case .dateAdded:
-                        return viewModel.recentVideos
+                    let pinnedList = viewModel.recentVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
+                    let unpinnedList = viewModel.recentVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
+                    
+                    let sortBlock: (URL, URL) -> Bool = { u1, u2 in
+                        switch sortBy {
+                        case .name:
+                            return u1.lastPathComponent.localizedStandardCompare(u2.lastPathComponent) == .orderedAscending
+                        case .dateAdded:
+                            let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDates") as? [String: Double] ?? [:]
+                            let t1 = dates[u1.lastPathComponent] ?? 0
+                            let t2 = dates[u2.lastPathComponent] ?? 0
+                            return t1 > t2
+                        }
                     }
+                    
+                    return pinnedList.sorted(by: sortBlock) + unpinnedList.sorted(by: sortBlock)
                 }()
                 
                 List {
@@ -1659,11 +1785,18 @@ extension VTPlayerView {
                                 VideoThumbnailView(url: url)
                                 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(url.lastPathComponent)
-                                        .font(.body)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.primary)
-                                        .lineLimit(2)
+                                    HStack(spacing: 6) {
+                                        if pinnedVideos.contains(url.lastPathComponent) {
+                                            Image(systemName: "pin.fill")
+                                                .font(.caption2)
+                                                .foregroundColor(.orange)
+                                        }
+                                        Text(url.lastPathComponent)
+                                            .font(.body)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                            .lineLimit(2)
+                                    }
                                     
                                     Text(formatDateAdded(for: url))
                                         .font(.caption)
@@ -1678,6 +1811,15 @@ extension VTPlayerView {
                             }
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                togglePin(for: url)
+                            } label: {
+                                Label(pinnedVideos.contains(url.lastPathComponent) ? "Unpin" : "Pin", 
+                                      systemImage: pinnedVideos.contains(url.lastPathComponent) ? "pin.slash.fill" : "pin.fill")
+                            }
+                            .tint(.orange)
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 if let idx = viewModel.recentVideos.firstIndex(of: url) {
@@ -1689,6 +1831,21 @@ extension VTPlayerView {
                         }
                         .contextMenu {
                             ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
+                            
+                            Button {
+                                togglePin(for: url)
+                            } label: {
+                                let isPinned = pinnedVideos.contains(url.lastPathComponent)
+                                Label(isPinned ? "Unpin Video" : "Pin Video", systemImage: isPinned ? "pin.slash" : "pin")
+                            }
+                            
+                            Button {
+                                videoToRename = url
+                                renameText = url.deletingPathExtension().lastPathComponent
+                                showRenameAlert = true
+                            } label: {
+                                Label("Rename File", systemImage: "pencil")
+                            }
                             
                             Button {
                                 UIPasteboard.general.string = url.lastPathComponent
@@ -1718,6 +1875,17 @@ extension VTPlayerView {
             }
         } message: {
             Text("This will clear your recent playback history. The original video files will not be deleted.")
+        }
+        .alert("Rename Video", isPresented: $showRenameAlert) {
+            TextField("New Name", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Rename") {
+                if let url = videoToRename {
+                    renameVideoFile(url, to: renameText)
+                }
+            }
+        } message: {
+            Text("Enter a new name for the video file.")
         }
     }
 
@@ -1760,6 +1928,74 @@ extension VTPlayerView {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+
+            // Default Playback Settings Section
+            Section("Default Playback Configuration") {
+                Picker("Super Resolution", selection: $defaultSRLevel) {
+                    Text("Off").tag(0)
+                    Text("2x Upscaling").tag(2)
+                    Text("4x Upscaling").tag(4)
+                }
+                
+                Picker("Quality SR", selection: $defaultQSRLevel) {
+                    Text("Off").tag(0)
+                    Text("2x Quality SR").tag(2)
+                    Text("4x Quality SR").tag(4)
+                }
+                
+                Picker("Frame Interpolation", selection: $defaultFILevel) {
+                    Text("Off").tag(0)
+                    Text("2x Interpolation").tag(2)
+                    Text("4x Interpolation").tag(4)
+                }
+                
+                HStack {
+                    Text("Motion Blur")
+                    Spacer()
+                    Slider(value: Binding(
+                        get: { Double(defaultMBLevel) },
+                        set: { defaultMBLevel = Int($0) }
+                    ), in: 0...30, step: 1)
+                    .frame(width: 140)
+                    Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("Denoise Strength")
+                    Spacer()
+                    Slider(value: $defaultDNLevel, in: 0.0...1.0, step: 0.05)
+                    .frame(width: 140)
+                    Text(String(format: "%.2f", defaultDNLevel))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("Sharpness")
+                    Spacer()
+                    Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.1)
+                    .frame(width: 140)
+                    Text(String(format: "%.1f", defaultSharpness))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("SDR-to-HDR Boost")
+                    Spacer()
+                    Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.1)
+                    .frame(width: 140)
+                    Text(String(format: "%.1f", defaultHDRBoost))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, alignment: .trailing)
+                }
             }
 
             // Copyright Row
