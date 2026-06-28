@@ -1625,9 +1625,9 @@ extension VTPlayerView {
                         Image(systemName: "play.rectangle.on.rectangle")
                             .font(.system(size: 48))
                             .foregroundColor(.secondary.opacity(0.6))
-                        Text("No Recent Videos")
+                        Text("No Videos")
                             .font(.headline)
-                        Text("Videos you enhance will appear here.")
+                        Text("Open a video to get started.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -1637,7 +1637,7 @@ extension VTPlayerView {
                     .padding(.vertical, 40)
                 } else {
                     HStack {
-                        Text("Recent Videos")
+                        Text("Videos")
                             .font(.title2)
                             .bold()
                         Spacer()
@@ -1680,7 +1680,7 @@ extension VTPlayerView {
                                         viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
                                     }
                                 } label: {
-                                    Label("Remove from Recents", systemImage: "trash")
+                                    Label("Remove from List", systemImage: "trash")
                                 }
                             }
                         }
@@ -1692,7 +1692,7 @@ extension VTPlayerView {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Gallery")
-        .alert("Clear Recent Videos?", isPresented: $showClearAllAlert) {
+        .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
                 viewModel.clearRecentVideosIOS()
