@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AVKit
 import AVFoundation
 import MetalKit
 import VideoToolbox
@@ -297,6 +298,7 @@ final class VTPlayerViewModel {
                 let item = AVPlayerItem(asset: asset)
                 item.add(output)
 
+                #if os(macOS)
                 // Disable the video track on AVPlayer so it only decodes
                 // audio.  Video frames are read separately via
                 // VTFrameSequence (AVAssetReader).  Without this, the
@@ -308,6 +310,7 @@ final class VTPlayerViewModel {
                         track.isEnabled = false
                     }
                 }
+                #endif
 
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
@@ -631,6 +634,7 @@ final class VTPlayerViewModel {
         self.userActivityDetected()
     }
     
+    #if os(macOS)
     private func startPlaybackLoop() {
         playbackGeneration += 1
         let gen = playbackGeneration
@@ -977,6 +981,7 @@ final class VTPlayerViewModel {
             }
             diagTimer = now
         }
+        #endif
     }
 
     #if !os(macOS)
@@ -1354,614 +1359,240 @@ extension VTPlayerView {
     #if os(iOS)
     @ViewBuilder
     private var iosHomeView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+        List {
+            // MARK: - Description Header
+            Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Real-Time Video Enhancements")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Upscale and interpolate video sequences on the Apple Silicon Neural Engine using hardware-accelerated processing.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 16)
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("LOAD VIDEO")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                        
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                            Button(action: { showFileImporter = true }) {
-                                VStack(spacing: 12) {
-                                    Image(systemName: "doc.badge.plus")
-                                        .font(.title)
-                                        .foregroundColor(.cyan)
-                                    Text("Browse Files")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 20)
-                                .background(Color(uiColor: .secondarySystemBackground))
-                                .cornerRadius(12)
-                                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 3)
-                            }
-                            
-                            #if canImport(PhotosUI)
-                            PhotosPicker(
-                                selection: $selectedPhotoItem,
-                                matching: .videos,
-                                photoLibrary: .shared()
-                            ) {
-                                VStack(spacing: 12) {
-                                    Image(systemName: "photo.on.rectangle.angled")
-                                        .font(.title)
-                                        .foregroundColor(.purple)
-                                    Text("Photos Library")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 20)
-                                .background(Color(uiColor: .secondarySystemBackground))
-                                .cornerRadius(12)
-                                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 3)
-                            }
-                            #endif
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Text("Upscale and interpolate video sequences on the Apple Silicon Neural Engine using hardware-accelerated processing.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                .listRowBackground(Color.clear)
+            }
+
+            // MARK: - Load Video
+            Section {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                    Button(action: { showFileImporter = true }) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "doc.badge.plus")
+                                .font(.title)
+                                .foregroundColor(.cyan)
+                            Text("Browse Files")
+                                .font(.headline)
+                                .foregroundColor(.primary)
                         }
-                        .padding(.horizontal)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("DEVICE PERFORMANCE")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Label("Neural Engine Acceleration", systemImage: "cpu.fill")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Spacer()
-                                Text("Enabled")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.green)
-                            }
-                            Divider()
-                            HStack {
-                                Label("Supported SR Scales", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
-                                    .font(.subheadline)
-                                Spacer()
-                                Text(viewModel.srIsSupported ? "2x, 4x" : "None")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
-                            }
-                        }
-                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
                         .background(Color(uiColor: .secondarySystemBackground))
                         .cornerRadius(12)
-                        .padding(.horizontal)
                     }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("RECENT VIDEOS")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(.secondary)
-                            
-                            Spacer()
-                            
-                            if !viewModel.recentVideos.isEmpty {
-                                Button("Clear All") {
-                                    viewModel.clearRecentVideosIOS()
+
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.title)
+                                .foregroundColor(.purple)
+                            Text("Photos Library")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .cornerRadius(12)
+                    }
+                    #endif
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            } header: {
+                Text("LOAD VIDEO")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+            }
+
+            // MARK: - Device Performance
+            Section {
+                LabeledContent {
+                    Text("Enabled")
+                        .fontWeight(.semibold)
+                        .foregroundColor(.green)
+                } label: {
+                    Label("Neural Engine Acceleration", systemImage: "cpu.fill")
+                }
+
+                LabeledContent {
+                    Text(viewModel.srIsSupported ? "2x, 4x" : "None")
+                        .fontWeight(.semibold)
+                        .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
+                } label: {
+                    Label("Supported SR Scales", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
+                }
+            } header: {
+                Text("DEVICE PERFORMANCE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+            }
+
+            // MARK: - Recent Videos
+            Section {
+                if viewModel.recentVideos.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "film")
+                            .font(.largeTitle)
+                            .foregroundColor(.secondary)
+                        Text("No recent videos")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(viewModel.recentVideos, id: \.self) { url in
+                        Button(action: {
+                            viewModel.openVideo(url)
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "video.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.blue)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(url.lastPathComponent)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Text(url.deletingLastPathComponent().lastPathComponent)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
                                 }
-                                .font(.caption)
-                                .foregroundColor(.red)
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.tertiary)
                             }
                         }
-                        .padding(.horizontal)
-                        
-                        if viewModel.recentVideos.isEmpty {
-                            VStack(spacing: 8) {
-                                Image(systemName: "film")
-                                    .font(.largeTitle)
-                                    .foregroundColor(.secondary)
-                                Text("No recent videos")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 40)
-                            .background(Color(uiColor: .secondarySystemBackground).opacity(0.5))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                        } else {
-                            VStack(spacing: 10) {
-                                ForEach(viewModel.recentVideos, id: \.self) { url in
-                                    Button(action: {
-                                        viewModel.openVideo(url)
-                                    }) {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: "video.circle.fill")
-                                                .font(.title)
-                                                .foregroundColor(.blue)
-                                            
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(url.lastPathComponent)
-                                                    .font(.headline)
-                                                    .foregroundColor(.primary)
-                                                    .lineLimit(1)
-                                                    .multilineTextAlignment(.leading)
-                                                
-                                                Text(url.deletingLastPathComponent().lastPathComponent)
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                            
-                                            Spacer()
-                                            
-                                            Image(systemName: "play.circle.fill")
-                                                .font(.title2)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        .padding()
-                                        .background(Color(uiColor: .secondarySystemBackground))
-                                        .cornerRadius(12)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        Button(action: {
-                                            viewModel.openVideo(url)
-                                        }) {
-                                            Label("Play", systemImage: "play.fill")
-                                        }
-                                        
-                                        Button(role: .destructive, action: {
-                                            if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                                viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                            }
-                                        }) {
-                                            Label("Remove", systemImage: "trash")
-                                        }
-                                    }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
                                 }
+                            } label: {
+                                Label("Remove", systemImage: "trash")
                             }
-                            .padding(.horizontal)
+                        }
+                        .contextMenu {
+                            Button(action: { viewModel.openVideo(url) }) {
+                                Label("Play", systemImage: "play.fill")
+                            }
+                            Button(role: .destructive) {
+                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
+                                }
+                            } label: {
+                                Label("Remove", systemImage: "trash")
+                            }
                         }
                     }
-                    .padding(.bottom, 24)
+                    .onDelete { indexSet in
+                        viewModel.deleteRecentVideoIOS(at: indexSet)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("RECENT VIDEOS")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !viewModel.recentVideos.isEmpty {
+                        Button("Clear All") {
+                            viewModel.clearRecentVideosIOS()
+                        }
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    }
                 }
             }
-            .navigationTitle("VTPlayer")
-            .navigationBarTitleDisplayMode(.large)
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle("VTPlayer")
+        .navigationBarTitleDisplayMode(.large)
+    }
     #endif
 
     #if os(iOS)
     @ViewBuilder
     private var iosPlayerView: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VTMetalRendererView(renderer: viewModel.renderer)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
-            
-            GeometryReader { geo in
-                HStack(spacing: 0) {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            triggerSeekLeft()
-                        }
-                        .onTapGesture(count: 1) {
-                            withAnimation {
-                                viewModel.showControls.toggle()
-                            }
-                        }
-                        .frame(width: geo.size.width * 0.35)
-                    
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 1) {
-                            withAnimation {
-                                viewModel.showControls.toggle()
-                            }
-                        }
-                        .frame(width: geo.size.width * 0.3)
-                    
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            triggerSeekRight()
-                        }
-                        .onTapGesture(count: 1) {
-                            withAnimation {
-                                viewModel.showControls.toggle()
-                            }
-                        }
-                        .frame(width: geo.size.width * 0.35)
-                }
+            if let player = viewModel.player {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
+            } else {
+                Color.black.ignoresSafeArea()
+                ProgressView()
+                    .tint(.white)
             }
-            .ignoresSafeArea()
-            
-            if showSeekIndicatorLeft {
-                VStack(spacing: 8) {
-                    Image(systemName: "backward.fill")
-                        .font(.title)
-                    Text("10s")
-                        .font(.caption)
-                        .bold()
-                }
-                .foregroundColor(.white)
-                .padding(20)
-                .background(Color.black.opacity(0.6))
-                .clipShape(Circle())
-                .transition(.scale.combined(with: .opacity))
-                .offset(x: -80)
-            }
-            
-            if showSeekIndicatorRight {
-                VStack(spacing: 8) {
-                    Image(systemName: "forward.fill")
-                        .font(.title)
-                    Text("10s")
-                        .font(.caption)
-                        .bold()
-                }
-                .foregroundColor(.white)
-                .padding(20)
-                .background(Color.black.opacity(0.6))
-                .clipShape(Circle())
-                .transition(.scale.combined(with: .opacity))
-                .offset(x: 80)
-            }
-            
-            VStack {
-                if viewModel.showControls {
-                    Spacer()
-                    
-                    HStack(spacing: 48) {
-                        Button(action: { viewModel.seekRelative(-15) }) {
-                            Image(systemName: "gobackward.15")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .padding(16)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [.white.opacity(0.25), .white.opacity(0.05)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                )
-                        }
-                        
-                        Button(action: { viewModel.togglePlayPause() }) {
-                            Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                                .font(.system(size: 36))
-                                .foregroundColor(.white)
-                                .padding(24)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [.white.opacity(0.4), .white.opacity(0.1)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1.5
-                                        )
-                                )
-                                .shadow(color: Color.blue.opacity(0.2), radius: 16, x: 0, y: 8)
-                        }
-                        
-                        Button(action: { viewModel.seekRelative(15) }) {
-                            Image(systemName: "goforward.15")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .padding(16)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [.white.opacity(0.25), .white.opacity(0.05)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                )
-                        }
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                    
-                    Spacer()
-                    
-                    VStack(spacing: 12) {
-                        HStack(spacing: 12) {
-                            Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.white)
-                                .frame(width: 50, alignment: .leading)
-                            
-                            GeometryReader { sliderGeo in
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.15))
-                                        .frame(height: 6)
-                                    
-                                    Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [.blue, .cyan],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .frame(width: max(0, min(sliderGeo.size.width, CGFloat((isScrubbing ? scrubTime : viewModel.currentTime) / (viewModel.duration > 0 ? viewModel.duration : 1.0)) * sliderGeo.size.width)), height: 6)
-                                        .shadow(color: Color.cyan.opacity(0.5), radius: 4, x: 0, y: 0)
-                                    
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 14, height: 14)
-                                        .overlay(Circle().stroke(Color.cyan, lineWidth: 1.5))
-                                        .shadow(color: Color.cyan.opacity(0.6), radius: 6, x: 0, y: 0)
-                                        .offset(x: max(0, min(sliderGeo.size.width - 14, CGFloat((isScrubbing ? scrubTime : viewModel.currentTime) / (viewModel.duration > 0 ? viewModel.duration : 1.0)) * sliderGeo.size.width - 7)))
-                                }
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { value in
-                                            isScrubbing = true
-                                            let percentage = Double(value.location.x / sliderGeo.size.width)
-                                            let newTime = max(0, min(viewModel.duration, percentage * viewModel.duration))
-                                            scrubTime = newTime
-                                            viewModel.scrub(to: newTime)
-                                        }
-                                        .onEnded { value in
-                                            isScrubbing = false
-                                            let percentage = Double(value.location.x / sliderGeo.size.width)
-                                            let newTime = max(0, min(viewModel.duration, percentage * viewModel.duration))
-                                            viewModel.seek(to: newTime)
-                                        }
-                                )
-                            }
-                            .frame(height: 14)
-                            .onChange(of: viewModel.currentTime) { _, newValue in
-                                if !isScrubbing {
-                                    scrubTime = newValue
-                                }
-                            }
-                            
-                            Text("-" + formatTime(max(0, viewModel.duration - (isScrubbing ? scrubTime : viewModel.currentTime))))
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.white)
-                                .frame(width: 50, alignment: .trailing)
-                        }
-                        
-                        HStack {
-                            Menu {
-                                ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0], id: \.self) { speed in
-                                    Button(action: { viewModel.playbackSpeed = speed }) {
-                                        HStack {
-                                            Text(String(format: "%.2fx", speed))
-                                            if viewModel.playbackSpeed == speed {
-                                                Spacer()
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "speedometer")
-                                    Text(String(format: "%.2fx", viewModel.playbackSpeed))
-                                }
-                                .font(.caption)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [.white.opacity(0.3), .white.opacity(0.05)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                )
-                            }
-                            
-                            Spacer()
-                            
-                            HStack(spacing: 4) {
-                                let hasSR = viewModel.superResolutionLevel > 0
-                                let hasQLSR = viewModel.qualitySuperResolutionScaleFactor > 0
-                                let hasFI = viewModel.frameInterpolationLevel > 0
-                                let hasHDR = viewModel.hdrStrength > 0
-                                let hasMB = viewModel.motionBlurStrength > 0
-                                let hasDN = viewModel.denoiseStrength > 0
-                                
-                                if hasSR {
-                                    Text("SR \(viewModel.superResolutionLevel)x")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.cyan.opacity(0.15)))
-                                        .overlay(Capsule().stroke(Color.cyan.opacity(0.4), lineWidth: 1))
-                                        .foregroundColor(.cyan)
-                                        .shadow(color: Color.cyan.opacity(0.25), radius: 4, x: 0, y: 0)
-                                }
-                                
-                                if hasQLSR {
-                                    Text("SR \(viewModel.qualitySuperResolutionScaleFactor)x QL")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.blue.opacity(0.15)))
-                                        .overlay(Capsule().stroke(Color.blue.opacity(0.4), lineWidth: 1))
-                                        .foregroundColor(.blue)
-                                        .shadow(color: Color.blue.opacity(0.25), radius: 4, x: 0, y: 0)
-                                }
-                                
-                                if hasFI {
-                                    Text("FI \(viewModel.frameInterpolationLevel)x")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.green.opacity(0.15)))
-                                        .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 1))
-                                        .foregroundColor(.green)
-                                        .shadow(color: Color.green.opacity(0.25), radius: 4, x: 0, y: 0)
-                                }
-                                
-                                if hasHDR {
-                                    Text("HDR")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.yellow.opacity(0.15)))
-                                        .overlay(Capsule().stroke(Color.yellow.opacity(0.4), lineWidth: 1))
-                                        .foregroundColor(.yellow)
-                                        .shadow(color: Color.yellow.opacity(0.25), radius: 4, x: 0, y: 0)
-                                }
-                                
-                                if hasMB {
-                                    Text("MB")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.purple.opacity(0.15)))
-                                        .overlay(Capsule().stroke(Color.purple.opacity(0.4), lineWidth: 1))
-                                        .foregroundColor(.purple)
-                                        .shadow(color: Color.purple.opacity(0.25), radius: 4, x: 0, y: 0)
-                                }
-                                
-                                if hasDN {
-                                    Text("DN")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.orange.opacity(0.15)))
-                                        .overlay(Capsule().stroke(Color.orange.opacity(0.4), lineWidth: 1))
-                                        .foregroundColor(.orange)
-                                        .shadow(color: Color.orange.opacity(0.25), radius: 4, x: 0, y: 0)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            Button(action: { showSettingsSheet = true }) {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.title3)
-                                    .foregroundColor(.white)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [.white.opacity(0.3), .white.opacity(0.05)],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 1
-                                            )
-                                    )
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(24)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.35), .white.opacity(0.05), .clear],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: Color.blue.opacity(0.12), radius: 12, x: 0, y: 6)
-                    .padding(.horizontal)
-                    .padding(.bottom, 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .safeAreaPadding()
             
             if viewModel.showSidebar {
                 iosDiagnosticsOverlay
             }
         }
-        .gesture(
-            DragGesture()
-                .onEnded { value in
-                    if value.translation.height > 100 {
-                        withAnimation {
-                            viewModel.stop()
-                            viewModel.videoURL = nil
-                        }
-                    }
-                }
-        )
-        .sheet(isPresented: $showSettingsSheet) {
-            PlaybackSettingsView(viewModel: viewModel)
-                .presentationDetents([.medium, .large])
-        }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if viewModel.showControls {
-                    Button(action: {
-                        withAnimation {
-                            viewModel.showSidebar.toggle()
-                        }
-                    }) {
-                        Image(systemName: "chart.bar.xaxis")
-                            .font(.body)
-                            .foregroundColor(viewModel.showSidebar ? .cyan : .white)
+                Button(action: {
+                    withAnimation {
+                        viewModel.showSidebar.toggle()
                     }
-                    .transition(.opacity)
+                }) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.body)
+                        .foregroundColor(viewModel.showSidebar ? .cyan : .white)
+                }
+            }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showSettingsSheet = true
+                }) {
+                    Image(systemName: "gearshape")
+                        .font(.body)
+                        .foregroundColor(.white)
                 }
             }
         }
+        .sheet(isPresented: $showSettingsSheet) {
+            PlaybackSettingsView(viewModel: viewModel)
+                .presentationDetents([.medium, .large])
+        }
+        .onDisappear {
+            viewModel.stop()
+            viewModel.videoURL = nil
+        }
+    }
     }
     
     @ViewBuilder
