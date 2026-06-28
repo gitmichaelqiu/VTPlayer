@@ -13,6 +13,7 @@ import CoreVideo
 
 #if canImport(UIKit)
 import UIKit
+import QuartzCore
 #elseif canImport(AppKit)
 import AppKit
 #endif
@@ -172,7 +173,11 @@ final class VTPlayerViewModel {
     private var videoOutput: AVPlayerItemVideoOutput?
     private var producerTask: Task<Void, Never>?
     private var consumerTask: Task<Void, Never>?
+    #if os(macOS)
     private var displayLink: CVDisplayLink?
+    #else
+    private var displayLink: CADisplayLink?
+    #endif
     private var processedFramesCount = 0
     private var fpsTimer = DispatchTime.now()
     private var diagTimer = DispatchTime.now()
@@ -563,10 +568,17 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         player.pause()
         self.isPaused = true
+        #if os(macOS)
         if let link = displayLink {
             CVDisplayLinkStop(link)
             self.displayLink = nil
         }
+        #else
+        if let link = displayLink {
+            link.invalidate()
+            self.displayLink = nil
+        }
+        #endif
         self.saveProgress()
         self.saveVideoSettings()
         self.userActivityDetected()
@@ -791,16 +803,24 @@ final class VTPlayerViewModel {
             await coordinator.endSession()
         }
         
-        // Start CVDisplayLink to drive the rendering consumer
+        // Start CVDisplayLink (macOS) or CADisplayLink (iOS)
+        #if os(macOS)
         if let link = self.displayLink {
             CVDisplayLinkStop(link)
             self.displayLink = nil
         }
+        #else
+        if let link = self.displayLink {
+            link.invalidate()
+            self.displayLink = nil
+        }
+        #endif
         
         self.processedFramesCount = 0
         self.fpsTimer = DispatchTime.now()
         self.diagTimer = DispatchTime.now()
         
+        #if os(macOS)
         var newLink: CVDisplayLink?
         if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
             let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
@@ -815,6 +835,11 @@ final class VTPlayerViewModel {
             CVDisplayLinkStart(link)
             self.displayLink = link
         }
+        #else
+        let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
+        link.add(to: .main, forMode: .common)
+        self.displayLink = link
+        #endif
 
         audioSyncTask?.cancel()
         audioSyncTask = Task {
@@ -899,6 +924,12 @@ final class VTPlayerViewModel {
         }
     }
 
+    #if !os(macOS)
+    @objc private func caDisplayLinkTick() {
+        self.tickDisplayLink()
+    }
+    #endif
+
     /// Pauses/stops playback entirely.
     func stop() {
         if self.currentTime > 0 {
@@ -909,10 +940,17 @@ final class VTPlayerViewModel {
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
+        #if os(macOS)
         if let link = displayLink {
             CVDisplayLinkStop(link)
             self.displayLink = nil
         }
+        #else
+        if let link = displayLink {
+            link.invalidate()
+            self.displayLink = nil
+        }
+        #endif
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
