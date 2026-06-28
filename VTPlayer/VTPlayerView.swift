@@ -1379,6 +1379,14 @@ struct VTPlayerView: View {
     @State private var hoverSH = false
     @State private var hoverHDR = false
 
+    /// Tracks whether the navigation bar should be visually hidden during
+    /// fullscreen playback.  We delay setting this so the navigation bar
+    /// frame stays in place while the controls animation completes, avoiding
+    /// a sudden upward jump of the overlay.
+    #if os(iOS)
+    @State private var delayedNavBarHidden = false
+    #endif
+
     var body: some View {
         Group {
             #if os(iOS)
@@ -1810,10 +1818,24 @@ extension VTPlayerView {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        // Keep toolbar always visible to prevent the navigation bar frame
-        // from collapsing during fullscreen controls animation — hiding the
-        // frame causes the video + controls overlay to jump up abruptly.
-        .toolbar(.visible, for: .navigationBar)
+        // Delay hiding the navigation bar so its frame doesn't collapse while
+        // the player controls are still animating out — that would cause the
+        // video + controls overlay to jump up abruptly at the end.
+        .toolbar(delayedNavBarHidden ? .hidden : .visible, for: .navigationBar)
+        .onChange(of: viewModel.showControls) { _, visible in
+            if visible {
+                delayedNavBarHidden = false
+            } else {
+                Task { [weak viewModel] in
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    // Re-check the current state — the user may have tapped
+                    // to show controls again during the delay.
+                    if await viewModel?.showControls == false {
+                        delayedNavBarHidden = true
+                    }
+                }
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
