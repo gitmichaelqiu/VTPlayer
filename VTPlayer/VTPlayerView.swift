@@ -2507,24 +2507,49 @@ struct PlaybackSettingsView: View {
 #if os(iOS)
 class CustomAVPlayerViewController: AVPlayerViewController {
     var onControlsVisibilityChange: ((Bool) -> Void)?
-    private var observer: NSKeyValueObservation?
-    private var controlsView: UIView?
+    private var lastKnownVisibility: Bool = true
+    private var checkTimer: Timer?
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
-        if let found = findControlsView(in: view) {
-            self.controlsView = found
-            observer = found.observe(\.isHidden, options: [.initial, .new]) { [weak self] v, _ in
-                self?.onControlsVisibilityChange?(!v.isHidden)
+        startTimer()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopTimer()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        disableFullscreenButton(in: view)
+        checkControlsVisibility()
+    }
+    
+    private func startTimer() {
+        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.checkControlsVisibility()
+        }
+    }
+    
+    private func stopTimer() {
+        checkTimer?.invalidate()
+        checkTimer = nil
+    }
+    
+    private func checkControlsVisibility() {
+        if let controls = findControlsView(in: view) {
+            let isVisible = !controls.isHidden && controls.alpha > 0.1 && controls.superview != nil
+            if isVisible != lastKnownVisibility {
+                lastKnownVisibility = isVisible
+                onControlsVisibilityChange?(isVisible)
             }
-            onControlsVisibilityChange?(!found.isHidden)
-        } else if let container = view.subviews.first, let last = container.subviews.last {
-            self.controlsView = last
-            observer = last.observe(\.isHidden, options: [.initial, .new]) { [weak self] v, _ in
-                self?.onControlsVisibilityChange?(!v.isHidden)
+        } else {
+            // If controls view is not found, default to visible so the user doesn't get stuck
+            if lastKnownVisibility != true {
+                lastKnownVisibility = true
+                onControlsVisibilityChange?(true)
             }
-            onControlsVisibilityChange?(!last.isHidden)
         }
     }
     
@@ -2541,8 +2566,32 @@ class CustomAVPlayerViewController: AVPlayerViewController {
         return nil
     }
     
-    deinit {
-        observer?.invalidate()
+    private func disableFullscreenButton(in view: UIView) {
+        let className = String(describing: type(of: view))
+        
+        // Hide native fullscreen view containers
+        if className.contains("FullScreen") || className.contains("Fullscreen") {
+            view.isHidden = true
+            if let control = view as? UIControl {
+                control.isEnabled = false
+            }
+        }
+        
+        // Disable individual buttons representing fullscreen
+        if let button = view as? UIButton {
+            let imageDesc = button.currentImage?.description.lowercased() ?? ""
+            let label = button.accessibilityLabel?.lowercased() ?? ""
+            if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") || 
+               imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
+               label.contains("fullscreen") || label.contains("full screen") {
+                button.isHidden = true
+                button.isEnabled = false
+            }
+        }
+        
+        for subview in view.subviews {
+            disableFullscreenButton(in: subview)
+        }
     }
 }
 
