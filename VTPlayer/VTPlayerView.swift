@@ -1399,6 +1399,8 @@ struct VTPlayerView: View {
         let array = UserDefaults.standard.stringArray(forKey: "VTPinnedVideos") ?? []
         return Set(array)
     }()
+    @State private var isPinnedExpanded = true
+    @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
     @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
     @AppStorage("VTDefaultQSRLevel") private var defaultQSRLevel = 0
@@ -1777,91 +1779,24 @@ extension VTPlayerView {
                 }()
                 
                 List {
-                    ForEach(sortedVideos, id: \.self) { url in
-                        Button(action: {
-                            viewModel.openVideo(url)
-                        }) {
-                            HStack(spacing: 12) {
-                                VideoThumbnailView(url: url)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 6) {
-                                        if pinnedVideos.contains(url.lastPathComponent) {
-                                            Image(systemName: "pin.fill")
-                                                .font(.caption2)
-                                                .foregroundColor(.orange)
-                                        }
-                                        Text(url.lastPathComponent)
-                                            .font(.body)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                            .lineLimit(2)
-                                    }
-                                    
-                                    Text(formatDateAdded(for: url))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+                    let pinnedList = sortedVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
+                    let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
+                    
+                    if !pinnedList.isEmpty {
+                        Section("Pinned", isExpanded: $isPinnedExpanded) {
+                            ForEach(pinnedList, id: \.self) { url in
+                                videoRow(for: url)
                             }
                         }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                togglePin(for: url)
-                            } label: {
-                                Label(pinnedVideos.contains(url.lastPathComponent) ? "Unpin" : "Pin", 
-                                      systemImage: pinnedVideos.contains(url.lastPathComponent) ? "pin.slash.fill" : "pin.fill")
-                            }
-                            .tint(.orange)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                }
-                            } label: {
-                                Label("Remove", systemImage: "trash")
+                        
+                        Section("Videos") {
+                            ForEach(unpinnedList, id: \.self) { url in
+                                videoRow(for: url)
                             }
                         }
-                        .contextMenu {
-                            ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
-                            
-                            Button {
-                                togglePin(for: url)
-                            } label: {
-                                let isPinned = pinnedVideos.contains(url.lastPathComponent)
-                                Label(isPinned ? "Unpin Video" : "Pin Video", systemImage: isPinned ? "pin.slash" : "pin")
-                            }
-                            
-                            Button {
-                                videoToRename = url
-                                renameText = url.deletingPathExtension().lastPathComponent
-                                showRenameAlert = true
-                            } label: {
-                                Label("Rename File", systemImage: "pencil")
-                            }
-                            
-                            Button {
-                                UIPasteboard.general.string = url.lastPathComponent
-                            } label: {
-                                Label("Copy Name", systemImage: "doc.on.doc")
-                            }
-                            
-                            Divider()
-                            
-                            Button(role: .destructive) {
-                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                }
-                            } label: {
-                                Label("Remove from List", systemImage: "trash")
-                            }
+                    } else {
+                        ForEach(unpinnedList, id: \.self) { url in
+                            videoRow(for: url)
                         }
                     }
                 }
@@ -1886,6 +1821,88 @@ extension VTPlayerView {
             }
         } message: {
             Text("Enter a new name for the video file.")
+        }
+    }
+
+    @ViewBuilder
+    private func videoRow(for url: URL) -> some View {
+        Button(action: {
+            viewModel.openVideo(url)
+        }) {
+            HStack(spacing: 12) {
+                VideoThumbnailView(url: url)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
+                        .font(.body)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                    
+                    Text(formatDateAdded(for: url))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                togglePin(for: url)
+            } label: {
+                Label(pinnedVideos.contains(url.lastPathComponent) ? "Unpin" : "Pin", 
+                      systemImage: pinnedVideos.contains(url.lastPathComponent) ? "pin.slash.fill" : "pin.fill")
+            }
+            .tint(.orange)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
+                }
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
+            
+            Button {
+                togglePin(for: url)
+            } label: {
+                let isPinned = pinnedVideos.contains(url.lastPathComponent)
+                Label(isPinned ? "Unpin Video" : "Pin Video", systemImage: isPinned ? "pin.slash" : "pin")
+            }
+            
+            Button {
+                videoToRename = url
+                renameText = url.deletingPathExtension().lastPathComponent
+                showRenameAlert = true
+            } label: {
+                Label("Rename File", systemImage: "pencil")
+            }
+            
+            Button {
+                UIPasteboard.general.string = url.lastPathComponent
+            } label: {
+                Label("Copy Name", systemImage: "doc.on.doc")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
+                }
+            } label: {
+                Label("Remove from List", systemImage: "trash")
+            }
         }
     }
 
@@ -1996,6 +2013,11 @@ extension VTPlayerView {
                         .foregroundColor(.secondary)
                         .frame(width: 24, alignment: .trailing)
                 }
+            }
+
+            // Gallery Configuration Section
+            Section("Gallery Configuration") {
+                Toggle("Show File Extensions", isOn: $showFileExtensions)
             }
 
             // Copyright Row
