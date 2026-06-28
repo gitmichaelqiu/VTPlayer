@@ -1553,11 +1553,34 @@ extension VTPlayerView {
         TabView {
             NavigationStack {
                 iosGalleryView
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Menu {
+                                Button(action: { showFileImporter = true }) {
+                                    Label("Browse Files", systemImage: "folder.fill")
+                                }
+
+                                #if canImport(PhotosUI)
+                                PhotosPicker(
+                                    selection: $selectedPhotoItem,
+                                    matching: .videos,
+                                    photoLibrary: .shared()
+                                ) {
+                                    Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                                }
+                                #endif
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title3)
+                                    .imageScale(.large)
+                            }
+                        }
+                    }
             }
             .tabItem {
                 Label("Gallery", systemImage: "play.square.stack.fill")
             }
-            
+
             NavigationStack {
                 iosAboutView
             }
@@ -1572,33 +1595,6 @@ extension VTPlayerView {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 let hasVideos = !viewModel.recentVideos.isEmpty
-
-                // MARK: - Import Buttons (always visible, native bordered style)
-                HStack(spacing: 12) {
-                    Button(action: { showFileImporter = true }) {
-                        Label("Browse Files", systemImage: "folder.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(.blue)
-
-                    #if canImport(PhotosUI)
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .videos,
-                        photoLibrary: .shared()
-                    ) {
-                        Label("Photos Library", systemImage: "photo.on.rectangle.angled")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(.purple)
-                    #endif
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
 
                 // MARK: - Header + Sort + Trash (always visible)
                 HStack {
@@ -1694,28 +1690,6 @@ extension VTPlayerView {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Gallery")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button(action: { showFileImporter = true }) {
-                        Label("Browse Files", systemImage: "folder.fill")
-                    }
-
-                    #if canImport(PhotosUI)
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .videos,
-                        photoLibrary: .shared()
-                    ) {
-                        Label("Photos Library", systemImage: "photo.on.rectangle.angled")
-                    }
-                    #endif
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
-                }
-            }
-        }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
