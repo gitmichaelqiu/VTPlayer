@@ -1625,59 +1625,6 @@ extension VTPlayerView {
             
             VStack {
                 if viewModel.showControls {
-                    HStack {
-                        Button(action: {
-                            withAnimation {
-                                viewModel.stop()
-                                viewModel.videoURL = nil
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .fontWeight(.bold)
-                                Text("Back")
-                                    .fontWeight(.semibold)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(20)
-                        }
-                        
-                        Spacer()
-                        
-                        if let url = viewModel.videoURL {
-                            Text(url.lastPathComponent)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .frame(maxWidth: 200)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 6)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(16)
-                        }
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            withAnimation {
-                                viewModel.showSidebar.toggle()
-                            }
-                        }) {
-                            Image(systemName: "chart.bar.xaxis")
-                                .font(.title3)
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(viewModel.showSidebar ? Color.cyan.opacity(0.3) : Color.white.opacity(0.15))
-                                .clipShape(Circle())
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    
                     Spacer()
                     
                     HStack(spacing: 48) {
@@ -1688,6 +1635,17 @@ extension VTPlayerView {
                                 .padding(16)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [.white.opacity(0.25), .white.opacity(0.05)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                )
                         }
                         
                         Button(action: { viewModel.togglePlayPause() }) {
@@ -1699,8 +1657,16 @@ extension VTPlayerView {
                                 .clipShape(Circle())
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [.white.opacity(0.4), .white.opacity(0.1)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1.5
+                                        )
                                 )
+                                .shadow(color: Color.blue.opacity(0.2), radius: 16, x: 0, y: 8)
                         }
                         
                         Button(action: { viewModel.seekRelative(15) }) {
@@ -1710,6 +1676,17 @@ extension VTPlayerView {
                                 .padding(16)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [.white.opacity(0.25), .white.opacity(0.05)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                )
                         }
                     }
                     .transition(.scale.combined(with: .opacity))
@@ -1859,11 +1836,19 @@ extension VTPlayerView {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(.ultraThinMaterial)
-                    .cornerRadius(20)
+                    .cornerRadius(24)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.35), .white.opacity(0.05), .clear],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
+                    .shadow(color: Color.blue.opacity(0.12), radius: 12, x: 0, y: 6)
                     .padding(.horizontal)
                     .padding(.bottom, 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1889,6 +1874,31 @@ extension VTPlayerView {
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
                 .presentationDetents([.medium, .large])
+        }
+        .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if viewModel.showControls {
+                    Button(action: {
+                        withAnimation {
+                            viewModel.showSidebar.toggle()
+                        }
+                    }) {
+                        Image(systemName: "chart.bar.xaxis")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(viewModel.showSidebar ? Color.cyan.opacity(0.3) : Color.white.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+                    .transition(.opacity)
+                }
+            }
         }
     }
     
