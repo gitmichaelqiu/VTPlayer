@@ -392,11 +392,7 @@ final class VTPlayerViewModel {
         var targetURL = url
         
         #if os(iOS)
-        self.addToRecentVideosIOS(url)
-        if let oldTemp = tempLocalURL {
-            try? FileManager.default.removeItem(at: oldTemp)
-            self.tempLocalURL = nil
-        }
+        self.tempLocalURL = nil
         
         // Release any previously held security-scoped resource
         if let prev = securityScopedURL {
@@ -432,11 +428,16 @@ final class VTPlayerViewModel {
             targetURL = url
         }
         
-        // Release security-scoped access now that the copy is complete
+        // Release security-scoped access now that the copy is complete,
+        // UNLESS we failed to copy and fell back to the original URL.
         if isSecurityScoped {
-            url.stopAccessingSecurityScopedResource()
-            self.securityScopedURL = nil
+            if targetURL.standardizedFileURL != url.standardizedFileURL {
+                url.stopAccessingSecurityScopedResource()
+                self.securityScopedURL = nil
+            }
         }
+        
+        self.addToRecentVideosIOS(targetURL)
         #endif
         
         self.videoURL = targetURL
@@ -1064,10 +1065,7 @@ final class VTPlayerViewModel {
         }
         #endif
         #if os(iOS)
-        if let temp = tempLocalURL {
-            try? FileManager.default.removeItem(at: temp)
-            self.tempLocalURL = nil
-        }
+        self.tempLocalURL = nil
         if let scoped = securityScopedURL {
             scoped.stopAccessingSecurityScopedResource()
             self.securityScopedURL = nil
@@ -1146,11 +1144,35 @@ final class VTPlayerViewModel {
     }
 
     #if os(iOS)
+    private func deleteTempFile(for url: URL) {
+        let tempDir = FileManager.default.temporaryDirectory
+        if url.standardizedFileURL.path.hasPrefix(tempDir.standardizedFileURL.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     private func loadRecentVideosIOS() {
         let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideos") ?? []
+        let loadedURLs = paths.compactMap { URL(string: $0) }
+        
+        // Clean up temp directory files that are NOT in the recents list
+        let tempDir = FileManager.default.temporaryDirectory
+        if let tempFiles = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) {
+            let activePaths = Set(loadedURLs.map { $0.standardizedFileURL.path })
+            for fileURL in tempFiles {
+                if !activePaths.contains(fileURL.standardizedFileURL.path) {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+            }
+        }
+        
         // Filter out stale temp URLs whose files no longer exist
-        self.recentVideos = paths.compactMap { URL(string: $0) }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        self.recentVideos = loadedURLs.filter { url in
+            if url.standardizedFileURL.path.hasPrefix(tempDir.standardizedFileURL.path) {
+                return FileManager.default.fileExists(atPath: url.path)
+            }
+            return true // Keep external URLs if any
+        }
         saveRecentVideosIOS() // persist cleaned list
     }
     
@@ -1163,6 +1185,10 @@ final class VTPlayerViewModel {
         var list = self.recentVideos.filter { $0.absoluteString != url.absoluteString }
         list.insert(url, at: 0)
         if list.count > 15 {
+            // Delete temp files of items falling off the list
+            for staleURL in list.suffix(from: 15) {
+                deleteTempFile(for: staleURL)
+            }
             list = Array(list.prefix(15))
         }
         self.recentVideos = list
@@ -1170,11 +1196,19 @@ final class VTPlayerViewModel {
     }
     
     func deleteRecentVideoIOS(at indexSet: IndexSet) {
+        for idx in indexSet {
+            if idx < recentVideos.count {
+                deleteTempFile(for: recentVideos[idx])
+            }
+        }
         self.recentVideos.remove(atOffsets: indexSet)
         saveRecentVideosIOS()
     }
     
     func clearRecentVideosIOS() {
+        for url in recentVideos {
+            deleteTempFile(for: url)
+        }
         self.recentVideos.removeAll()
         saveRecentVideosIOS()
     }
@@ -1483,17 +1517,18 @@ extension VTPlayerView {
     private var iosPlayerView: some View {
         ZStack {
             if let player = viewModel.player {
-                VideoPlayer(player: player)
-                    .ignoresSafeArea()
+                NativeVideoPlayer(
+                    player: player,
+                    title: viewModel.videoURL?.lastPathComponent ?? "Video",
+                    showControls: $viewModel.showControls
+                )
+                .ignoresSafeArea()
             } else {
                 Color.black.ignoresSafeArea()
                 ProgressView()
                     .tint(.white)
             }
         }
-        .simultaneousGesture(TapGesture().onEnded {
-            viewModel.toggleControls()
-        })
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
@@ -2468,3 +2503,83 @@ struct PlaybackSettingsView: View {
         }
     }
 }
+
+#if os(iOS)
+class CustomAVPlayerViewController: AVPlayerViewController {
+    var onControlsVisibilityChange: ((Bool) -> Void)?
+    private var observer: NSKeyValueObservation?
+    private var controlsView: UIView?
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        if let found = findControlsView(in: view) {
+            self.controlsView = found
+            observer = found.observe(\.isHidden, options: [.initial, .new]) { [weak self] v, _ in
+                self?.onControlsVisibilityChange?(!v.isHidden)
+            }
+            onControlsVisibilityChange?(!found.isHidden)
+        } else if let container = view.subviews.first, let last = container.subviews.last {
+            self.controlsView = last
+            observer = last.observe(\.isHidden, options: [.initial, .new]) { [weak self] v, _ in
+                self?.onControlsVisibilityChange?(!v.isHidden)
+            }
+            onControlsVisibilityChange?(!last.isHidden)
+        }
+    }
+    
+    private func findControlsView(in view: UIView) -> UIView? {
+        let className = String(describing: type(of: view))
+        if className.contains("PlaybackControls") || className.contains("ControlsContainer") || className.contains("TransportBar") {
+            return view
+        }
+        for subview in view.subviews {
+            if let found = findControlsView(in: subview) {
+                return found
+            }
+        }
+        return nil
+    }
+    
+    deinit {
+        observer?.invalidate()
+    }
+}
+
+struct NativeVideoPlayer: UIViewControllerRepresentable {
+    let player: AVPlayer
+    let title: String
+    @Binding var showControls: Bool
+    
+    func makeUIViewController(context: Context) -> CustomAVPlayerViewController {
+        let controller = CustomAVPlayerViewController()
+        controller.player = player
+        controller.showsPlaybackControls = true
+        
+        // Apply title to AVPlayerItem metadata so the system player shows the title natively
+        if let currentItem = player.currentItem {
+            let titleItem = AVMutableMetadataItem()
+            titleItem.identifier = .commonIdentifierTitle
+            titleItem.value = title as NSString
+            currentItem.externalMetadata = [titleItem]
+        }
+        
+        controller.onControlsVisibilityChange = { visible in
+            DispatchQueue.main.async {
+                self.showControls = visible
+            }
+        }
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: CustomAVPlayerViewController, context: Context) {
+        // Apply title to AVPlayerItem metadata if item changes
+        if let currentItem = player.currentItem, currentItem.externalMetadata.isEmpty {
+            let titleItem = AVMutableMetadataItem()
+            titleItem.identifier = .commonIdentifierTitle
+            titleItem.value = title as NSString
+            currentItem.externalMetadata = [titleItem]
+        }
+    }
+}
+#endif
