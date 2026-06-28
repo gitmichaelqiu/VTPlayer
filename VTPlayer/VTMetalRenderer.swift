@@ -45,6 +45,9 @@ public final class VTMetalRenderer: MTKView {
         self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         self.enableSetNeedsDisplay = true
         self.isPaused = true // We manually trigger drawing when a new frame is received
+        #if os(iOS)
+        self.contentMode = .redraw
+        #endif
 
         self.commandQueue = device.makeCommandQueue()
         if let queue = commandQueue {
@@ -157,4 +160,13 @@ public final class VTMetalRenderer: MTKView {
         commandBuffer.present(drawable)
         commandBuffer.commit()
     }
+    
+    #if os(iOS)
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        // Force the MTKView to trigger draw() when bounds change due to rotation,
+        // ensuring the aspect ratio transforms recalculate correctly while paused.
+        self.setNeedsDisplay(self.bounds)
+    }
+    #endif
 }

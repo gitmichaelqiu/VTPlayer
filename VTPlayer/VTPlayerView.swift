@@ -1641,7 +1641,7 @@ extension VTPlayerView {
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.medium])
         }
         .sheet(isPresented: $showDiagnosticsSheet) {
             iosDiagnosticsSheet
