@@ -208,6 +208,7 @@ final class VTPlayerViewModel {
     #endif
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
+    private var timeJumpedObserver: Any?
     private var rateObserver: NSKeyValueObservation?
     private var playbackGeneration: UInt64 = 0
     private var isInitializingPipeline = false
@@ -358,6 +359,19 @@ final class VTPlayerViewModel {
                         }
                     }
                     self.playerItemObserver = observer
+                    
+                    // Observe time jumps (seeks) to sync pipeline iterator
+                    let jumpObserver = NotificationCenter.default.addObserver(
+                        forName: .AVPlayerItemTimeJumped,
+                        object: item,
+                        queue: .main
+                    ) { [weak self] _ in
+                        guard let self = self else { return }
+                        Task { @MainActor in
+                            self.handleTimeJump()
+                        }
+                    }
+                    self.timeJumpedObserver = jumpObserver
                     
                     // Observe AVPlayer's timeControlStatus to sync player state with isPaused
                     self.rateObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, change in
@@ -592,6 +606,25 @@ final class VTPlayerViewModel {
                     self.player?.rate = targetRate
                 }
                 await self.triggerSingleFrameUpdate(at: time)
+            }
+        }
+    }
+
+    private func handleTimeJump() {
+        guard let player = player else { return }
+        let currentTime = player.currentTime()
+        
+        self.processedFrameCache.removeAll()
+        self.lastPulledTime = currentTime
+        self.lastRenderedPTS = currentTime
+        
+        // If paused (e.g. scrubbing), read and draw a single frame immediately
+        // at the new seek position so the screen updates in real time.
+        if self.isPaused, let url = videoURL {
+            Task { @MainActor in
+                if let pixelBuffer = self.readSingleFrame(from: url, at: currentTime) {
+                    self.renderer.render(pixelBuffer: pixelBuffer)
+                }
             }
         }
     }
@@ -1112,6 +1145,10 @@ final class VTPlayerViewModel {
         if let observer = playerItemObserver {
             NotificationCenter.default.removeObserver(observer)
             playerItemObserver = nil
+        }
+        if let observer = timeJumpedObserver {
+            NotificationCenter.default.removeObserver(observer)
+            timeJumpedObserver = nil
         }
         rateObserver?.invalidate()
         rateObserver = nil
