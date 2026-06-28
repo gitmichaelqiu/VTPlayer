@@ -1477,9 +1477,6 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-
-            // Enhancement status pills overlaid at top
-            iosEnhancementPills
         }
         .onTapGesture {
             viewModel.userActivityDetected()
@@ -1520,77 +1517,6 @@ extension VTPlayerView {
             viewModel.stop()
             viewModel.videoURL = nil
         }
-    }
-
-    // MARK: - Enhancement Pills (simplified overlay)
-    @ViewBuilder
-    private var iosEnhancementPills: some View {
-        VStack {
-            HStack(spacing: 6) {
-                let hasSR = viewModel.superResolutionLevel > 0
-                let hasQLSR = viewModel.qualitySuperResolutionScaleFactor > 0
-                let hasFI = viewModel.frameInterpolationLevel > 0
-                let hasHDR = viewModel.hdrStrength > 0
-                let hasMB = viewModel.motionBlurStrength > 0
-                let hasDN = viewModel.denoiseStrength > 0
-
-                if hasSR {
-                    Text("SR \(viewModel.superResolutionLevel)x")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.cyan)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.cyan.opacity(0.15)))
-                }
-                if hasQLSR {
-                    Text("SR \(viewModel.qualitySuperResolutionScaleFactor)x QL")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.blue.opacity(0.15)))
-                }
-                if hasFI {
-                    Text("FI \(viewModel.frameInterpolationLevel)x")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.green.opacity(0.15)))
-                }
-                if hasHDR {
-                    Text("HDR")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.yellow)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.yellow.opacity(0.15)))
-                }
-                if hasMB {
-                    Text("MB")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.purple)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.purple.opacity(0.15)))
-                }
-                if hasDN {
-                    Text("DN")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.orange.opacity(0.15)))
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial.opacity(0.7))
-            .cornerRadius(20)
-
-            Spacer()
-        }
-        .padding(.top, 60)
     }
 
     @ViewBuilder
