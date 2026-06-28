@@ -1054,7 +1054,6 @@ final class VTPlayerViewModel {
 /// The premium media player user interface view.
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
-    @Environment(\.horizontalSizeClass) var sizeClass
     @State private var showFileImporter = false
     #if canImport(PhotosUI)
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
@@ -1076,7 +1075,7 @@ struct VTPlayerView: View {
     var body: some View {
         Group {
             #if os(iOS)
-            if sizeClass == .compact {
+            if UIDevice.current.userInterfaceIdiom == .phone {
                 iphoneLayout
             } else {
                 splitViewLayout
@@ -1249,6 +1248,16 @@ struct VTPlayerView: View {
                         }
                     })
                     .accentColor(.cyan)
+                    .onChange(of: viewModel.currentTime) { _, newValue in
+                        if !isScrubbing {
+                            scrubTime = newValue
+                        }
+                    }
+                    .onChange(of: scrubTime) { _, newValue in
+                        if isScrubbing {
+                            viewModel.scrub(to: newValue)
+                        }
+                    }
                     
                     Text(formatTime(viewModel.duration))
                         .font(.system(.caption2, design: .monospaced))
