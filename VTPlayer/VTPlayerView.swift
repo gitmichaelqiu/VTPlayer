@@ -1565,26 +1565,25 @@ extension VTPlayerView {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    withAnimation {
-                        viewModel.showSidebar.toggle()
-                    }
-                }) {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.body)
-                        .foregroundColor(viewModel.showSidebar ? .cyan : .white)
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showSettingsSheet = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                        .symbolRenderingMode(.hierarchical)
                 }
+                .labelStyle(.iconOnly)
             }
 
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showSettingsSheet = true
-                }) {
-                    Image(systemName: "gearshape")
-                        .font(.body)
-                        .foregroundColor(.white)
+                Button {
+                    withAnimation { viewModel.showSidebar.toggle() }
+                } label: {
+                    Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
+                        .symbolRenderingMode(.hierarchical)
                 }
+                .labelStyle(.iconOnly)
+                .tint(viewModel.showSidebar ? .cyan : nil)
             }
         }
         .sheet(isPresented: $showSettingsSheet) {
