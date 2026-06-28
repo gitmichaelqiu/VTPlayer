@@ -182,6 +182,7 @@ final class VTPlayerViewModel {
     private var fpsTimer = DispatchTime.now()
     private var diagTimer = DispatchTime.now()
     private var processedFrameCache: [VTFrame] = []
+    private var securityScopedURL: URL?
     private var lastPulledTime: CMTime = .zero
     private var playerItemObserver: Any?
     private var playbackGeneration: UInt64 = 0
@@ -237,22 +238,7 @@ final class VTPlayerViewModel {
         #endif
     }
     
-    /// Launches file picker (macOS-only OpenPanel, stubbed on iOS).
-    func selectFile() {
-        #if os(macOS)
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.movie, .quickTimeMovie, .mpeg4Movie]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            self.stop()
-            self.videoURL = url
-            self.setupPlayer(with: url)
-        }
-        #endif
-    }
+
     
     private func setupPlayer(with url: URL) {
         let asset = AVAsset(url: url)
@@ -378,10 +364,19 @@ final class VTPlayerViewModel {
     }
     #endif
     
-    func openRecentVideo(_ url: URL) {
+    func openVideo(_ url: URL) {
         self.stop()
+        #if os(iOS)
+        if url.startAccessingSecurityScopedResource() {
+            self.securityScopedURL = url
+        }
+        #endif
         self.videoURL = url
         self.setupPlayer(with: url)
+    }
+    
+    func openRecentVideo(_ url: URL) {
+        self.openVideo(url)
     }
     
     #if os(macOS)
@@ -963,6 +958,12 @@ final class VTPlayerViewModel {
             self.displayLink = nil
         }
         #endif
+        #if os(iOS)
+        if let secUrl = securityScopedURL {
+            secUrl.stopAccessingSecurityScopedResource()
+            self.securityScopedURL = nil
+        }
+        #endif
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
@@ -1048,6 +1049,7 @@ final class VTPlayerViewModel {
 /// The premium media player user interface view.
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
+    @State private var showFileImporter = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     @State private var scrubTime: Double = 0.0
@@ -1062,53 +1064,64 @@ struct VTPlayerView: View {
     @State private var hoverHDR = false
 
     var body: some View {
-        if !viewModel.isFullScreen {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                leftSidebar
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
-            } detail: {
-                videoContent
-                    .inspector(isPresented: Binding(
-                        get: { viewModel.showSidebar && viewModel.videoURL != nil },
-                        set: { viewModel.showSidebar = $0 }
-                    )) {
-                        rightSidebar
-                            .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
-                    }
-            }
-            .navigationSplitViewStyle(.balanced)
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button(action: { viewModel.selectFile() }) {
-                        Label("Open Video", systemImage: "plus")
-                    }
-                    .help("Open a local video file")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { viewModel.showSidebar.toggle() }) {
-                        Label("Toggle Sidebar", systemImage: "sidebar.right")
-                    }
-                    .help("Toggle diagnostics and metadata sidebar panel")
-                }
-            }
-            .macWindowToolbarFullScreenVisibility()
-        } else {
-            videoContent
-                .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        Button(action: { viewModel.selectFile() }) {
-                            Label("Open Video", systemImage: "plus")
+        Group {
+            if !viewModel.isFullScreen {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    leftSidebar
+                        .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button(action: { showFileImporter = true }) {
+                                    Label("Open Video", systemImage: "plus")
+                                }
+                                .help("Open a local video file")
+                            }
                         }
-                        .help("Open a local video file")
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(action: { viewModel.showSidebar.toggle() }) {
-                            Label("Toggle Sidebar", systemImage: "sidebar.right")
+                } detail: {
+                    videoContent
+                        .inspector(isPresented: Binding(
+                            get: { viewModel.showSidebar && viewModel.videoURL != nil },
+                            set: { viewModel.showSidebar = $0 }
+                        )) {
+                            rightSidebar
+                                .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
                         }
-                        .help("Toggle diagnostics and metadata sidebar panel")
-                    }
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button(action: { viewModel.showSidebar.toggle() }) {
+                                    Label("Toggle Sidebar", systemImage: "sidebar.right")
+                                }
+                                .help("Toggle diagnostics and metadata sidebar panel")
+                            }
+                        }
                 }
+                .navigationSplitViewStyle(.balanced)
                 .macWindowToolbarFullScreenVisibility()
+            } else {
+                videoContent
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: { viewModel.showSidebar.toggle() }) {
+                                Label("Toggle Sidebar", systemImage: "sidebar.right")
+                            }
+                            .help("Toggle diagnostics and metadata sidebar panel")
+                        }
+                    }
+                    .macWindowToolbarFullScreenVisibility()
+            }
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.movie, .quickTimeMovie, .mpeg4Movie],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                viewModel.openVideo(url)
+            case .failure(let error):
+                print("Failed to import file: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -1207,6 +1220,11 @@ extension VTPlayerView {
                         Label("No Recents", systemImage: "clock")
                     } description: {
                         Text("Open a video to see it here.")
+                    } actions: {
+                        Button(action: { showFileImporter = true }) {
+                            Text("Open Video...")
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                     Spacer()
                 }
@@ -1368,7 +1386,7 @@ extension VTPlayerView {
                     } description: {
                         Text("Open a local video file to test Apple Silicon Neural Engine enhancements.")
                     } actions: {
-                        Button(action: { viewModel.selectFile() }) {
+                        Button(action: { showFileImporter = true }) {
                             Text("Open Video File...")
                         }
                         .buttonStyle(.borderedProminent)
