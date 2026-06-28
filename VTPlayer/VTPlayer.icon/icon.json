@@ -31,9 +31,11 @@
       }
     },
     {
+      "blur-material" : null,
       "layers" : [
         {
           "glass" : true,
+          "hidden" : false,
           "image-name" : "VTPlayer-iOS-Default-1024@1x.png",
           "name" : "VTPlayer-iOS-Default-1024@1x",
           "position" : {
@@ -58,6 +60,19 @@
       "hidden" : false,
       "layers" : [
         {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "automatic-gradient" : "extended-gray:0.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+              }
+            }
+          ],
           "image-name" : "wand.and.outline.inverse.png",
           "name" : "wand.and.outline.inverse",
           "position" : {
@@ -65,18 +80,6 @@
             "translation-in-points" : [
               0.15999999999996817,
               16.960000000000036
-            ]
-          }
-        },
-        {
-          "hidden" : true,
-          "image-name" : "wand.and.sparkles.inverse.png",
-          "name" : "wand.and.sparkles.inverse",
-          "position" : {
-            "scale" : 0.34,
-            "translation-in-points" : [
-              291.1875,
-              309.8415624999999
             ]
           }
         }
