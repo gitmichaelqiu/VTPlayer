@@ -1128,6 +1128,12 @@ struct VTPlayerView: View {
     #endif
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var showSettingsSheet = false
+    #if os(iOS)
+    @State private var showSeekIndicatorLeft = false
+    @State private var showSeekIndicatorRight = false
+    @State private var seekTaskLeft: Task<Void, Never>?
+    @State private var seekTaskRight: Task<Void, Never>?
+    #endif
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1229,134 +1235,7 @@ struct VTPlayerView: View {
         if viewModel.videoURL == nil {
             iosHomeView
         } else {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                
-                VTMetalRendererView(renderer: viewModel.renderer)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                
-                VStack {
-                    if viewModel.showControls {
-                        // Top back button row
-                        HStack {
-                            Button(action: {
-                                withAnimation {
-                                    viewModel.stop()
-                                    viewModel.videoURL = nil
-                                }
-                            }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.body.weight(.bold))
-                                    .foregroundColor(.white)
-                                    .padding(10)
-                                    .background(Color.black.opacity(0.5))
-                                    .clipShape(Circle())
-                            }
-                            Spacer()
-                        }
-                        
-                        Spacer()
-                        
-                        // Bottom control bar
-                        VStack(spacing: 8) {
-                            HStack(spacing: 8) {
-                                Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(.white)
-                                
-                                Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
-                                    isScrubbing = editing
-                                    if !editing {
-                                        viewModel.seek(to: scrubTime)
-                                    }
-                                })
-                                .accentColor(.cyan)
-                                .onChange(of: viewModel.currentTime) { _, newValue in
-                                    if !isScrubbing {
-                                        scrubTime = newValue
-                                    }
-                                }
-                                .onChange(of: scrubTime) { _, newValue in
-                                    if isScrubbing {
-                                        viewModel.scrub(to: newValue)
-                                    }
-                                }
-                                
-                                Text(formatTime(viewModel.duration))
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(.white)
-                            }
-                            .padding(.horizontal, 10)
-                            
-                            HStack {
-                                Button(action: { viewModel.togglePlayPause() }) {
-                                    Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                                        .font(.title3.weight(.bold))
-                                        .foregroundColor(.white)
-                                        .padding(8)
-                                        .background(Color.white.opacity(0.15))
-                                        .clipShape(Circle())
-                                }
-                                
-                                Spacer()
-                                
-                                HStack(spacing: 6) {
-                                    if viewModel.superResolutionLevel > 0 {
-                                        Text("SR: \(viewModel.superResolutionLevel)x")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(Color.cyan)
-                                            .cornerRadius(4)
-                                            .foregroundColor(.black)
-                                    }
-                                    
-                                    if viewModel.frameInterpolationLevel > 0 {
-                                        Text("FI: \(viewModel.frameInterpolationLevel)x")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(Color.green)
-                                            .cornerRadius(4)
-                                            .foregroundColor(.black)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: { showSettingsSheet = true }) {
-                                    Image(systemName: "gearshape.fill")
-                                        .font(.title3)
-                                        .foregroundColor(.white)
-                                        .padding(8)
-                                        .background(Color.white.opacity(0.15))
-                                        .clipShape(Circle())
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(
-                            Color.black.opacity(0.65)
-                                .cornerRadius(16)
-                        )
-                    }
-                }
-                .safeAreaPadding()
-            }
-            .gesture(
-                TapGesture().onEnded {
-                    withAnimation {
-                        viewModel.showControls.toggle()
-                    }
-                }
-            )
-            .sheet(isPresented: $showSettingsSheet) {
-                PlaybackSettingsView(viewModel: viewModel)
-                    .presentationDetents([.medium, .large])
-            }
+            iosPlayerView
         }
     }
 
@@ -1406,6 +1285,36 @@ struct VTPlayerView: View {
             viewModel.userActivityDetected()
         }
     }
+    
+    #if os(iOS)
+    private func triggerSeekLeft() {
+        viewModel.seekRelative(-10)
+        showSeekIndicatorLeft = true
+        seekTaskLeft?.cancel()
+        seekTaskLeft = Task {
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            if !Task.isCancelled {
+                withAnimation {
+                    showSeekIndicatorLeft = false
+                }
+            }
+        }
+    }
+    
+    private func triggerSeekRight() {
+        viewModel.seekRelative(10)
+        showSeekIndicatorRight = true
+        seekTaskRight?.cancel()
+        seekTaskRight = Task {
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            if !Task.isCancelled {
+                withAnimation {
+                    showSeekIndicatorRight = false
+                }
+            }
+        }
+    }
+    #endif
     
     private func formatTime(_ seconds: Double) -> String {
         guard !seconds.isNaN && !seconds.isInfinite else { return "00:00" }
@@ -1629,6 +1538,427 @@ extension VTPlayerView {
                 }
             }
             .navigationBarHidden(true)
+        }
+    }
+    #endif
+
+    #if os(iOS)
+    @ViewBuilder
+    private var iosPlayerView: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VTMetalRendererView(renderer: viewModel.renderer)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+            
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            triggerSeekLeft()
+                        }
+                        .onTapGesture(count: 1) {
+                            withAnimation {
+                                viewModel.showControls.toggle()
+                            }
+                        }
+                        .frame(width: geo.size.width * 0.35)
+                    
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 1) {
+                            withAnimation {
+                                viewModel.showControls.toggle()
+                            }
+                        }
+                        .frame(width: geo.size.width * 0.3)
+                    
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            triggerSeekRight()
+                        }
+                        .onTapGesture(count: 1) {
+                            withAnimation {
+                                viewModel.showControls.toggle()
+                            }
+                        }
+                        .frame(width: geo.size.width * 0.35)
+                }
+            }
+            .ignoresSafeArea()
+            
+            if showSeekIndicatorLeft {
+                VStack(spacing: 8) {
+                    Image(systemName: "backward.fill")
+                        .font(.title)
+                    Text("10s")
+                        .font(.caption)
+                        .bold()
+                }
+                .foregroundColor(.white)
+                .padding(20)
+                .background(Color.black.opacity(0.6))
+                .clipShape(Circle())
+                .transition(.scale.combined(with: .opacity))
+                .offset(x: -80)
+            }
+            
+            if showSeekIndicatorRight {
+                VStack(spacing: 8) {
+                    Image(systemName: "forward.fill")
+                        .font(.title)
+                    Text("10s")
+                        .font(.caption)
+                        .bold()
+                }
+                .foregroundColor(.white)
+                .padding(20)
+                .background(Color.black.opacity(0.6))
+                .clipShape(Circle())
+                .transition(.scale.combined(with: .opacity))
+                .offset(x: 80)
+            }
+            
+            VStack {
+                if viewModel.showControls {
+                    HStack {
+                        Button(action: {
+                            withAnimation {
+                                viewModel.stop()
+                                viewModel.videoURL = nil
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .fontWeight(.bold)
+                                Text("Back")
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(20)
+                        }
+                        
+                        Spacer()
+                        
+                        if let url = viewModel.videoURL {
+                            Text(url.lastPathComponent)
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .frame(maxWidth: 200)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 6)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(16)
+                        }
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            withAnimation {
+                                viewModel.showSidebar.toggle()
+                            }
+                        }) {
+                            Image(systemName: "chart.bar.xaxis")
+                                .font(.title3)
+                                .foregroundColor(.white)
+                                .padding(8)
+                                .background(viewModel.showSidebar ? Color.cyan.opacity(0.3) : Color.white.opacity(0.15))
+                                .clipShape(Circle())
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 48) {
+                        Button(action: { viewModel.seekRelative(-15) }) {
+                            Image(systemName: "gobackward.15")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .padding(16)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                        
+                        Button(action: { viewModel.togglePlayPause() }) {
+                            Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
+                                .font(.system(size: 36))
+                                .foregroundColor(.white)
+                                .padding(24)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        }
+                        
+                        Button(action: { viewModel.seekRelative(15) }) {
+                            Image(systemName: "goforward.15")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .padding(16)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                    
+                    Spacer()
+                    
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(.white)
+                                .frame(width: 50, alignment: .leading)
+                            
+                            Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
+                                isScrubbing = editing
+                                if !editing {
+                                    viewModel.seek(to: scrubTime)
+                                }
+                            })
+                            .accentColor(.cyan)
+                            .onChange(of: viewModel.currentTime) { _, newValue in
+                                if !isScrubbing {
+                                    scrubTime = newValue
+                                }
+                            }
+                            .onChange(of: scrubTime) { _, newValue in
+                                if isScrubbing {
+                                    viewModel.scrub(to: newValue)
+                                }
+                            }
+                            
+                            Text("-" + formatTime(max(0, viewModel.duration - (isScrubbing ? scrubTime : viewModel.currentTime))))
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(.white)
+                                .frame(width: 50, alignment: .trailing)
+                        }
+                        
+                        HStack {
+                            Menu {
+                                ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0], id: \.self) { speed in
+                                    Button(action: { viewModel.playbackSpeed = speed }) {
+                                        HStack {
+                                            Text(String(format: "%.2fx", speed))
+                                            if viewModel.playbackSpeed == speed {
+                                                Spacer()
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "speedometer")
+                                    Text(String(format: "%.2fx", viewModel.playbackSpeed))
+                                }
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.15))
+                                .cornerRadius(12)
+                            }
+                            
+                            Spacer()
+                            
+                            HStack(spacing: 4) {
+                                let hasSR = viewModel.superResolutionLevel > 0
+                                let hasQLSR = viewModel.qualitySuperResolutionScaleFactor > 0
+                                let hasFI = viewModel.frameInterpolationLevel > 0
+                                let hasHDR = viewModel.hdrStrength > 0
+                                let hasMB = viewModel.motionBlurStrength > 0
+                                let hasDN = viewModel.denoiseStrength > 0
+                                
+                                if hasSR {
+                                    Text("SR \(viewModel.superResolutionLevel)x")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.cyan.opacity(0.25))
+                                        .cornerRadius(4)
+                                        .foregroundColor(.cyan)
+                                }
+                                
+                                if hasQLSR {
+                                    Text("SR \(viewModel.qualitySuperResolutionScaleFactor)x QL")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.blue.opacity(0.25))
+                                        .cornerRadius(4)
+                                        .foregroundColor(.blue)
+                                }
+                                
+                                if hasFI {
+                                    Text("FI \(viewModel.frameInterpolationLevel)x")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.green.opacity(0.25))
+                                        .cornerRadius(4)
+                                        .foregroundColor(.green)
+                                }
+                                
+                                if hasHDR {
+                                    Text("HDR")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.yellow.opacity(0.25))
+                                        .cornerRadius(4)
+                                        .foregroundColor(.yellow)
+                                }
+                                
+                                if hasMB {
+                                    Text("MB")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.purple.opacity(0.25))
+                                        .cornerRadius(4)
+                                        .foregroundColor(.purple)
+                                }
+                                
+                                if hasDN {
+                                    Text("DN")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.orange.opacity(0.25))
+                                        .cornerRadius(4)
+                                        .foregroundColor(.orange)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Button(action: { showSettingsSheet = true }) {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                                    .background(Color.white.opacity(0.15))
+                                    .clipShape(Circle())
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .safeAreaPadding()
+            
+            if viewModel.showSidebar {
+                iosDiagnosticsOverlay
+            }
+        }
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    if value.translation.height > 100 {
+                        withAnimation {
+                            viewModel.stop()
+                            viewModel.videoURL = nil
+                        }
+                    }
+                }
+        )
+        .sheet(isPresented: $showSettingsSheet) {
+            PlaybackSettingsView(viewModel: viewModel)
+                .presentationDetents([.medium, .large])
+        }
+    }
+    
+    @ViewBuilder
+    private var iosDiagnosticsOverlay: some View {
+        VStack {
+            HStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("DIAGNOSTICS")
+                            .font(.system(.caption, design: .default)).bold()
+                            .foregroundColor(.cyan)
+                        Spacer()
+                        Button(action: {
+                            withAnimation {
+                                viewModel.showSidebar = false
+                            }
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledValueRow(label: "Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
+                        LabeledValueRow(label: "Source Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate))
+                        
+                        let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
+                        LabeledValueRow(label: "Target Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
+                        
+                        LabeledValueRow(label: "Display Rate", value: String(format: "%.1f Hz", viewModel.fps), valueColor: viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                        LabeledValueRow(label: "Latency", value: String(format: "%.1f ms", viewModel.frameProcessingTime))
+                        
+                        let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                        let activeScale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                        LabeledValueRow(label: "SR Mode", value: activeScale > 0 ? "\(isQL ? "QL" : "LL") \(activeScale)x" : "Off")
+                    }
+                }
+                .frame(width: 220)
+                .padding()
+                .background(.ultraThinMaterial)
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                .padding()
+            }
+            Spacer()
+        }
+        .padding(.top, 60)
+    }
+    
+    struct LabeledValueRow: View {
+        let label: String
+        let value: String
+        var valueColor: Color = .white
+        
+        var body: some View {
+            HStack {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(value)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(valueColor)
+            }
         }
     }
     #endif
