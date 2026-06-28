@@ -738,6 +738,12 @@ public actor VTFrameProcessorCoordinator {
         isSessionActive = false
     }
 
+    public func clearHistory() {
+        frameHistory.removeAll()
+        outputHistory.removeAll()
+        upscaledFrameHistory.removeAll()
+    }
+
     // MARK: - Helpers
 
     private func configureTransferSession(_ session: VTPixelTransferSession) {
@@ -805,5 +811,7 @@ public actor VTFrameProcessorCoordinator {
     }
     
     public func endSession() async {}
+    
+    public func clearHistory() {}
 }
 #endif

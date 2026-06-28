@@ -592,6 +592,7 @@ final class VTPlayerViewModel {
         self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
+        self.coordinator.clearHistory()
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         let targetRate = Float(self.playbackSpeed)
@@ -617,6 +618,7 @@ final class VTPlayerViewModel {
         self.processedFrameCache.removeAll()
         self.lastPulledTime = currentTime
         self.lastRenderedPTS = currentTime
+        self.coordinator.clearHistory()
         
         // If paused (e.g. scrubbing), read and draw a single frame immediately
         // at the new seek position so the screen updates in real time.
@@ -636,6 +638,7 @@ final class VTPlayerViewModel {
         self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
+        self.coordinator.clearHistory()
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -1497,98 +1500,235 @@ extension VTPlayerView {
     #if os(iOS)
     @ViewBuilder
     private var iosHomeView: some View {
-        List {
-            // MARK: - Load Video
-            Section {
-                Button(action: { showFileImporter = true }) {
-                    Label("Browse Files", systemImage: "doc.badge.plus")
-                        .foregroundColor(.cyan)
-                }
-
-                #if canImport(PhotosUI)
-                PhotosPicker(
-                    selection: $selectedPhotoItem,
-                    matching: .videos,
-                    photoLibrary: .shared()
-                ) {
-                    Label("Photos Library", systemImage: "photo.on.rectangle.angled")
-                        .foregroundColor(.purple)
-                }
-                #endif
-            } header: {
-                Text("Load video")
-            }
-
-            // MARK: - Device Performance
-            Section {
-                LabeledContent("Neural Engine", value: "Enabled")
-                LabeledContent("Supported SR", value: viewModel.srIsSupported ? "2x, 4x" : "None")
-            } header: {
-                Text("Device performance")
-            }
-
-            // MARK: - Recent Videos
-            Section {
-                if viewModel.recentVideos.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Recent Videos", systemImage: "film")
-                    } description: {
-                        Text("Open a video to add it here.")
+        ScrollView {
+            VStack(spacing: 24) {
+                // MARK: - Premium Header Banner
+                HStack(spacing: 16) {
+                    Image(systemName: "cpu.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .purple, .pink],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .padding(12)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("VTPlayer")
+                            .font(.system(.title, design: .rounded).weight(.bold))
+                        Text("Hardware-Accelerated AI Enhancer")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
-                } else {
-                    ForEach(viewModel.recentVideos, id: \.self) { url in
-                        Button(action: {
-                            viewModel.openVideo(url)
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "video.circle.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.blue)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(url.lastPathComponent)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                    Text(url.deletingLastPathComponent().lastPathComponent)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                }
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-                        }
-                    }
-                    .onDelete { indexSet in
-                        viewModel.deleteRecentVideoIOS(at: indexSet)
-                    }
-                }
-            } header: {
-                HStack {
-                    Text("Recent videos")
                     Spacer()
-                    if !viewModel.recentVideos.isEmpty {
-                        Button("Clear All") {
-                            viewModel.clearRecentVideosIOS()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                // MARK: - Import Actions Grid
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                    Button(action: { showFileImporter = true }) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Image(systemName: "doc.badge.plus")
+                                .font(.title)
+                                .foregroundColor(.blue)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Browse Files")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Local video files")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        .font(.caption)
-                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.title)
+                                .foregroundColor(.purple)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Photos Library")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Camera roll videos")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    #endif
+                }
+                .padding(.horizontal)
+                
+                // MARK: - Neural Engine Dashboard Card
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Label("Neural Engine Status", systemImage: "cpu")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("Active")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(20)
+                    }
+                    
+                    Divider()
+                    
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
+                                .foregroundColor(.blue)
+                                .font(.subheadline)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Super Resolution")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text(viewModel.srIsSupported ? "2x, 4x Native" : "N/A")
+                                    .font(.system(.footnote, design: .monospaced).weight(.bold))
+                            }
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.stack.3d.down.right")
+                                .foregroundColor(.green)
+                                .font(.subheadline)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Interpolation")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Low-Latency")
+                                    .font(.system(.footnote, design: .monospaced).weight(.bold))
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
+                .padding(.horizontal)
+                
+                // MARK: - Recent Videos
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Recent Videos")
+                            .font(.headline)
+                        Spacer()
+                        if !viewModel.recentVideos.isEmpty {
+                            Button("Clear All") {
+                                withAnimation {
+                                    viewModel.clearRecentVideosIOS()
+                                }
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.red)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    if viewModel.recentVideos.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "film")
+                                .font(.system(size: 40))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Text("No Recent Videos")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .cornerRadius(16)
+                        .padding(.horizontal)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(viewModel.recentVideos, id: \.self) { url in
+                                Button(action: {
+                                    viewModel.openVideo(url)
+                                }) {
+                                    HStack(spacing: 16) {
+                                        Image(systemName: "video.fill")
+                                            .font(.headline)
+                                            .foregroundColor(.blue)
+                                            .padding(10)
+                                            .background(Color.blue.opacity(0.1))
+                                            .clipShape(Circle())
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(url.lastPathComponent)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundColor(.primary)
+                                                .lineLimit(1)
+                                            Text(url.deletingLastPathComponent().lastPathComponent)
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                
+                                if url != viewModel.recentVideos.last {
+                                    Divider()
+                                        .padding(.leading, 60)
+                                }
+                            }
+                        }
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .cornerRadius(16)
+                        .padding(.horizontal)
                     }
                 }
             }
+            .padding(.vertical)
         }
-        .listStyle(.insetGrouped)
-        .navigationTitle("VTPlayer")
-        .navigationBarTitleDisplayMode(.large)
+        .background(Color(.systemGroupedBackground))
+        .navigationBarTitleDisplayMode(.inline)
     }
     #endif
 
