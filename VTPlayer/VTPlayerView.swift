@@ -103,6 +103,17 @@ final class VTPlayerViewModel {
     }
     
     // Playback Progress & Stats
+    var isPipelineActive: Bool {
+        #if os(iOS)
+        return (superResolutionLevel > 0 || 
+                frameInterpolationLevel > 0 || 
+                qualitySuperResolutionScaleFactor > 0 || 
+                denoiseStrength > 0 || 
+                motionBlurStrength > 0)
+        #else
+        return true
+        #endif
+    }
     var currentTime: Double = 0.0
     var duration: Double = 0.0
     var playbackSpeed: Double = 1.0 {
@@ -1262,18 +1273,6 @@ struct VTPlayerView: View {
     @State private var hoverDN = false
     @State private var hoverSH = false
     @State private var hoverHDR = false
- 
-    private var isPipelineActive: Bool {
-        #if os(iOS)
-        return (viewModel.superResolutionLevel > 0 || 
-                viewModel.frameInterpolationLevel > 0 || 
-                viewModel.qualitySuperResolutionScaleFactor > 0 || 
-                viewModel.denoiseStrength > 0 || 
-                viewModel.motionBlurStrength > 0)
-        #else
-        return true
-        #endif
-    }
 
     var body: some View {
         Group {
@@ -1545,7 +1544,7 @@ extension VTPlayerView {
     @ViewBuilder
     private var iosPlayerView: some View {
         ZStack {
-            if isPipelineActive {
+            if viewModel.isPipelineActive {
                 ZStack {
                     viewModel.currentBackgroundColor
                         .ignoresSafeArea()
