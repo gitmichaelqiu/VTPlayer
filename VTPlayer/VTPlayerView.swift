@@ -2578,13 +2578,12 @@ class CustomAVPlayerViewController: AVPlayerViewController {
     }
     
     private func hideVideoLayer(in view: UIView) {
-        let className = String(describing: type(of: view))
-        
-        // Hide the view backing the player layer (but keep the controls overlay layer)
-        if className.contains("AVPlayerLayer") || className.contains("AVDisplayView") {
-            view.alpha = self.isPipelineActive ? 0.0 : 1.0
+        // If the view's layer itself is an AVPlayerLayer, hide it
+        if view.layer is AVPlayerLayer {
+            view.layer.isHidden = self.isPipelineActive
         }
         
+        // Also check any sublayers for AVPlayerLayer
         if let sublayers = view.layer.sublayers {
             for sublayer in sublayers {
                 if sublayer is AVPlayerLayer {
