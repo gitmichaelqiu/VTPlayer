@@ -221,6 +221,7 @@ final class VTPlayerViewModel {
     
     let renderer: VTMetalRenderer
     let modelManager = VTModelManager()
+    private var activeCoordinator: VTFrameProcessorCoordinator?
 
     init() {
         self.renderer = VTMetalRenderer(frame: .zero, device: nil)
@@ -592,7 +593,9 @@ final class VTPlayerViewModel {
         self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
-        self.coordinator.clearHistory()
+        Task { @MainActor in
+            await self.activeCoordinator?.clearHistory()
+        }
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         let targetRate = Float(self.playbackSpeed)
@@ -618,7 +621,9 @@ final class VTPlayerViewModel {
         self.processedFrameCache.removeAll()
         self.lastPulledTime = currentTime
         self.lastRenderedPTS = currentTime
-        self.coordinator.clearHistory()
+        Task { @MainActor in
+            await self.activeCoordinator?.clearHistory()
+        }
         
         // If paused (e.g. scrubbing), read and draw a single frame immediately
         // at the new seek position so the screen updates in real time.
@@ -638,7 +643,9 @@ final class VTPlayerViewModel {
         self.lastRenderedPTS = .zero
         self.processedFrameCache.removeAll()
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
-        self.coordinator.clearHistory()
+        Task { @MainActor in
+            await self.activeCoordinator?.clearHistory()
+        }
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -844,7 +851,6 @@ final class VTPlayerViewModel {
                 effectiveSRLevel = qualitySR == 4 ? 4 : 2
             }
             #endif
-
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: effectiveSRLevel,
                 frameInterpolationLevel: fiLevel,
@@ -855,6 +861,7 @@ final class VTPlayerViewModel {
                 denoiseStrength: dnStrength,
                 qualityPrioritization: qualPrior
             )
+            self.activeCoordinator = coordinator
 
             // Pause the player during coordinator init so the audio clock
             // doesn't advance while the cache is empty.  Without this, the
@@ -1123,6 +1130,7 @@ final class VTPlayerViewModel {
             self.saveProgress()
         }
         saveVideoSettings()
+        activeCoordinator = nil
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
