@@ -1570,61 +1570,61 @@ extension VTPlayerView {
     @ViewBuilder
     private var iosGalleryView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // MARK: - Empty State
-                if viewModel.recentVideos.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Videos", systemImage: "play.rectangle.on.rectangle")
-                    } description: {
-                        Text("Open a video file or import from your photo library to get started.")
-                    } actions: {
-                        VStack(spacing: 10) {
-                            Button(action: { showFileImporter = true }) {
-                                Label("Browse Files", systemImage: "folder.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.blue)
+            VStack(alignment: .leading, spacing: 16) {
+                let hasVideos = !viewModel.recentVideos.isEmpty
 
-                            #if canImport(PhotosUI)
-                            PhotosPicker(
-                                selection: $selectedPhotoItem,
-                                matching: .videos,
-                                photoLibrary: .shared()
-                            ) {
-                                Label("Photos Library", systemImage: "photo.on.rectangle.angled")
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.purple)
-                            #endif
-                        }
+                // MARK: - Import Buttons (always visible, native bordered style)
+                HStack(spacing: 12) {
+                    Button(action: { showFileImporter = true }) {
+                        Label("Browse Files", systemImage: "folder.fill")
+                            .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(.blue)
+
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(.purple)
+                    #endif
                 }
+                .padding(.horizontal)
+                .padding(.top, 8)
 
-                // MARK: - Videos Grid
-                if !viewModel.recentVideos.isEmpty {
-                    HStack {
-                        Text("Videos")
-                            .font(.title2)
-                            .bold()
-                        Spacer()
-                        Picker("Sort", selection: $sortBy) {
-                            Text("Date").tag(SortOption.dateAdded)
-                            Text("Name").tag(SortOption.name)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 140)
-
-                        Button(action: { showClearAllAlert = true }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                        }
-                        .padding(.leading, 8)
+                // MARK: - Header + Sort + Trash (always visible)
+                HStack {
+                    Text("VTPlayer")
+                        .font(.title2)
+                        .bold()
+                    Spacer()
+                    Picker("Sort", selection: $sortBy) {
+                        Text("Date").tag(SortOption.dateAdded)
+                        Text("Name").tag(SortOption.name)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .disabled(!hasVideos)
 
+                    Button(action: { showClearAllAlert = true }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(hasVideos ? .red : .secondary)
+                    }
+                    .disabled(!hasVideos)
+                    .padding(.leading, 8)
+                }
+                .padding(.horizontal)
+
+                // MARK: - Videos Grid or Empty Placeholder
+                if hasVideos {
                     let sortedVideos: [URL] = {
                         switch sortBy {
                         case .name:
@@ -1676,6 +1676,18 @@ extension VTPlayerView {
                         }
                     }
                     .padding(.horizontal)
+                } else {
+                    // Subtle empty state — layout stays stable
+                    VStack(spacing: 8) {
+                        Image(systemName: "play.rectangle.on.rectangle")
+                            .font(.system(size: 36))
+                            .foregroundColor(.secondary.opacity(0.4))
+                            .padding(.top, 48)
+                        Text("Tap + to add a video")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             }
             .padding(.vertical)
@@ -2883,6 +2895,7 @@ struct VideoThumbnailView: View {
             }
             .frame(height: 100)
             .frame(maxWidth: .infinity)
+            .clipped()
 
             if let duration = durationString {
                 Text(duration)
