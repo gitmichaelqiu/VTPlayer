@@ -1262,17 +1262,17 @@ struct VTPlayerView: View {
     private var iphoneLayout: some View {
         NavigationStack {
             iosHomeView
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { viewModel.videoURL != nil },
-            set: { show in
-                if !show {
-                    viewModel.stop()
-                    viewModel.videoURL = nil
+                .navigationDestination(isPresented: Binding(
+                    get: { viewModel.videoURL != nil },
+                    set: { show in
+                        if !show {
+                            viewModel.stop()
+                            viewModel.videoURL = nil
+                        }
+                    }
+                )) {
+                    iosPlayerView
                 }
-            }
-        )) {
-            iosPlayerView
         }
     }
     #endif
@@ -1345,107 +1345,43 @@ extension VTPlayerView {
     @ViewBuilder
     private var iosHomeView: some View {
         List {
-            // MARK: - Description Header
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Real-Time Video Enhancements")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Text("Upscale and interpolate video sequences on the Apple Silicon Neural Engine using hardware-accelerated processing.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                .listRowBackground(Color.clear)
-            }
-
             // MARK: - Load Video
             Section {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                    Button(action: { showFileImporter = true }) {
-                        VStack(spacing: 12) {
-                            Image(systemName: "doc.badge.plus")
-                                .font(.title)
-                                .foregroundColor(.cyan)
-                            Text("Browse Files")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
-
-                    #if canImport(PhotosUI)
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .videos,
-                        photoLibrary: .shared()
-                    ) {
-                        VStack(spacing: 12) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.title)
-                                .foregroundColor(.purple)
-                            Text("Photos Library")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
-                    #endif
+                Button(action: { showFileImporter = true }) {
+                    Label("Browse Files", systemImage: "doc.badge.plus")
+                        .foregroundColor(.cyan)
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+
+                #if canImport(PhotosUI)
+                PhotosPicker(
+                    selection: $selectedPhotoItem,
+                    matching: .videos,
+                    photoLibrary: .shared()
+                ) {
+                    Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                        .foregroundColor(.purple)
+                }
+                #endif
             } header: {
                 Text("LOAD VIDEO")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
             }
 
             // MARK: - Device Performance
             Section {
-                LabeledContent {
-                    Text("Enabled")
-                        .fontWeight(.semibold)
-                        .foregroundColor(.green)
-                } label: {
-                    Label("Neural Engine Acceleration", systemImage: "cpu.fill")
-                }
-
-                LabeledContent {
-                    Text(viewModel.srIsSupported ? "2x, 4x" : "None")
-                        .fontWeight(.semibold)
-                        .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
-                } label: {
-                    Label("Supported SR Scales", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
-                }
+                LabeledContent("Neural Engine", value: "Enabled")
+                LabeledContent("Supported SR", value: viewModel.srIsSupported ? "2x, 4x" : "None")
             } header: {
                 Text("DEVICE PERFORMANCE")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
             }
 
             // MARK: - Recent Videos
             Section {
                 if viewModel.recentVideos.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "film")
-                            .font(.largeTitle)
-                            .foregroundColor(.secondary)
-                        Text("No recent videos")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
+                    ContentUnavailableView {
+                        Label("No Recent Videos", systemImage: "film")
+                    } description: {
+                        Text("Open a video to add it here.")
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-                    .listRowBackground(Color.clear)
                 } else {
                     ForEach(viewModel.recentVideos, id: \.self) { url in
                         Button(action: {
@@ -1466,28 +1402,10 @@ extension VTPlayerView {
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
                                 }
-
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
                             }
                         }
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                }
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-                        }
-                        .contextMenu {
-                            Button(action: { viewModel.openVideo(url) }) {
-                                Label("Play", systemImage: "play.fill")
-                            }
                             Button(role: .destructive) {
                                 if let idx = viewModel.recentVideos.firstIndex(of: url) {
                                     viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
@@ -1504,9 +1422,6 @@ extension VTPlayerView {
             } header: {
                 HStack {
                     Text("RECENT VIDEOS")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
                     Spacer()
                     if !viewModel.recentVideos.isEmpty {
                         Button("Clear All") {
@@ -1537,14 +1452,35 @@ extension VTPlayerView {
                     .tint(.white)
             }
 
-            // Floating Liquid Glass control bar at top
-            iosPlayerTopBar
-
-            // Enhancement status pills
+            // Enhancement status pills overlaid at top
             iosEnhancementPills
 
             if viewModel.showSidebar {
                 iosDiagnosticsOverlay
+            }
+        }
+        .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showSettingsSheet = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .labelStyle(.iconOnly)
+            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    withAnimation { viewModel.showSidebar.toggle() }
+                } label: {
+                    Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
+                }
+                .labelStyle(.iconOnly)
+                .tint(viewModel.showSidebar ? .cyan : nil)
             }
         }
         .sheet(isPresented: $showSettingsSheet) {
@@ -1557,55 +1493,7 @@ extension VTPlayerView {
         }
     }
 
-    // MARK: - Player Top Bar (Liquid Glass)
-    @ViewBuilder
-    private var iosPlayerTopBar: some View {
-        VStack {
-            HStack(spacing: 12) {
-                Button {
-                    viewModel.stop()
-                    viewModel.videoURL = nil
-                } label: {
-                    Label("Close", systemImage: "xmark")
-                        .font(.body.weight(.semibold))
-                }
-                .labelStyle(.iconOnly)
-                .foregroundStyle(.white)
-
-                Text(viewModel.videoURL?.lastPathComponent ?? "Video")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Button {
-                    withAnimation { viewModel.showSidebar.toggle() }
-                } label: {
-                    Label("Diagnostics", systemImage: viewModel.showSidebar ? "chart.bar.fill" : "chart.bar")
-                }
-                .labelStyle(.iconOnly)
-                .foregroundStyle(viewModel.showSidebar ? .cyan : .white)
-
-                Button {
-                    showSettingsSheet = true
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .labelStyle(.iconOnly)
-                .foregroundStyle(.white)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .glassEffect(in: .rect(cornerRadius: 20))
-            .padding(.horizontal, 8)
-            .safeAreaPadding(.top, 8)
-
-            Spacer()
-        }
-    }
-
-    // MARK: - Enhancement Pills (Liquid Glass)
+    // MARK: - Enhancement Pills (simplified overlay)
     @ViewBuilder
     private var iosEnhancementPills: some View {
         VStack {
@@ -1618,53 +1506,62 @@ extension VTPlayerView {
                 let hasDN = viewModel.denoiseStrength > 0
 
                 if hasSR {
-                    enhancementPill(
-                        label: "SR \(viewModel.superResolutionLevel)x",
-                        color: .cyan
-                    )
+                    Text("SR \(viewModel.superResolutionLevel)x")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.cyan)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.cyan.opacity(0.15)))
                 }
                 if hasQLSR {
-                    enhancementPill(
-                        label: "SR \(viewModel.qualitySuperResolutionScaleFactor)x QL",
-                        color: .blue
-                    )
+                    Text("SR \(viewModel.qualitySuperResolutionScaleFactor)x QL")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.blue.opacity(0.15)))
                 }
                 if hasFI {
-                    enhancementPill(
-                        label: "FI \(viewModel.frameInterpolationLevel)x",
-                        color: .green
-                    )
+                    Text("FI \(viewModel.frameInterpolationLevel)x")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.green.opacity(0.15)))
                 }
                 if hasHDR {
-                    enhancementPill(label: "HDR", color: .yellow)
+                    Text("HDR")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.yellow)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.yellow.opacity(0.15)))
                 }
                 if hasMB {
-                    enhancementPill(label: "MB", color: .purple)
+                    Text("MB")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.purple)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.purple.opacity(0.15)))
                 }
                 if hasDN {
-                    enhancementPill(label: "DN", color: .orange)
-                }
-
-                if !hasSR && !hasQLSR && !hasFI && !hasHDR && !hasMB && !hasDN {
-                    EmptyView()
+                    Text("DN")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.orange.opacity(0.15)))
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .glassEffect(in: .rect(cornerRadius: 20))
+            .background(.ultraThinMaterial.opacity(0.7))
+            .cornerRadius(20)
 
             Spacer()
         }
-        .safeAreaPadding(.top, 52)
-    }
-
-    private func enhancementPill(label: String, color: Color) -> some View {
-        Text(label)
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .glassEffect(.regular.tint(color), in: .capsule)
+        .padding(.top, 60)
     }
 
     @ViewBuilder
@@ -1750,7 +1647,13 @@ extension VTPlayerView {
                 }
                 .frame(width: 220)
                 .padding()
-                .glassEffect(in: .rect(cornerRadius: 16))
+                .background(.ultraThinMaterial)
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
                 .padding()
             }
             Spacer()
