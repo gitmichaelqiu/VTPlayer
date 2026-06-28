@@ -9,10 +9,38 @@ import SwiftUI
 import AVFoundation
 import MetalKit
 import VideoToolbox
-import AppKit
 import CoreVideo
 
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+#if os(macOS)
+typealias PlatformVisualEffectMaterial = NSVisualEffectView.Material
+typealias PlatformVisualEffectBlendingMode = NSVisualEffectView.BlendingMode
+#else
+enum PlatformVisualEffectMaterial {
+    case hudWindow
+}
+enum PlatformVisualEffectBlendingMode {
+    case withinWindow
+}
+#endif
+
 /// SwiftUI Representable wrapper for the VTMetalRenderer.
+#if canImport(UIKit)
+struct VTMetalRendererView: UIViewRepresentable {
+    let renderer: VTMetalRenderer
+    
+    func makeUIView(context: Context) -> VTMetalRenderer {
+        return renderer
+    }
+    
+    func updateUIView(_ uiView: VTMetalRenderer, context: Context) {}
+}
+#elseif canImport(AppKit)
 struct VTMetalRendererView: NSViewRepresentable {
     let renderer: VTMetalRenderer
     
@@ -22,6 +50,7 @@ struct VTMetalRendererView: NSViewRepresentable {
     
     func updateNSView(_ nsView: VTMetalRenderer, context: Context) {}
 }
+#endif
 
 /// The Main ViewModel managing the playback loop, synchronization, and processor pipeline.
 @Observable
@@ -105,7 +134,11 @@ final class VTPlayerViewModel {
         } else if videoURL != nil {
             return Color.black
         } else {
+            #if os(macOS)
             return Color(nsColor: .windowBackgroundColor)
+            #else
+            return Color(uiColor: .systemBackground)
+            #endif
         }
     }
     
@@ -160,10 +193,9 @@ final class VTPlayerViewModel {
 
     init() {
         self.renderer = VTMetalRenderer(frame: .zero, device: nil)
+        #if os(macOS)
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
-        self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
-        self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
-
+        
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(reloadRecentVideos),
@@ -184,17 +216,25 @@ final class VTPlayerViewModel {
             name: NSWindow.didExitFullScreenNotification,
             object: nil
         )
+        #else
+        self.recentVideos = []
+        #endif
+        self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
+        self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        #if os(macOS)
         if cursorHidden {
             NSCursor.unhide()
         }
+        #endif
     }
     
-    /// Launches an NSOpenPanel to select a local media file.
+    /// Launches file picker (macOS-only OpenPanel, stubbed on iOS).
     func selectFile() {
+        #if os(macOS)
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .quickTimeMovie, .mpeg4Movie]
         panel.allowsMultipleSelection = false
@@ -206,6 +246,7 @@ final class VTPlayerViewModel {
             self.videoURL = url
             self.setupPlayer(with: url)
         }
+        #endif
     }
     
     private func setupPlayer(with url: URL) {
@@ -334,6 +375,7 @@ final class VTPlayerViewModel {
         self.setupPlayer(with: url)
     }
     
+    #if os(macOS)
     @objc private func windowDidEnterFullScreen() {
         self.isFullScreen = true
         self.userActivityDetected()
@@ -355,21 +397,26 @@ final class VTPlayerViewModel {
             window.backgroundColor = .windowBackgroundColor
         }
     }
+    #endif
     
     func userActivityDetected() {
         if isFullScreen && isPlaying && !isPaused {
             self.showControls = true
+            #if os(macOS)
             if self.cursorHidden {
                 NSCursor.unhide()
                 self.cursorHidden = false
             }
+            #endif
             startInactivityTimer()
         } else {
             self.showControls = true
+            #if os(macOS)
             if self.cursorHidden {
                 NSCursor.unhide()
                 self.cursorHidden = false
             }
+            #endif
             inactivityTask?.cancel()
         }
     }
@@ -381,10 +428,12 @@ final class VTPlayerViewModel {
             guard !Task.isCancelled, let self = self else { return }
             if self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar {
                 self.showControls = false
+                #if os(macOS)
                 if !self.cursorHidden {
                     NSCursor.hide()
                     self.cursorHidden = true
                 }
+                #endif
             }
         }
     }
@@ -1037,6 +1086,7 @@ struct VTPlayerView: View {
                 .frame(width: 0, height: 0)
                 .opacity(0)
 
+            #if os(macOS)
             // Cmd+1...9 to switch between window tabs
             ForEach(1..<10, id: \.self) { i in
                 Button("") {
@@ -1050,6 +1100,7 @@ struct VTPlayerView: View {
                 .frame(width: 0, height: 0)
                 .opacity(0)
             }
+            #endif
         }
         .onContinuousHover { phase in
             viewModel.userActivityDetected()
@@ -1562,6 +1613,7 @@ extension VTPlayerView {
     
     @ViewBuilder
     private var fullscreenButton: some View {
+        #if os(macOS)
         Button(action: {
             if let window = NSApp.mainWindow ?? NSApp.keyWindow {
                 window.toggleFullScreen(nil)
@@ -1575,6 +1627,9 @@ extension VTPlayerView {
         .buttonBorderShape(.circle)
         .keyboardShortcut("f", modifiers: [])
         .help("Toggle Fullscreen (F)")
+        #else
+        EmptyView()
+        #endif
     }
 
 }
@@ -1616,10 +1671,11 @@ struct QLModelStatusView: View {
     }
 }
 
-/// Helper view for macOS blur/visual effect backgrounds.
+/// Helper view for blur/visual effect backgrounds.
+#if os(macOS)
 struct VisualEffectView: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blendingMode: NSVisualEffectView.BlendingMode
+    let material: PlatformVisualEffectMaterial
+    let blendingMode: PlatformVisualEffectBlendingMode
     
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
@@ -1634,3 +1690,16 @@ struct VisualEffectView: NSViewRepresentable {
         nsView.blendingMode = blendingMode
     }
 }
+#else
+struct VisualEffectView: UIViewRepresentable {
+    let material: PlatformVisualEffectMaterial
+    let blendingMode: PlatformVisualEffectBlendingMode
+    
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterialDark))
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
+}
+#endif
