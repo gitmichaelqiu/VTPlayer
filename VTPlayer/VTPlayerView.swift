@@ -1206,6 +1206,7 @@ struct VTPlayerView: View {
                 Color.black.ignoresSafeArea()
                 
                 VTMetalRendererView(renderer: viewModel.renderer)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
                 
                 if viewModel.showControls {
@@ -1617,6 +1618,7 @@ extension VTPlayerView {
         VStack(spacing: 0) {
             ZStack {
                 VTMetalRendererView(renderer: viewModel.renderer)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .cornerRadius(viewModel.isFullScreen ? 0 : 8)
                     .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
                     .padding(.top, viewModel.isFullScreen ? 0 : 16)
