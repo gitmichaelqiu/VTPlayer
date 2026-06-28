@@ -1060,6 +1060,7 @@ struct VTPlayerView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     #endif
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+    @State private var showSettingsSheet = false
 
     @State private var scrubTime: Double = 0.0
     @State private var isScrubbing: Bool = false
@@ -1178,29 +1179,141 @@ struct VTPlayerView: View {
                     }
             }
         } else {
-            NavigationStack {
-                videoContent
-                    .toolbar {
-                        ToolbarItem(placement: .navigation) {
-                            Button(action: {
-                                withAnimation {
-                                    viewModel.stop()
-                                    viewModel.videoURL = nil
-                                }
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "chevron.left")
-                                    Text("Library")
-                                }
-                            }
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VTMetalRendererView(renderer: viewModel.renderer)
+                    .ignoresSafeArea()
+                
+                if viewModel.showControls {
+                    iphoneBackButton
+                    iphoneControlBar
+                }
+            }
+            .gesture(
+                TapGesture().onEnded {
+                    withAnimation {
+                        viewModel.showControls.toggle()
+                    }
+                }
+            )
+            .sheet(isPresented: $showSettingsSheet) {
+                PlaybackSettingsView(viewModel: viewModel)
+                    .presentationDetents([.medium, .large])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var iphoneBackButton: some View {
+        VStack {
+            HStack {
+                Button(action: {
+                    withAnimation {
+                        viewModel.stop()
+                        viewModel.videoURL = nil
+                    }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.black.opacity(0.5))
+                        .clipShape(Circle())
+                }
+                .padding(.leading, 16)
+                .padding(.top, 16)
+                
+                Spacer()
+            }
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var iphoneControlBar: some View {
+        VStack {
+            Spacer()
+            
+            VStack(spacing: 8) {
+                // Time progress timeline
+                HStack(spacing: 8) {
+                    Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white)
+                    
+                    Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
+                        isScrubbing = editing
+                        if !editing {
+                            viewModel.seek(to: scrubTime)
                         }
-                        ToolbarItem(placement: .primaryAction) {
-                            Button(action: { viewModel.showSidebar.toggle() }) {
-                                Label("Toggle Sidebar", systemImage: "sidebar.right")
-                            }
+                    })
+                    .accentColor(.cyan)
+                    
+                    Text(formatTime(viewModel.duration))
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10)
+                
+                HStack {
+                    // Play/Pause button
+                    Button(action: { viewModel.togglePlayPause() }) {
+                        Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    // Current Status indicators (pill shapes)
+                    HStack(spacing: 6) {
+                        if viewModel.superResolutionLevel > 0 {
+                            Text("SR: \(viewModel.superResolutionLevel)x")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.cyan)
+                                .cornerRadius(4)
+                                .foregroundColor(.black)
+                        }
+                        
+                        if viewModel.frameInterpolationLevel > 0 {
+                            Text("FI: \(viewModel.frameInterpolationLevel)x")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.green)
+                                .cornerRadius(4)
+                                .foregroundColor(.black)
                         }
                     }
+                    
+                    Spacer()
+                    
+                    // Settings gear button
+                    Button(action: { showSettingsSheet = true }) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.title3)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, 10)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                Color.black.opacity(0.65)
+                    .cornerRadius(16)
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
         }
     }
 
@@ -1904,6 +2017,15 @@ extension View {
         self
         #endif
     }
+    
+    @ViewBuilder
+    func macNavigationBarTitleDisplayMode() -> some View {
+        #if os(iOS)
+        self.navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
 }
 
 #if canImport(PhotosUI)
@@ -1927,3 +2049,99 @@ struct PhotosMovie: Transferable {
     }
 }
 #endif
+
+struct PlaybackSettingsView: View {
+    @Bindable var viewModel: VTPlayerViewModel
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Video Enhancements (Neural Engine)")) {
+                    Picker("Super Resolution", selection: $viewModel.superResolutionLevel) {
+                        Text("Off").tag(0)
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
+                    }
+                    .onChange(of: viewModel.superResolutionLevel) { _ in
+                        viewModel.updateEnhancements()
+                    }
+                    
+                    Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
+                        Text("Off").tag(0)
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
+                    }
+                    .onChange(of: viewModel.frameInterpolationLevel) { _ in
+                        viewModel.updateEnhancements()
+                    }
+                    
+                    Picker("Motion Blur", selection: $viewModel.motionBlurStrength) {
+                        Text("Off").tag(0)
+                        Text("5").tag(5)
+                        Text("10").tag(10)
+                        Text("20").tag(20)
+                        Text("30").tag(30)
+                    }
+                    .onChange(of: viewModel.motionBlurStrength) { _ in
+                        viewModel.updateEnhancements()
+                    }
+                    
+                    Picker("Denoise Strength", selection: $viewModel.denoiseStrength) {
+                        Text("Off").tag(0.0)
+                        Text("0.25").tag(0.25)
+                        Text("0.50").tag(0.5)
+                        Text("0.75").tag(0.75)
+                        Text("1.00").tag(1.0)
+                    }
+                    .onChange(of: viewModel.denoiseStrength) { _ in
+                        viewModel.updateEnhancements()
+                    }
+                }
+                
+                Section(header: Text("Filters & Adjustments")) {
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text("Sharpness")
+                            Spacer()
+                            Text(String(format: "%.2f", viewModel.sharpness))
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                    }
+                    
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text("SDR-to-HDR Boost")
+                            Spacer()
+                            Text(String(format: "%.2f", viewModel.hdrStrength))
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                    }
+                }
+                
+                Section(header: Text("Playback Controls")) {
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text("Playback Speed")
+                            Spacer()
+                            Text(String(format: "%.2fx", viewModel.playbackSpeed))
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $viewModel.playbackSpeed, in: 0.25...4.0, step: 0.25)
+                    }
+                }
+            }
+            .navigationTitle("Playback Settings")
+            .macNavigationBarTitleDisplayMode()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
