@@ -1466,7 +1466,20 @@ struct VTPlayerView: View {
     #if os(iOS)
     @ViewBuilder
     private var iphoneLayout: some View {
-        iosHomeView
+        NavigationStack {
+            iosHomeView
+                .navigationDestination(isPresented: Binding(
+                    get: { viewModel.videoURL != nil },
+                    set: { show in
+                        if !show {
+                            viewModel.stop()
+                            viewModel.videoURL = nil
+                        }
+                    }
+                )) {
+                    iosPlayerView
+                }
+        }
     }
     #endif
 
@@ -1550,30 +1563,15 @@ extension VTPlayerView {
     @ViewBuilder
     private var iosHomeView: some View {
         TabView {
-            NavigationStack {
-                iosGalleryView
-                    .navigationDestination(isPresented: Binding(
-                        get: { viewModel.videoURL != nil },
-                        set: { show in
-                            if !show {
-                                viewModel.stop()
-                                viewModel.videoURL = nil
-                            }
-                        }
-                    )) {
-                        iosPlayerView
-                    }
-            }
-            .tabItem {
-                Label("Gallery", systemImage: "play.square.stack.fill")
-            }
+            iosGalleryView
+                .tabItem {
+                    Label("Gallery", systemImage: "play.square.stack.fill")
+                }
 
-            NavigationStack {
-                iosAboutView
-            }
-            .tabItem {
-                Label("About", systemImage: "info.circle.fill")
-            }
+            iosAboutView
+                .tabItem {
+                    Label("About", systemImage: "info.circle.fill")
+                }
         }
     }
 
@@ -1835,7 +1833,6 @@ extension VTPlayerView {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .persistentSystemOverlays(.hidden)
-        .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
                 .presentationDetents([.medium])
@@ -2777,73 +2774,23 @@ class CustomAVPlayerViewController: AVPlayerViewController {
         let className = String(describing: type(of: view))
         
         // Hide native fullscreen view containers
-        if className.contains("FullScreen") || className.contains("Fullscreen") || className.contains("Zoom") {
+        if className.contains("FullScreen") || className.contains("Fullscreen") {
             view.isHidden = true
             if let control = view as? UIControl {
                 control.isEnabled = false
             }
         }
         
-        var isFullscreenElement = false
-        
-        // Check accessibility properties
-        if let label = view.accessibilityLabel?.lowercased(),
-           label.contains("fullscreen") || label.contains("full screen") || label.contains("exit fullscreen") || label.contains("exit full screen") {
-            isFullscreenElement = true
-        }
-        
-        if let identifier = view.accessibilityIdentifier?.lowercased(),
-           identifier.contains("fullscreen") || identifier.contains("full-screen") {
-            isFullscreenElement = true
-        }
-        
-        // Check if it's a button and inspect its image
+        // Disable individual buttons representing fullscreen
         if let button = view as? UIButton {
-            if let image = button.currentImage {
-                let imageDesc = image.description.lowercased()
-                if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") ||
-                   imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
-                   imageDesc.contains("expand") || imageDesc.contains("collapse") ||
-                   imageDesc.contains("resize") {
-                    isFullscreenElement = true
-                }
+            let imageDesc = button.currentImage?.description.lowercased() ?? ""
+            let label = button.accessibilityLabel?.lowercased() ?? ""
+            if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") || 
+               imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
+               label.contains("fullscreen") || label.contains("full screen") {
+                button.isHidden = true
+                button.isEnabled = false
             }
-        }
-        
-        // Check UIImageView subviews of this view for matching images
-        for subview in view.subviews {
-            if let imageView = subview as? UIImageView, let image = imageView.image {
-                let imageDesc = image.description.lowercased()
-                if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") ||
-                   imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
-                   imageDesc.contains("expand") || imageDesc.contains("collapse") ||
-                   imageDesc.contains("resize") {
-                    isFullscreenElement = true
-                }
-            }
-        }
-        
-        // Also check if any private properties might have image info using reflection (Mirror)
-        let mirror = Mirror(reflecting: view)
-        for child in mirror.children {
-            if let image = child.value as? UIImage {
-                let imageDesc = image.description.lowercased()
-                if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") ||
-                   imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
-                   imageDesc.contains("expand") || imageDesc.contains("collapse") ||
-                   imageDesc.contains("resize") {
-                    isFullscreenElement = true
-                }
-            }
-        }
-        
-        if isFullscreenElement {
-            view.isHidden = true
-            view.alpha = 0
-            if let control = view as? UIControl {
-                control.isEnabled = false
-            }
-            view.superview?.layoutIfNeeded()
         }
         
         for subview in view.subviews {
