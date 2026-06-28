@@ -1571,7 +1571,7 @@ extension VTPlayerView {
     private var iosGalleryView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // MARK: - Import Buttons Card Actions (Uniform height)
+                // MARK: - Import Buttons with Liquid Glass styling
                 HStack(spacing: 16) {
                     Button(action: { showFileImporter = true }) {
                         HStack {
@@ -1586,15 +1586,11 @@ extension VTPlayerView {
                         }
                         .frame(height: 44)
                         .padding(.horizontal)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(.ultraThinMaterial)
                         .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                        )
                     }
                     .buttonStyle(.plain)
-                    
+
                     #if canImport(PhotosUI)
                     PhotosPicker(
                         selection: $selectedPhotoItem,
@@ -1613,12 +1609,8 @@ extension VTPlayerView {
                         }
                         .frame(height: 44)
                         .padding(.horizontal)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(.ultraThinMaterial)
                         .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                        )
                     }
                     .buttonStyle(.plain)
                     #endif
