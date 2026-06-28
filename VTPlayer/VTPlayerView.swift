@@ -1808,7 +1808,7 @@ extension VTPlayerView {
         }
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(viewModel.showControls ? .ultraThinMaterial : .hidden, for: .navigationBar)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         // Keep toolbar always visible to prevent the navigation bar frame
         // from collapsing during fullscreen controls animation — hiding the
