@@ -507,6 +507,18 @@ final class VTPlayerViewModel {
         }
     }
     
+    /// Toggles controls visibility — used on iOS to keep the navigation bar
+    /// in sync with VideoPlayer's native transport controls which also toggle on tap.
+    func toggleControls() {
+        if showControls {
+            showControls = false
+            inactivityTask?.cancel()
+        } else {
+            showControls = true
+            startInactivityTimer()
+        }
+    }
+    
     private func startInactivityTimer() {
         inactivityTask?.cancel()
         inactivityTask = Task { [weak self] in
@@ -1479,9 +1491,9 @@ extension VTPlayerView {
                     .tint(.white)
             }
         }
-        .onTapGesture {
-            viewModel.userActivityDetected()
-        }
+        .simultaneousGesture(TapGesture().onEnded {
+            viewModel.toggleControls()
+        })
         .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "Video")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
