@@ -1553,29 +1553,6 @@ extension VTPlayerView {
         TabView {
             NavigationStack {
                 iosGalleryView
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Menu {
-                                Button(action: { showFileImporter = true }) {
-                                    Label("Browse Files", systemImage: "folder.fill")
-                                }
-
-                                #if canImport(PhotosUI)
-                                PhotosPicker(
-                                    selection: $selectedPhotoItem,
-                                    matching: .videos,
-                                    photoLibrary: .shared()
-                                ) {
-                                    Label("Photos Library", systemImage: "photo.on.rectangle.angled")
-                                }
-                                #endif
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title3)
-                                    .imageScale(.large)
-                            }
-                        }
-                    }
             }
             .tabItem {
                 Label("Gallery", systemImage: "play.square.stack.fill")
@@ -1690,6 +1667,27 @@ extension VTPlayerView {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Gallery")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(action: { showFileImporter = true }) {
+                        Label("Browse Files", systemImage: "folder.fill")
+                    }
+
+                    #if canImport(PhotosUI)
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .videos,
+                        photoLibrary: .shared()
+                    ) {
+                        Label("Photos Library", systemImage: "photo.on.rectangle.angled")
+                    }
+                    #endif
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
