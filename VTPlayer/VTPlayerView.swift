@@ -755,7 +755,9 @@ final class VTPlayerViewModel {
         playbackGeneration += 1
         let gen = playbackGeneration
         producerTask?.cancel()
+        producerTask = nil
         consumerTask?.cancel()
+        consumerTask = nil
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
@@ -791,6 +793,10 @@ final class VTPlayerViewModel {
 
         producerTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
+            
+            defer {
+                self.producerTask = nil
+            }
 
             // Check Quality SR model availability before starting (macOS only)
             var effectiveQualitySR = qualitySR
