@@ -1551,7 +1551,10 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-            
+
+            // Enhancement status pills — Liquid Glass floating bar at top
+            iosEnhancementPills
+
             if viewModel.showSidebar {
                 iosDiagnosticsOverlay
             }
@@ -1573,7 +1576,7 @@ extension VTPlayerView {
                         .foregroundColor(viewModel.showSidebar ? .cyan : .white)
                 }
             }
-            
+
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     showSettingsSheet = true
@@ -1593,8 +1596,84 @@ extension VTPlayerView {
             viewModel.videoURL = nil
         }
     }
+
+    // MARK: - Enhancement Pills (Liquid Glass)
+    @ViewBuilder
+    private var iosEnhancementPills: some View {
+        VStack {
+            HStack(spacing: 6) {
+                let hasSR = viewModel.superResolutionLevel > 0
+                let hasQLSR = viewModel.qualitySuperResolutionScaleFactor > 0
+                let hasFI = viewModel.frameInterpolationLevel > 0
+                let hasHDR = viewModel.hdrStrength > 0
+                let hasMB = viewModel.motionBlurStrength > 0
+                let hasDN = viewModel.denoiseStrength > 0
+
+                if hasSR {
+                    enhancementPill(
+                        label: "SR \(viewModel.superResolutionLevel)x",
+                        color: .cyan
+                    )
+                }
+                if hasQLSR {
+                    enhancementPill(
+                        label: "SR \(viewModel.qualitySuperResolutionScaleFactor)x QL",
+                        color: .blue
+                    )
+                }
+                if hasFI {
+                    enhancementPill(
+                        label: "FI \(viewModel.frameInterpolationLevel)x",
+                        color: .green
+                    )
+                }
+                if hasHDR {
+                    enhancementPill(label: "HDR", color: .yellow)
+                }
+                if hasMB {
+                    enhancementPill(label: "MB", color: .purple)
+                }
+                if hasDN {
+                    enhancementPill(label: "DN", color: .orange)
+                }
+
+                if !hasSR && !hasQLSR && !hasFI && !hasHDR && !hasMB && !hasDN {
+                    EmptyView()
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial.opacity(0.85))
+            .cornerRadius(20)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.35), .white.opacity(0.05)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+
+            Spacer()
+        }
+        .padding(.top, 8)
     }
-    
+
+    private func enhancementPill(label: String, color: Color) -> some View {
+        Text(label)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(color.opacity(0.15)))
+            .overlay(Capsule().stroke(color.opacity(0.4), lineWidth: 1))
+            .shadow(color: color.opacity(0.25), radius: 4, x: 0, y: 0)
+    }
+
     @ViewBuilder
     private var iosDiagnosticsOverlay: some View {
         VStack {
@@ -1616,17 +1695,17 @@ extension VTPlayerView {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledValueRow(label: "Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
                         LabeledValueRow(label: "Source Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate))
-                        
+
                         let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
                         LabeledValueRow(label: "Target Rate", value: String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
-                        
+
                         LabeledValueRow(label: "Display Rate", value: String(format: "%.1f Hz", viewModel.fps), valueColor: viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                         LabeledValueRow(label: "Latency", value: String(format: "%.1f ms", viewModel.frameProcessingTime))
-                        
+
                         let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                         let activeScale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
                         LabeledValueRow(label: "SR Mode", value: activeScale > 0 ? "\(isQL ? "QL" : "LL") \(activeScale)x" : "Off")
@@ -1647,12 +1726,12 @@ extension VTPlayerView {
         }
         .padding(.top, 60)
     }
-    
+
     struct LabeledValueRow: View {
         let label: String
         let value: String
         var valueColor: Color = .white
-        
+
         var body: some View {
             HStack {
                 Text(label)
