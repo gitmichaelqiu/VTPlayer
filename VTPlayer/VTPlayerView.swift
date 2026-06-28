@@ -1571,23 +1571,28 @@ extension VTPlayerView {
     private var iosGalleryView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // MARK: - Import Buttons with Liquid Glass styling
-                HStack(spacing: 16) {
+                // MARK: - Import Buttons with native Liquid Glass styling
+                VStack(spacing: 12) {
                     Button(action: { showFileImporter = true }) {
-                        HStack {
+                        HStack(spacing: 14) {
                             Image(systemName: "folder.fill")
-                                .font(.body)
-                                .foregroundColor(.blue)
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+
                             Text("Browse Files")
-                                .font(.body)
-                                .fontWeight(.semibold)
+                                .font(.body.weight(.semibold))
                                 .foregroundColor(.primary)
+
                             Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
                         }
-                        .frame(height: 44)
-                        .padding(.horizontal)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(12)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
 
@@ -1597,26 +1602,31 @@ extension VTPlayerView {
                         matching: .videos,
                         photoLibrary: .shared()
                     ) {
-                        HStack {
+                        HStack(spacing: 14) {
                             Image(systemName: "photo.on.rectangle.angled")
-                                .font(.body)
-                                .foregroundColor(.purple)
+                                .font(.title3)
+                                .foregroundStyle(.purple)
+                                .frame(width: 28)
+
                             Text("Photos Library")
-                                .font(.body)
-                                .fontWeight(.semibold)
+                                .font(.body.weight(.semibold))
                                 .foregroundColor(.primary)
+
                             Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
                         }
-                        .frame(height: 44)
-                        .padding(.horizontal)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(12)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                     #endif
                 }
                 .padding(.horizontal)
-                .padding(.top, 16)
+                .padding(.top, 8)
                 
                 // MARK: - Recents Grid (Responsive layout)
                 if viewModel.recentVideos.isEmpty {
@@ -1642,18 +1652,17 @@ extension VTPlayerView {
                             .bold()
                         Spacer()
                         Picker("Sort", selection: $sortBy) {
-                            ForEach(SortOption.allCases) { option in
-                                Text(option.rawValue).tag(option)
-                            }
+                            Text("Date").tag(SortOption.dateAdded)
+                            Text("Name").tag(SortOption.name)
                         }
-                        .pickerStyle(.menu)
-                        .font(.subheadline)
-                        .tint(.secondary)
+                        .pickerStyle(.segmented)
+                        .frame(width: 140)
 
                         Button(action: { showClearAllAlert = true }) {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
                         }
+                        .padding(.leading, 8)
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
@@ -1671,19 +1680,15 @@ extension VTPlayerView {
                         ForEach(sortedVideos, id: \.self) { url in
                             VStack(alignment: .leading, spacing: 8) {
                                 VideoThumbnailView(url: url)
-                                    .cornerRadius(12)
-                                    .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 3)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                                    )
-                                
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(url.lastPathComponent)
                                         .font(.caption)
                                         .fontWeight(.bold)
                                         .foregroundColor(.primary)
-                                        .lineLimit(2)
+                                        .lineLimit(1)
                                         .multilineTextAlignment(.leading)
                                 }
                                 .padding(.horizontal, 4)
@@ -1693,6 +1698,16 @@ extension VTPlayerView {
                                 viewModel.openVideo(url)
                             }
                             .contextMenu {
+                                ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
+
+                                Button {
+                                    UIPasteboard.general.string = url.lastPathComponent
+                                } label: {
+                                    Label("Copy Name", systemImage: "doc.on.doc")
+                                }
+
+                                Divider()
+
                                 Button(role: .destructive) {
                                     if let idx = viewModel.recentVideos.firstIndex(of: url) {
                                         viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
