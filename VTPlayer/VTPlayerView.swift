@@ -1641,6 +1641,15 @@ extension VTPlayerView {
                             .font(.title2)
                             .bold()
                         Spacer()
+                        Picker("Sort", selection: $sortBy) {
+                            ForEach(SortOption.allCases) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .font(.subheadline)
+                        .tint(.secondary)
+
                         Button(action: { showClearAllAlert = true }) {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
@@ -1648,9 +1657,18 @@ extension VTPlayerView {
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
-                    
+
+                    let sortedVideos: [URL] = {
+                        switch sortBy {
+                        case .name:
+                            return viewModel.recentVideos.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+                        case .dateAdded:
+                            return viewModel.recentVideos
+                        }
+                    }()
+
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 20) {
-                        ForEach(viewModel.recentVideos, id: \.self) { url in
+                        ForEach(sortedVideos, id: \.self) { url in
                             VStack(alignment: .leading, spacing: 8) {
                                 VideoThumbnailView(url: url)
                                     .cornerRadius(12)
