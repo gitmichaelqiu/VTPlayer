@@ -18,6 +18,11 @@ import QuartzCore
 import AppKit
 #endif
 
+#if canImport(PhotosUI)
+import PhotosUI
+import UniformTypeIdentifiers
+#endif
+
 #if os(macOS)
 typealias PlatformVisualEffectMaterial = NSVisualEffectView.Material
 typealias PlatformVisualEffectBlendingMode = NSVisualEffectView.BlendingMode
@@ -359,7 +364,7 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS)
-    @objc private func reloadRecentVideos() {
+    @objc func reloadRecentVideos() {
         self.recentVideos = NSDocumentController.shared.recentDocumentURLs
     }
     #endif
@@ -1050,6 +1055,9 @@ final class VTPlayerViewModel {
 struct VTPlayerView: View {
     @State private var viewModel = VTPlayerViewModel()
     @State private var showFileImporter = false
+    #if canImport(PhotosUI)
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    #endif
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     @State private var scrubTime: Double = 0.0
@@ -1119,10 +1127,26 @@ struct VTPlayerView: View {
             case .success(let urls):
                 guard let url = urls.first else { return }
                 viewModel.openVideo(url)
+                withAnimation {
+                    columnVisibility = .detailOnly
+                }
             case .failure(let error):
                 print("Failed to import file: \(error.localizedDescription)")
             }
         }
+        #if canImport(PhotosUI)
+        .onChange(of: selectedPhotoItem) { item in
+            guard let item = item else { return }
+            Task {
+                if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
+                    viewModel.openVideo(movie.url)
+                    withAnimation {
+                        columnVisibility = .detailOnly
+                    }
+                }
+            }
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -1221,16 +1245,34 @@ extension VTPlayerView {
                     } description: {
                         Text("Open a video to see it here.")
                     } actions: {
-                        Button(action: { showFileImporter = true }) {
-                            Text("Open Video...")
+                        VStack(spacing: 8) {
+                            Button(action: { showFileImporter = true }) {
+                                Text("Open from Files...")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            
+                            #if canImport(PhotosUI)
+                            PhotosPicker(
+                                selection: $selectedPhotoItem,
+                                matching: .videos,
+                                photoLibrary: .shared()
+                            ) {
+                                Text("Open from Photos...")
+                            }
+                            .buttonStyle(.bordered)
+                            #endif
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                     Spacer()
                 }
             } else {
                 List(viewModel.recentVideos, id: \.self) { url in
-                    Button(action: { viewModel.openRecentVideo(url) }) {
+                    Button(action: {
+                        viewModel.openRecentVideo(url)
+                        withAnimation {
+                            columnVisibility = .detailOnly
+                        }
+                    }) {
                         HStack(spacing: 10) {
                             Image(systemName: "film")
                                 .foregroundColor(.secondary)
@@ -1386,11 +1428,25 @@ extension VTPlayerView {
                     } description: {
                         Text("Open a local video file to test Apple Silicon Neural Engine enhancements.")
                     } actions: {
-                        Button(action: { showFileImporter = true }) {
-                            Text("Open Video File...")
+                        VStack(spacing: 8) {
+                            Button(action: { showFileImporter = true }) {
+                                Text("Open Video File...")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+                            
+                            #if canImport(PhotosUI) && !os(macOS)
+                            PhotosPicker(
+                                selection: $selectedPhotoItem,
+                                matching: .videos,
+                                photoLibrary: .shared()
+                            ) {
+                                Text("Open from Photos Library...")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                            #endif
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.regular)
                     }
                 }
             }
@@ -1794,3 +1850,25 @@ extension View {
         #endif
     }
 }
+
+#if canImport(PhotosUI)
+struct PhotosMovie: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { receivedData in
+            let fileName = receivedData.file.lastPathComponent
+            let copy = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            
+            if FileManager.default.fileExists(atPath: copy.path) {
+                try? FileManager.default.removeItem(at: copy)
+            }
+            
+            try FileManager.default.copyItem(at: receivedData.file, to: copy)
+            return .init(url: copy)
+        }
+    }
+}
+#endif
