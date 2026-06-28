@@ -399,17 +399,23 @@ final class VTPlayerViewModel {
         let tempDir = FileManager.default.temporaryDirectory
         let destinationURL = tempDir.appendingPathComponent(url.lastPathComponent)
         
-        do {
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try? FileManager.default.removeItem(at: destinationURL)
+        if url.standardizedFileURL != destinationURL.standardizedFileURL {
+            do {
+                if FileManager.default.fileExists(atPath: destinationURL.path) {
+                    try? FileManager.default.removeItem(at: destinationURL)
+                }
+                try FileManager.default.copyItem(at: url, to: destinationURL)
+                self.tempLocalURL = destinationURL
+                targetURL = destinationURL
+                print("Successfully copied video to sandbox temp: \(destinationURL.path)")
+            } catch {
+                print("Failed to copy video to sandbox: \(error.localizedDescription)")
+                targetURL = url
             }
-            try FileManager.default.copyItem(at: url, to: destinationURL)
-            self.tempLocalURL = destinationURL
-            targetURL = destinationURL
-            print("Successfully copied video to sandbox temp: \(destinationURL.path)")
-        } catch {
-            print("Failed to copy video to sandbox: \(error.localizedDescription)")
+        } else {
+            self.tempLocalURL = url
             targetURL = url
+            print("Video is already in sandbox temp: \(url.path)")
         }
         #endif
         
