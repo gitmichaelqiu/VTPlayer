@@ -1606,61 +1606,59 @@ extension VTPlayerView {
                 }()
                 
                 List {
-                    Section("Videos") {
-                        ForEach(sortedVideos, id: \.self) { url in
-                            Button(action: {
-                                viewModel.openVideo(url)
-                            }) {
-                                HStack(spacing: 12) {
-                                    VideoThumbnailView(url: url)
+                    ForEach(sortedVideos, id: \.self) { url in
+                        Button(action: {
+                            viewModel.openVideo(url)
+                        }) {
+                            HStack(spacing: 12) {
+                                VideoThumbnailView(url: url)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(url.lastPathComponent)
+                                        .font(.body)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.primary)
+                                        .lineLimit(2)
                                     
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(url.lastPathComponent)
-                                            .font(.body)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                            .lineLimit(2)
-                                        
-                                        Text(formatDateAdded(for: url))
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
+                                    Text(formatDateAdded(for: url))
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
-                            .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                        viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                    }
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
                                 }
+                            } label: {
+                                Label("Remove", systemImage: "trash")
                             }
-                            .contextMenu {
-                                ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
-                                
-                                Button {
-                                    UIPasteboard.general.string = url.lastPathComponent
-                                } label: {
-                                    Label("Copy Name", systemImage: "doc.on.doc")
+                        }
+                        .contextMenu {
+                            ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
+                            
+                            Button {
+                                UIPasteboard.general.string = url.lastPathComponent
+                            } label: {
+                                Label("Copy Name", systemImage: "doc.on.doc")
+                            }
+                            
+                            Divider()
+                            
+                            Button(role: .destructive) {
+                                if let idx = viewModel.recentVideos.firstIndex(of: url) {
+                                    viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
                                 }
-                                
-                                Divider()
-                                
-                                Button(role: .destructive) {
-                                    if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                                        viewModel.deleteRecentVideoIOS(at: IndexSet(integer: idx))
-                                    }
-                                } label: {
-                                    Label("Remove from List", systemImage: "trash")
-                                }
+                            } label: {
+                                Label("Remove from List", systemImage: "trash")
                             }
                         }
                     }
@@ -1837,6 +1835,7 @@ extension VTPlayerView {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .persistentSystemOverlays(.hidden)
+        .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
                 .presentationDetents([.medium])
@@ -2778,23 +2777,73 @@ class CustomAVPlayerViewController: AVPlayerViewController {
         let className = String(describing: type(of: view))
         
         // Hide native fullscreen view containers
-        if className.contains("FullScreen") || className.contains("Fullscreen") {
+        if className.contains("FullScreen") || className.contains("Fullscreen") || className.contains("Zoom") {
             view.isHidden = true
             if let control = view as? UIControl {
                 control.isEnabled = false
             }
         }
         
-        // Disable individual buttons representing fullscreen
+        var isFullscreenElement = false
+        
+        // Check accessibility properties
+        if let label = view.accessibilityLabel?.lowercased(),
+           label.contains("fullscreen") || label.contains("full screen") || label.contains("exit fullscreen") || label.contains("exit full screen") {
+            isFullscreenElement = true
+        }
+        
+        if let identifier = view.accessibilityIdentifier?.lowercased(),
+           identifier.contains("fullscreen") || identifier.contains("full-screen") {
+            isFullscreenElement = true
+        }
+        
+        // Check if it's a button and inspect its image
         if let button = view as? UIButton {
-            let imageDesc = button.currentImage?.description.lowercased() ?? ""
-            let label = button.accessibilityLabel?.lowercased() ?? ""
-            if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") || 
-               imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
-               label.contains("fullscreen") || label.contains("full screen") {
-                button.isHidden = true
-                button.isEnabled = false
+            if let image = button.currentImage {
+                let imageDesc = image.description.lowercased()
+                if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") ||
+                   imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
+                   imageDesc.contains("expand") || imageDesc.contains("collapse") ||
+                   imageDesc.contains("resize") {
+                    isFullscreenElement = true
+                }
             }
+        }
+        
+        // Check UIImageView subviews of this view for matching images
+        for subview in view.subviews {
+            if let imageView = subview as? UIImageView, let image = imageView.image {
+                let imageDesc = image.description.lowercased()
+                if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") ||
+                   imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
+                   imageDesc.contains("expand") || imageDesc.contains("collapse") ||
+                   imageDesc.contains("resize") {
+                    isFullscreenElement = true
+                }
+            }
+        }
+        
+        // Also check if any private properties might have image info using reflection (Mirror)
+        let mirror = Mirror(reflecting: view)
+        for child in mirror.children {
+            if let image = child.value as? UIImage {
+                let imageDesc = image.description.lowercased()
+                if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") ||
+                   imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
+                   imageDesc.contains("expand") || imageDesc.contains("collapse") ||
+                   imageDesc.contains("resize") {
+                    isFullscreenElement = true
+                }
+            }
+        }
+        
+        if isFullscreenElement {
+            view.isHidden = true
+            view.alpha = 0
+            if let control = view as? UIControl {
+                control.isEnabled = false
+            }
+            view.superview?.layoutIfNeeded()
         }
         
         for subview in view.subviews {
