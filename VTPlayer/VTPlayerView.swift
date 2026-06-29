@@ -1666,10 +1666,12 @@ struct VTPlayerView: View {
 
     private func togglePin(for url: URL) {
         let filename = url.lastPathComponent
-        if pinnedVideos.contains(filename) {
-            pinnedVideos.remove(filename)
-        } else {
-            pinnedVideos.insert(filename)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            if pinnedVideos.contains(filename) {
+                pinnedVideos.remove(filename)
+            } else {
+                pinnedVideos.insert(filename)
+            }
         }
         UserDefaults.standard.set(Array(pinnedVideos), forKey: "VTPinnedVideos")
     }
@@ -1801,6 +1803,8 @@ extension VTPlayerView {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: sortBy)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pinnedVideos)
             }
         }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
@@ -1907,6 +1911,15 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
+    private func settingsIcon(_ symbol: String, backgroundColor: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.footnote.bold())
+            .foregroundColor(.white)
+            .frame(width: 28, height: 28)
+            .background(backgroundColor)
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
     private var iosAboutView: some View {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
@@ -1916,7 +1929,7 @@ extension VTPlayerView {
                         icon
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 60, height: 60)
+                            .frame(width: 64, height: 64)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1925,108 +1938,135 @@ extension VTPlayerView {
                             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                     } else {
                         Image(systemName: "cpu.fill")
-                            .font(.system(size: 24))
+                            .font(.system(size: 26))
                             .foregroundColor(.blue)
-                            .frame(width: 60, height: 60)
+                            .frame(width: 64, height: 64)
                             .background(Color(.secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("VTPlayer")
-                            .font(.headline)
-                            .bold()
+                            .font(.title2.bold())
                         Text("Hardware-Accelerated AI Enhancer")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("Version 1.0")
+                        Text("Version 1.0 (Build 100)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
             }
-
-            // Default Playback Settings Section
-            Section("Default Playback Configuration") {
-                Picker("Super Resolution", selection: $defaultSRLevel) {
-                    Text("Off").tag(0)
-                    Text("2x Upscaling").tag(2)
-                    Text("4x Upscaling").tag(4)
-                }
-                
-                Picker("Quality SR", selection: $defaultQSRLevel) {
-                    Text("Off").tag(0)
-                    Text("2x Quality SR").tag(2)
-                    Text("4x Quality SR").tag(4)
-                }
-                
-                Picker("Frame Interpolation", selection: $defaultFILevel) {
-                    Text("Off").tag(0)
-                    Text("2x Interpolation").tag(2)
-                    Text("4x Interpolation").tag(4)
+            
+            // Default Playback Settings Section (iOS Settings Native Style)
+            Section("Default Enhancement Configuration") {
+                HStack {
+                    settingsIcon("sparkles", backgroundColor: .blue)
+                    Picker("Super Resolution", selection: $defaultSRLevel) {
+                        Text("Off").tag(0)
+                        Text("2x Upscaling").tag(2)
+                        Text("4x Upscaling").tag(4)
+                    }
                 }
                 
                 HStack {
-                    Text("Motion Blur")
-                    Spacer()
+                    settingsIcon("star.fill", backgroundColor: .purple)
+                    Picker("Quality SR", selection: $defaultQSRLevel) {
+                        Text("Off").tag(0)
+                        Text("2x Quality SR").tag(2)
+                        Text("4x Quality SR").tag(4)
+                    }
+                }
+                
+                HStack {
+                    settingsIcon("bolt.fill", backgroundColor: .green)
+                    Picker("Frame Interpolation", selection: $defaultFILevel) {
+                        Text("Off").tag(0)
+                        Text("2x Interpolation").tag(2)
+                        Text("4x Interpolation").tag(4)
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        settingsIcon("wind", backgroundColor: .orange)
+                        Text("Motion Blur")
+                        Spacer()
+                        Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
                     Slider(value: Binding(
                         get: { Double(defaultMBLevel) },
                         set: { defaultMBLevel = Int($0) }
                     ), in: 0...30, step: 1)
-                    .frame(width: 140)
-                    Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
-                        .frame(width: 24, alignment: .trailing)
+                    .tint(.orange)
                 }
+                .padding(.vertical, 2)
                 
-                HStack {
-                    Text("Denoise Strength")
-                    Spacer()
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        settingsIcon("slider.horizontal.3", backgroundColor: .teal)
+                        Text("Denoise Strength")
+                        Spacer()
+                        Text(String(format: "%.2f", defaultDNLevel))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
                     Slider(value: $defaultDNLevel, in: 0.0...1.0, step: 0.05)
-                    .frame(width: 140)
-                    Text(String(format: "%.2f", defaultDNLevel))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
-                        .frame(width: 32, alignment: .trailing)
+                        .tint(.teal)
                 }
+                .padding(.vertical, 2)
                 
-                HStack {
-                    Text("Sharpness")
-                    Spacer()
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        settingsIcon("wand.and.rays", backgroundColor: .red)
+                        Text("Sharpness")
+                        Spacer()
+                        Text(String(format: "%.1f", defaultSharpness))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
                     Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.1)
-                    .frame(width: 140)
-                    Text(String(format: "%.1f", defaultSharpness))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
-                        .frame(width: 24, alignment: .trailing)
+                        .tint(.red)
                 }
+                .padding(.vertical, 2)
                 
-                HStack {
-                    Text("SDR-to-HDR Boost")
-                    Spacer()
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        settingsIcon("sun.max.fill", backgroundColor: .pink)
+                        Text("SDR-to-HDR Boost")
+                        Spacer()
+                        Text(String(format: "%.1f", defaultHDRBoost))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
                     Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.1)
-                    .frame(width: 140)
-                    Text(String(format: "%.1f", defaultHDRBoost))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
-                        .frame(width: 24, alignment: .trailing)
+                        .tint(.pink)
                 }
+                .padding(.vertical, 2)
             }
-
+            
             // Gallery Configuration Section
-            Section("Gallery Configuration") {
-                Toggle("Show File Extensions", isOn: $showFileExtensions)
+            Section("Gallery Options") {
+                HStack {
+                    settingsIcon("doc.text", backgroundColor: .gray)
+                    Toggle("Show File Extensions", isOn: $showFileExtensions)
+                }
             }
 
             // Copyright Row
             Section {
                 HStack {
                     Spacer()
-                    Text("Copyright © 2026 Michael Qiu. All rights reserved.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    VStack(spacing: 4) {
+                        Text("Copyright © 2026 Michael Qiu. All rights reserved.")
+                        Text("Powered by Apple Silicon Neural Engine & VideoToolbox")
+                    }
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
                     Spacer()
                 }
             }
@@ -3038,9 +3078,10 @@ class CustomAVPlayerViewController: AVPlayerViewController {
     private func disableFullscreenButton(in view: UIView) {
         let className = String(describing: type(of: view))
         
-        // Hide native fullscreen view containers
+        // Disable native fullscreen view containers
         if className.contains("FullScreen") || className.contains("Fullscreen") {
-            view.isHidden = true
+            view.isUserInteractionEnabled = false
+            view.alpha = 0.35
             if let control = view as? UIControl {
                 control.isEnabled = false
             }
@@ -3053,8 +3094,9 @@ class CustomAVPlayerViewController: AVPlayerViewController {
             if imageDesc.contains("fullscreen") || imageDesc.contains("full-screen") || 
                imageDesc.contains("arrow.up.left") || imageDesc.contains("arrow.down.right") ||
                label.contains("fullscreen") || label.contains("full screen") {
-                button.isHidden = true
                 button.isEnabled = false
+                button.isUserInteractionEnabled = false
+                button.alpha = 0.35
             }
         }
         
