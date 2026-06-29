@@ -1637,7 +1637,9 @@ struct VTPlayerView: View {
             // Update recentVideos list
             if let idx = viewModel.recentVideos.firstIndex(of: url) {
                 viewModel.recentVideos[idx] = newURL
+                #if os(iOS)
                 viewModel.saveRecentVideosIOS()
+                #endif
             }
             
             // Move Date Added timestamp in UserDefaults
@@ -2330,7 +2332,7 @@ extension VTPlayerView {
                             Button(action: { showFileImporter = true }) {
                                 Text("Open from Files...")
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.glassProminent)
                             
                             #if canImport(PhotosUI)
                             PhotosPicker(
@@ -2340,7 +2342,7 @@ extension VTPlayerView {
                             ) {
                                 Text("Open from Photos...")
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glass)
                             #endif
                         }
                     }
@@ -2514,7 +2516,7 @@ extension VTPlayerView {
                             Button(action: { showFileImporter = true }) {
                                 Text("Open Video File...")
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.glassProminent)
                             .controlSize(.regular)
                             
                             #if canImport(PhotosUI) && !os(macOS)
@@ -2755,15 +2757,7 @@ extension VTPlayerView {
             .macOnHover { viewModel.isHoveringControlBar = $0 }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(
-                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                    .cornerRadius(16)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
         }
@@ -2779,8 +2773,7 @@ extension VTPlayerView {
                 .font(.title3.weight(.semibold))
                 .foregroundColor(.primary)
         }
-        .buttonStyle(.borderless)
-        .buttonBorderShape(.circle)
+        .buttonStyle(.glass)
         .keyboardShortcut(.space, modifiers: [])
     }
     
@@ -2831,8 +2824,7 @@ extension VTPlayerView {
                 .font(.body.weight(.semibold))
                 .foregroundColor(.primary)
         }
-        .buttonStyle(.borderless)
-        .buttonBorderShape(.circle)
+        .buttonStyle(.glass)
         .keyboardShortcut("f", modifiers: [])
         .help("Toggle Fullscreen (F)")
         #else
