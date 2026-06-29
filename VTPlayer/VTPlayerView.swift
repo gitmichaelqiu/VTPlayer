@@ -1264,7 +1264,7 @@ final class VTPlayerViewModel {
         hdrStrength = defHDR
         renderer.hdrStrength = Float(defHDR)
         
-        qualitySuperResolutionScaleFactor = UserDefaults.standard.integer(forKey: "VTDefaultQSRLevel")
+        qualitySuperResolutionScaleFactor = 0
         motionBlurStrength = UserDefaults.standard.integer(forKey: "VTDefaultMBLevel")
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1
@@ -1403,7 +1403,6 @@ struct VTPlayerView: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
     @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
-    @AppStorage("VTDefaultQSRLevel") private var defaultQSRLevel = 0
     @AppStorage("VTDefaultFILevel") private var defaultFILevel = 0
     @AppStorage("VTDefaultMBLevel") private var defaultMBLevel = 0
     @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
@@ -1709,7 +1708,14 @@ extension VTPlayerView {
                         
                         // Sort option menu
                         Menu {
-                            Picker("Sort By", selection: $sortBy) {
+                            Picker("Sort By", selection: Binding(
+                                get: { sortBy },
+                                set: { newValue in
+                                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                        sortBy = newValue
+                                    }
+                                }
+                            )) {
                                 Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
                                 Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
                             }
@@ -1911,15 +1917,6 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    private func settingsIcon(_ symbol: String, backgroundColor: Color) -> some View {
-        Image(systemName: symbol)
-            .font(.footnote.bold())
-            .foregroundColor(.white)
-            .frame(width: 28, height: 28)
-            .background(backgroundColor)
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-    }
-
     private var iosAboutView: some View {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
@@ -1929,7 +1926,7 @@ extension VTPlayerView {
                         icon
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 64, height: 64)
+                            .frame(width: 60, height: 60)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1938,135 +1935,102 @@ extension VTPlayerView {
                             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                     } else {
                         Image(systemName: "cpu.fill")
-                            .font(.system(size: 26))
+                            .font(.system(size: 24))
                             .foregroundColor(.blue)
-                            .frame(width: 64, height: 64)
+                            .frame(width: 60, height: 60)
                             .background(Color(.secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("VTPlayer")
-                            .font(.title2.bold())
+                            .font(.headline)
+                            .bold()
                         Text("Hardware-Accelerated AI Enhancer")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("Version 1.0 (Build 100)")
+                        Text("Version 1.0")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
             
-            // Default Playback Settings Section (iOS Settings Native Style)
-            Section("Default Enhancement Configuration") {
-                HStack {
-                    settingsIcon("sparkles", backgroundColor: .blue)
-                    Picker("Super Resolution", selection: $defaultSRLevel) {
-                        Text("Off").tag(0)
-                        Text("2x Upscaling").tag(2)
-                        Text("4x Upscaling").tag(4)
-                    }
+            // Default Playback Settings Section
+            Section("Default Playback Configuration") {
+                Picker("Super Resolution", selection: $defaultSRLevel) {
+                    Text("Off").tag(0)
+                    Text("2x Upscaling").tag(2)
+                    Text("4x Upscaling").tag(4)
+                }
+                
+                Picker("Frame Interpolation", selection: $defaultFILevel) {
+                    Text("Off").tag(0)
+                    Text("2x Interpolation").tag(2)
+                    Text("4x Interpolation").tag(4)
                 }
                 
                 HStack {
-                    settingsIcon("star.fill", backgroundColor: .purple)
-                    Picker("Quality SR", selection: $defaultQSRLevel) {
-                        Text("Off").tag(0)
-                        Text("2x Quality SR").tag(2)
-                        Text("4x Quality SR").tag(4)
-                    }
-                }
-                
-                HStack {
-                    settingsIcon("bolt.fill", backgroundColor: .green)
-                    Picker("Frame Interpolation", selection: $defaultFILevel) {
-                        Text("Off").tag(0)
-                        Text("2x Interpolation").tag(2)
-                        Text("4x Interpolation").tag(4)
-                    }
-                }
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        settingsIcon("wind", backgroundColor: .orange)
-                        Text("Motion Blur")
-                        Spacer()
-                        Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                    }
+                    Text("Motion Blur")
+                    Spacer()
                     Slider(value: Binding(
                         get: { Double(defaultMBLevel) },
                         set: { defaultMBLevel = Int($0) }
                     ), in: 0...30, step: 1)
-                    .tint(.orange)
+                    .frame(width: 140)
+                    Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, alignment: .trailing)
                 }
-                .padding(.vertical, 2)
                 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        settingsIcon("slider.horizontal.3", backgroundColor: .teal)
-                        Text("Denoise Strength")
-                        Spacer()
-                        Text(String(format: "%.2f", defaultDNLevel))
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                    }
+                HStack {
+                    Text("Denoise Strength")
+                    Spacer()
                     Slider(value: $defaultDNLevel, in: 0.0...1.0, step: 0.05)
-                        .tint(.teal)
+                    .frame(width: 140)
+                    Text(String(format: "%.2f", defaultDNLevel))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, alignment: .trailing)
                 }
-                .padding(.vertical, 2)
                 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        settingsIcon("wand.and.rays", backgroundColor: .red)
-                        Text("Sharpness")
-                        Spacer()
-                        Text(String(format: "%.1f", defaultSharpness))
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                    }
+                HStack {
+                    Text("Sharpness")
+                    Spacer()
                     Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.1)
-                        .tint(.red)
+                    .frame(width: 140)
+                    Text(String(format: "%.1f", defaultSharpness))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, alignment: .trailing)
                 }
-                .padding(.vertical, 2)
                 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        settingsIcon("sun.max.fill", backgroundColor: .pink)
-                        Text("SDR-to-HDR Boost")
-                        Spacer()
-                        Text(String(format: "%.1f", defaultHDRBoost))
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                    }
+                HStack {
+                    Text("SDR-to-HDR Boost")
+                    Spacer()
                     Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.1)
-                        .tint(.pink)
+                    .frame(width: 140)
+                    Text(String(format: "%.1f", defaultHDRBoost))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, alignment: .trailing)
                 }
-                .padding(.vertical, 2)
             }
             
             // Gallery Configuration Section
-            Section("Gallery Options") {
-                HStack {
-                    settingsIcon("doc.text", backgroundColor: .gray)
-                    Toggle("Show File Extensions", isOn: $showFileExtensions)
-                }
+            Section("Gallery Configuration") {
+                Toggle("Show File Extensions", isOn: $showFileExtensions)
             }
 
             // Copyright Row
             Section {
                 HStack {
                     Spacer()
-                    VStack(spacing: 4) {
-                        Text("Copyright © 2026 Michael Qiu. All rights reserved.")
-                        Text("Powered by Apple Silicon Neural Engine & VideoToolbox")
-                    }
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+                    Text("Copyright © 2026 Michael Qiu. All rights reserved.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                     Spacer()
                 }
             }
