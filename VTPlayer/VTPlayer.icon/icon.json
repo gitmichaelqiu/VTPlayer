@@ -34,6 +34,12 @@
       "blur-material" : null,
       "layers" : [
         {
+          "fill-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : "automatic"
+            }
+          ],
           "glass" : true,
           "hidden" : false,
           "image-name" : "VTPlayer-iOS-Default-1024@1x.png",
@@ -70,6 +76,12 @@
               "appearance" : "dark",
               "value" : {
                 "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "automatic-gradient" : "extended-gray:1.00000,1.00000"
               }
             }
           ],
