@@ -715,7 +715,11 @@ final class VTPlayerViewModel {
     func updateEnhancements() {
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
-            startPlaybackLoop()
+            if isPipelineActive {
+                startPlaybackLoop()
+            } else {
+                stopPlaybackLoopOnly()
+            }
         } else if isPlaying && isPaused {
             // Don't restart the pipeline while paused — the cache clear
             // would cause a visible freeze on resume.  Flag it so play()
@@ -748,9 +752,13 @@ final class VTPlayerViewModel {
         // Rebuild the pipeline if enhancements were changed while paused,
         // or if the loop has not yet been initialized. Otherwise, the existing
         // active loop will automatically resume processing when isPaused is false.
-        if enhancementsPendingRestart || producerTask == nil {
-            enhancementsPendingRestart = false
-            startPlaybackLoop()
+        if isPipelineActive {
+            if enhancementsPendingRestart || producerTask == nil {
+                enhancementsPendingRestart = false
+                startPlaybackLoop()
+            }
+        } else {
+            stopPlaybackLoopOnly()
         }
         #endif
         self.userActivityDetected()
@@ -778,6 +786,31 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+    private func stopPlaybackLoopOnly() {
+        playbackGeneration += 1
+        producerTask?.cancel()
+        producerTask = nil
+        consumerTask?.cancel()
+        consumerTask = nil
+        
+        #if os(macOS)
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            self.displayLink = nil
+        }
+        #else
+        if let link = displayLink {
+            link.invalidate()
+            self.displayLink = nil
+        }
+        #endif
+        
+        audioSyncTask?.cancel()
+        audioSyncTask = nil
+        audioSyncLatency = 0
+        processedFrameCache.removeAll()
+    }
+
     private func startPlaybackLoop() {
         playbackGeneration += 1
         let gen = playbackGeneration
@@ -3191,16 +3224,28 @@ class CustomAVPlayerViewController: AVPlayerViewController {
         
         // Hide the backdrop/video presentation layers so the MTKView underneath is visible
         if className.contains("AVPlayerLayer") || className.contains("AVDisplayView") || className.contains("AVBackgroundView") {
-            view.backgroundColor = .clear
-            if let layerView = view as? AnyObject, layerView.responds(to: NSSelectorFromString("isOpaque")) {
-                view.isOpaque = false
+            if self.isPipelineActive {
+                view.backgroundColor = .clear
+                if let layerView = view as? AnyObject, layerView.responds(to: NSSelectorFromString("isOpaque")) {
+                    view.isOpaque = false
+                }
+            } else {
+                view.backgroundColor = .black // Restore default opaque color for native playback
+                if let layerView = view as? AnyObject, layerView.responds(to: NSSelectorFromString("isOpaque")) {
+                    view.isOpaque = true
+                }
             }
         }
         
         // General background clear for main view controller view
         if view == self.view {
-            view.backgroundColor = .clear
-            view.isOpaque = false
+            if self.isPipelineActive {
+                view.backgroundColor = .clear
+                view.isOpaque = false
+            } else {
+                view.backgroundColor = .black
+                view.isOpaque = true
+            }
         }
         
         for subview in view.subviews {

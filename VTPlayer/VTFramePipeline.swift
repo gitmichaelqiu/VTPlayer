@@ -73,7 +73,13 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     
                     // If seeked, configure starting time range
                     if startTime > .zero {
-                        reader.timeRange = CMTimeRange(start: startTime, duration: .invalid)
+                        let duration = try await asset.load(.duration)
+                        let remaining = CMTimeSubtract(duration, startTime)
+                        if remaining > .zero {
+                            reader.timeRange = CMTimeRange(start: startTime, duration: remaining)
+                        } else {
+                            reader.timeRange = CMTimeRange(start: startTime, duration: CMTime(value: 1, timescale: 100))
+                        }
                     }
                     
                     let outputSettings: [String: Any] = [
