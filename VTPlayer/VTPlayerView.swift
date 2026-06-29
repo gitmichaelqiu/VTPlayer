@@ -829,10 +829,10 @@ final class VTPlayerViewModel {
             var effectiveQualitySR = qualitySR
             var effectiveSRLevel = srLevel
             
-            #if os(macOS)
+            #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
             if qualitySR > 0 {
                 var qlConfig: VTSuperResolutionScalerConfiguration? = nil
-                if #available(macOS 26.0, *),
+                if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
                    VTSuperResolutionScalerConfiguration.isSupported {
                     qlConfig = VTSuperResolutionScalerConfiguration(
                         frameWidth: videoWidth, frameHeight: videoHeight,
@@ -861,11 +861,6 @@ final class VTPlayerViewModel {
                     effectiveQualitySR = 0
                     effectiveSRLevel = qualitySR == 4 ? 4 : 2
                 }
-            }
-            #else
-            if qualitySR > 0 {
-                effectiveQualitySR = 0
-                effectiveSRLevel = qualitySR == 4 ? 4 : 2
             }
             #endif
             let coordinator = VTFrameProcessorCoordinator(
@@ -1264,7 +1259,11 @@ final class VTPlayerViewModel {
         hdrStrength = defHDR
         renderer.hdrStrength = Float(defHDR)
         
-        qualitySuperResolutionScaleFactor = 0
+        if modelManager.status == .ready {
+            qualitySuperResolutionScaleFactor = UserDefaults.standard.integer(forKey: "VTDefaultQSRLevel")
+        } else {
+            qualitySuperResolutionScaleFactor = 0
+        }
         motionBlurStrength = UserDefaults.standard.integer(forKey: "VTDefaultMBLevel")
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1
@@ -1315,6 +1314,34 @@ final class VTPlayerViewModel {
     func saveRecentVideosIOS() {
         let paths = self.recentVideos.map { $0.absoluteString }
         UserDefaults.standard.set(paths, forKey: "VTRecentVideos")
+    }
+    
+    func checkGlobalModelStatus() {
+        if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
+           VTSuperResolutionScalerConfiguration.isSupported {
+            if let config = VTSuperResolutionScalerConfiguration(
+                frameWidth: 1920, frameHeight: 1080,
+                scaleFactor: 4, inputType: .video,
+                usePrecomputedFlow: false, qualityPrioritization: .normal,
+                revision: .revision1
+            ) {
+                modelManager.checkStatus(for: config)
+            }
+        }
+    }
+    
+    func downloadGlobalModel() {
+        if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
+           VTSuperResolutionScalerConfiguration.isSupported {
+            if let config = VTSuperResolutionScalerConfiguration(
+                frameWidth: 1920, frameHeight: 1080,
+                scaleFactor: 4, inputType: .video,
+                usePrecomputedFlow: false, qualityPrioritization: .normal,
+                revision: .revision1
+            ) {
+                modelManager.downloadModel(for: config)
+            }
+        }
     }
     
     func addToRecentVideosIOS(_ url: URL) {
@@ -1403,6 +1430,7 @@ struct VTPlayerView: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
     @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
+    @AppStorage("VTDefaultQSRLevel") private var defaultQSRLevel = 0
     @AppStorage("VTDefaultFILevel") private var defaultFILevel = 0
     @AppStorage("VTDefaultMBLevel") private var defaultMBLevel = 0
     @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
@@ -1790,27 +1818,35 @@ extension VTPlayerView {
                     let pinnedList = sortedVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
                     let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
                     
-                    if !pinnedList.isEmpty {
-                        Section("Pinned", isExpanded: $isPinnedExpanded) {
-                            ForEach(pinnedList, id: \.self) { url in
-                                videoRow(for: url)
-                            }
+                    Section(isExpanded: $isPinnedExpanded) {
+                        ForEach(pinnedList, id: \.self) { url in
+                            videoRow(for: url)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
                         }
-                        
-                        Section("Videos") {
-                            ForEach(unpinnedList, id: \.self) { url in
-                                videoRow(for: url)
-                            }
+                    } header: {
+                        if !pinnedList.isEmpty {
+                            Text("Pinned")
                         }
-                    } else {
+                    }
+                    
+                    Section {
                         ForEach(unpinnedList, id: \.self) { url in
                             videoRow(for: url)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                        }
+                    } header: {
+                        if !pinnedList.isEmpty {
+                            Text("Videos")
                         }
                     }
                 }
                 .listStyle(.insetGrouped)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: sortBy)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pinnedVideos)
             }
         }
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
@@ -1917,6 +1953,27 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
+    private func modelStatusLabelView(_ status: VTModelManager.Status) -> some View {
+        switch status {
+        case .notChecked:
+            Text("Checking...")
+                .foregroundColor(.secondary)
+        case .ready:
+            Text("Ready")
+                .foregroundColor(.green)
+                .bold()
+        case .downloadRequired:
+            Text("Download Required")
+                .foregroundColor(.orange)
+        case .downloading(let progress):
+            Text(String(format: "Downloading (%.0f%%)", progress * 100))
+                .foregroundColor(.blue)
+        case .failed:
+            Text("Failed")
+                .foregroundColor(.red)
+        }
+    }
+
     private var iosAboutView: some View {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
@@ -1963,6 +2020,14 @@ extension VTPlayerView {
                     Text("Off").tag(0)
                     Text("2x Upscaling").tag(2)
                     Text("4x Upscaling").tag(4)
+                }
+                
+                if viewModel.modelManager.status == .ready {
+                    Picker("Quality SR", selection: $defaultQSRLevel) {
+                        Text("Off").tag(0)
+                        Text("2x Quality SR").tag(2)
+                        Text("4x Quality SR").tag(4)
+                    }
                 }
                 
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
@@ -2019,6 +2084,53 @@ extension VTPlayerView {
                 }
             }
             
+            // Quality SR Model Section
+            Section("Quality Super Resolution Model") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Model Status")
+                        Spacer()
+                        modelStatusLabelView(viewModel.modelManager.status)
+                    }
+                    
+                    if case .downloadRequired = viewModel.modelManager.status {
+                        Button(action: {
+                            viewModel.downloadGlobalModel()
+                        }) {
+                            Text("Download Quality SR Model")
+                                .font(.body.bold())
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else if case .failed(let errMsg) = viewModel.modelManager.status {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Error: \(errMsg)")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                            
+                            Button(action: {
+                                viewModel.downloadGlobalModel()
+                            }) {
+                                Text("Retry Download")
+                                    .font(.body.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 4)
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    } else if case .downloading(let progress) = viewModel.modelManager.status {
+                        ProgressView(value: progress) {
+                            Text(String(format: "Downloading (%.0f%%)", progress * 100))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .progressViewStyle(.linear)
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            
             // Gallery Configuration Section
             Section("Gallery Configuration") {
                 Toggle("Show File Extensions", isOn: $showFileExtensions)
@@ -2038,6 +2150,9 @@ extension VTPlayerView {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("About")
+        .onAppear {
+            viewModel.checkGlobalModelStatus()
+        }
     }
     #endif
 
@@ -2876,6 +2991,16 @@ struct PlaybackSettingsView: View {
                         viewModel.updateEnhancements()
                     }
                     
+                    if viewModel.modelManager.status == .ready {
+                        Picker("Quality SR", selection: $viewModel.qualitySuperResolutionScaleFactor) {
+                            Text("Off").tag(0)
+                            Text("2x Quality SR").tag(2)
+                            Text("4x Quality SR").tag(4)
+                        }
+                        .onChange(of: viewModel.qualitySuperResolutionScaleFactor) { _ in
+                            viewModel.updateEnhancements()
+                        }
+                    }
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
                         Text("Off").tag(0)
                         Text("2x").tag(2)

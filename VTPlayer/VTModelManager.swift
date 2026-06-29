@@ -8,7 +8,7 @@
 import Foundation
 import Observation
 
-#if os(macOS)
+#if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
 import VideoToolbox
 
 /// A manager class responsible for checking, downloading, and reporting the progress of
@@ -119,35 +119,6 @@ public final class VTModelManager {
                 }
             }
         }
-    }
-}
-#else
-/// A manager class responsible for checking, downloading, and reporting the progress of
-/// machine learning models required by VideoToolbox frame processors.
-@Observable
-@MainActor
-public final class VTModelManager {
-    
-    /// The current status of the model.
-    public enum Status: Sendable, Equatable {
-        case notChecked
-        case ready
-        case downloadRequired
-        case downloading(progress: Double)
-        case failed(String)
-    }
-    
-    /// The observable status of the model manager.
-    public private(set) var status: Status = .ready
-
-    public init() {}
-    
-    public func checkStatus(for configuration: Any) {
-        status = .ready
-    }
-    
-    public func downloadModel(for configuration: Any) {
-        status = .ready
     }
 }
 #endif
