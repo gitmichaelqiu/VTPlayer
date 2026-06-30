@@ -467,9 +467,6 @@ final class VTPlayerViewModel {
         
         var targetURL = url
         
-        #if os(iOS)
-        self.tempLocalURL = nil
-        
         // Release any previously held security-scoped resource
         if let prev = securityScopedURL {
             prev.stopAccessingSecurityScopedResource()
@@ -480,6 +477,9 @@ final class VTPlayerViewModel {
         if isSecurityScoped {
             self.securityScopedURL = url
         }
+        
+        #if os(iOS)
+        self.tempLocalURL = nil
         
         let tempDir = FileManager.default.temporaryDirectory
         let destinationURL = tempDir.appendingPathComponent(url.lastPathComponent)
@@ -1221,11 +1221,11 @@ final class VTPlayerViewModel {
         #endif
         #if os(iOS)
         self.tempLocalURL = nil
+        #endif
         if let scoped = securityScopedURL {
             scoped.stopAccessingSecurityScopedResource()
             self.securityScopedURL = nil
         }
-        #endif
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
@@ -1489,6 +1489,7 @@ struct VTPlayerView: View {
     }()
     @State private var isPinnedExpanded = true
     @State private var isSettingsExpanded = false
+    @State private var showAdjustmentsPopover = false
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
     @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
@@ -1529,6 +1530,20 @@ struct VTPlayerView: View {
         } message: {
             Text("Enter a new name for the video file.")
         }
+        .alert("Clear Playback History?", isPresented: $showClearAllAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear History", role: .destructive) {
+                #if os(macOS)
+                NSDocumentController.shared.clearRecentDocuments(nil)
+                UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
+                viewModel.reloadRecentVideos()
+                #else
+                viewModel.clearRecentVideosIOS()
+                #endif
+            }
+        } message: {
+            Text("This will clear your recent playback history. Your video files will remain safe.")
+        }
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [.movie, .quickTimeMovie, .mpeg4Movie],
@@ -1560,14 +1575,6 @@ struct VTPlayerView: View {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 leftSidebar
                     .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
-                    .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button(action: { showFileImporter = true }) {
-                                Label("Open Video", systemImage: "plus")
-                            }
-                            .help("Open a local video file")
-                        }
-                    }
             } detail: {
                 videoContent
                     .inspector(isPresented: Binding(
@@ -1578,7 +1585,12 @@ struct VTPlayerView: View {
                             .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
                     }
                     .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
+                        ToolbarItemGroup(placement: .primaryAction) {
+                            Button(action: { showFileImporter = true }) {
+                                Label("Open Video", systemImage: "plus")
+                            }
+                            .help("Open a local video file")
+                            
                             Button(action: { viewModel.showSidebar.toggle() }) {
                                 Label("Toggle Sidebar", systemImage: "sidebar.right")
                             }
@@ -1591,7 +1603,12 @@ struct VTPlayerView: View {
         } else {
             videoContent
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Button(action: { showFileImporter = true }) {
+                            Label("Open Video", systemImage: "plus")
+                        }
+                        .help("Open a local video file")
+                        
                         Button(action: { viewModel.showSidebar.toggle() }) {
                             Label("Toggle Sidebar", systemImage: "sidebar.right")
                         }
@@ -2377,12 +2394,7 @@ extension VTPlayerView {
                     ContentUnavailableView {
                         Label("No Recents", systemImage: "clock")
                     } description: {
-                        Text("Open a video file to begin.")
-                    } actions: {
-                        Button(action: { showFileImporter = true }) {
-                            Text("Open Video File...")
-                        }
-                        .buttonStyle(.glassProminent)
+                        Text("Open a video from the title bar.")
                     }
                 } else {
                     ForEach(unpinnedList, id: \.self) { url in
@@ -2392,86 +2404,15 @@ extension VTPlayerView {
             } header: {
                 Text("Recents")
             }
-
-            Section(isExpanded: $isSettingsExpanded) {
-                Toggle("Show File Extensions", isOn: $showFileExtensions)
-                    .font(.subheadline)
-                    .padding(.vertical, 2)
-
-                Divider()
-
-                Group {
-                    Text("Default Enhancement Level")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .bold()
-                        .padding(.top, 4)
-
-                    Picker("Super Resolution", selection: $defaultSRLevel) {
-                        Text("Off").tag(0)
-                        Text("2x").tag(2)
-                        Text("4x").tag(4)
-                    }
-
-                    if viewModel.modelManager.status == .ready {
-                        Picker("Quality SR", selection: $defaultQSRLevel) {
-                            Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
-                        }
-                    }
-
-                    Picker("Frame Interpolation", selection: $defaultFILevel) {
-                        Text("Off").tag(0)
-                        Text("2x").tag(2)
-                        Text("4x").tag(4)
-                    }
-
-                    Picker("Motion Blur", selection: $defaultMBLevel) {
-                        Text("Off").tag(0)
-                        ForEach(1...30, id: \.self) { val in
-                            Text("\(val)").tag(val)
-                        }
-                    }
-
-                    Picker("Denoise", selection: $defaultDNLevel) {
-                        Text("Off").tag(0.0)
-                        Text("0.25").tag(0.25)
-                        Text("0.50").tag(0.50)
-                        Text("0.75").tag(0.75)
-                        Text("1.00").tag(1.00)
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sharpness: \(defaultSharpness > 0.0 ? String(format: "%.2f", defaultSharpness) : "Off")")
-                        .font(.caption)
-                    Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.05)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("HDR Boost: \(defaultHDRBoost > 0.0 ? String(format: "%.2f", defaultHDRBoost) : "Off")")
-                        .font(.caption)
-                    Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.05)
-                }
-            } header: {
-                Text("Default Settings")
-            }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .bottom) {
             if !viewModel.recentVideos.isEmpty {
                 Button(action: {
-                    #if os(macOS)
-                    NSDocumentController.shared.clearRecentDocuments(nil)
-                    UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
-                    viewModel.reloadRecentVideos()
-                    #endif
+                    showClearAllAlert = true
                 }) {
-                    Text("Clear Recents")
+                    Text("Clear Recents...")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -2571,109 +2512,73 @@ extension VTPlayerView {
     
     @ViewBuilder
     private var rightSidebar: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("DIAGNOSTICS & METADATA")
-                    .font(.system(.footnote, design: .default)).bold()
-                    .foregroundColor(.secondary)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Real-Time Metrics")
-                        .font(.system(.subheadline, design: .default).bold())
-                        .foregroundColor(.secondary)
-
-                    Group {
-                        LabeledContent("Frame Processing") {
-                            Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
-                                .monospacedDigit()
-                        }
-                        LabeledContent("Display Rate") {
-                            Text(String(format: "%.1f Hz", viewModel.fps))
-                                .monospacedDigit()
-                                .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                        }
-                        LabeledContent("Cached Frames") {
-                            Text("\(viewModel.frameCacheCount)")
-                                .monospacedDigit()
-                                .foregroundColor(viewModel.frameCacheCount > 10 ? .blue : .secondary)
-                        }
-                    }
-                    .font(.system(.subheadline, design: .default))
+        Form {
+            Section("Real-Time Metrics") {
+                LabeledContent("Frame Processing") {
+                    Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                        .monospacedDigit()
                 }
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Video Metadata")
-                        .font(.system(.subheadline, design: .default).bold())
-                        .foregroundColor(.secondary)
-                    
-                    Group {
-                        LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
-                        LabeledContent("Source Rate") {
-                            Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
-                                .monospacedDigit()
-                        }
-                        LabeledContent("Target Rate") {
-                            let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
-                            let rate = viewModel.sourceFrameRate * scale
-                            Text(String(format: "%.2f fps", rate))
-                                .monospacedDigit()
-                        }
-                        LabeledContent("Video Codec", value: viewModel.videoFormat)
-                    }
-                    .font(.system(.subheadline, design: .default))
+                LabeledContent("Display Rate") {
+                    Text(String(format: "%.1f Hz", viewModel.fps))
+                        .monospacedDigit()
+                        .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                 }
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Super Resolution Specs")
-                        .font(.system(.subheadline, design: .default).bold())
-                        .foregroundColor(.secondary)
-                    
-                    Group {
-                        LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
-                            .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
-                        LabeledContent("Scales", value: viewModel.srSupportedScales)
-                        if viewModel.qualitySuperResolutionScaleFactor > 0 {
-                            QLModelStatusView(modelManager: viewModel.modelManager)
-                        }
-                        if let initError = viewModel.srInitializationError {
-                            LabeledContent("SR Status", value: "Error")
-                                .foregroundColor(.red)
-                            Text(initError)
-                                .font(.system(.caption2, design: .default))
-                                .foregroundColor(.red)
-                                .lineLimit(3)
-                        } else {
-                            let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
-                            let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
-                            LabeledContent("Active", value: scale > 0 ? "\(isQL ? "QL" : "LL") \(scale)x" : "None")
-                                .foregroundColor(scale > 0 ? .blue : .secondary)
-                        }
-                    }
-                    .font(.system(.subheadline, design: .default))
-                }
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Image Processing")
-                        .font(.system(.subheadline, design: .default).bold())
-                        .foregroundColor(.secondary)
-
-                    Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
-                        .font(.system(.subheadline, design: .default))
-                        .help("Use high-quality chroma downsampling when scaling")
-
-                    Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
-                        .font(.system(.subheadline, design: .default))
-                        .help("Hint VideoToolbox to prioritize real-time processing")
+                LabeledContent("Cached Frames") {
+                    Text("\(viewModel.frameCacheCount)")
+                        .monospacedDigit()
+                        .foregroundColor(viewModel.frameCacheCount > 10 ? .blue : .secondary)
                 }
             }
-            .padding()
+            
+            Section("Video Metadata") {
+                LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
+                LabeledContent("Source Rate") {
+                    Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
+                        .monospacedDigit()
+                }
+                LabeledContent("Target Rate") {
+                    let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
+                    let rate = viewModel.sourceFrameRate * scale
+                    Text(String(format: "%.2f fps", rate))
+                        .monospacedDigit()
+                }
+                LabeledContent("Video Codec", value: viewModel.videoFormat)
+            }
+            
+            Section("Super Resolution Specs") {
+                LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
+                    .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
+                
+                LabeledContent("Scales", value: viewModel.srSupportedScales)
+                
+                let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                LabeledContent("Active State", value: scale > 0 ? "\(isQL ? "Quality" : "Low Latency") \(scale)x" : "Off")
+                    .foregroundColor(scale > 0 ? .blue : .secondary)
+                
+                if viewModel.qualitySuperResolutionScaleFactor > 0 {
+                    QLModelStatusView(modelManager: viewModel.modelManager)
+                }
+                
+                if let initError = viewModel.srInitializationError {
+                    LabeledContent("SR Status", value: "Error")
+                        .foregroundColor(.red)
+                    Text(initError)
+                        .font(.system(.caption2, design: .default))
+                        .foregroundColor(.red)
+                        .lineLimit(3)
+                }
+            }
+            
+            Section("Image Processing") {
+                Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
+                    .help("Use high-quality chroma downsampling when scaling")
+                
+                Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
+                    .help("Force pipeline to run with higher thread priority")
+            }
         }
+        .formStyle(.grouped)
     }
     
     @ViewBuilder
@@ -2721,228 +2626,229 @@ extension VTPlayerView {
     
     @ViewBuilder
     private var controlBar: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: 8) {
-                // Video Scrubbing Timeline Progress Bar
-                HStack(spacing: 8) {
-                    Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                    
-                    Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
-                        isScrubbing = editing
-                        if !editing {
-                            viewModel.seek(to: scrubTime)
-                        }
-                    })
-                    .accentColor(.cyan)
-                    .labelsHidden()
-                    .onChange(of: viewModel.currentTime) { _, newValue in
-                        if !isScrubbing {
-                            scrubTime = newValue
-                        }
-                    }
-                    .onChange(of: scrubTime) { _, newValue in
-                        if isScrubbing {
-                            viewModel.scrub(to: newValue)
-                        }
-                    }
-                    
-                    Text(formatTime(viewModel.duration))
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 12)
+        VStack(spacing: 10) {
+            // Video Scrubbing Timeline Progress Bar
+            HStack(spacing: 8) {
+                Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
                 
-                HStack(spacing: 20) {
-                    playPauseButton
-
-                    Divider()
-                        .frame(height: 20)
-
-                    // Super Resolution (LL SR + Quality SR)
-                    Menu {
-                        Picker(selection: Binding(
-                            get: {
-                                // Tags: 0=Off, 1=LL2, 2=LL4, 3=QL4
-                                if viewModel.qualitySuperResolutionScaleFactor == 4 {
-                                    3
-                                } else if viewModel.superResolutionLevel > 0 {
-                                    viewModel.superResolutionLevel == 4 ? 2 : 1
-                                } else {
-                                    0
-                                }
-                            },
-                            set: { tag in
-                                switch tag {
-                                case 1: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
-                                case 2: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
-                                case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
-                                default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
-                                }
-                                viewModel.updateEnhancements()
+                Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
+                    isScrubbing = editing
+                    if !editing {
+                        viewModel.seek(to: scrubTime)
+                    }
+                })
+                .accentColor(.cyan)
+                .labelsHidden()
+                .onChange(of: viewModel.currentTime) { _, newValue in
+                    if !isScrubbing {
+                        scrubTime = newValue
+                    }
+                }
+                .onChange(of: scrubTime) { _, newValue in
+                    if isScrubbing {
+                        viewModel.scrub(to: newValue)
+                    }
+                }
+                
+                Text(formatTime(viewModel.duration))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            
+            // Bottom control actions
+            HStack(spacing: 16) {
+                // Play/Pause button
+                playPauseButton
+                
+                Divider()
+                    .frame(height: 16)
+                
+                // Super Resolution Menu
+                Menu {
+                    Picker(selection: Binding(
+                        get: {
+                            if viewModel.qualitySuperResolutionScaleFactor == 4 {
+                                3
+                            } else if viewModel.superResolutionLevel > 0 {
+                                viewModel.superResolutionLevel == 4 ? 2 : 1
+                            } else {
+                                0
                             }
-                        )) {
-                            Text("Off").tag(0)
-                            Divider()
-                            Text("Low Latency 2x").tag(1)
-                            Text("Low Latency 4x").tag(2)
-                            Divider()
-                            Text("Quality 4x").tag(3)
-                        } label: {
-                            EmptyView()
+                        },
+                        set: { tag in
+                            switch tag {
+                            case 1: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 2: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
+                            default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
+                            }
+                            viewModel.updateEnhancements()
                         }
-                        .pickerStyle(.inline)
+                    )) {
+                        Text("Off").tag(0)
+                        Divider()
+                        Text("Low Latency 2x").tag(1)
+                        Text("Low Latency 4x").tag(2)
+                        Divider()
+                        Text("Quality 4x").tag(3)
                     } label: {
-                        let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
-                        let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
-                        let isActive = scale > 0
-                        Text(hoverSR
-                            ? (isQL
-                                ? "Quality SR: \(scale)x"
-                                : (isActive ? "LL Super Resolution: \(scale)x" : "Super Resolution: Off"))
-                            : (isQL
-                                ? "SR: \(scale)x QL"
-                                : "SR: \(isActive ? "\(scale)x" : "Off")")
-                        )
+                        EmptyView()
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
+                    let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
+                    let isActive = scale > 0
+                    Text(isQL ? "SR: \(scale)x QL" : "SR: \(isActive ? "\(scale)x" : "Off")")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isActive ? (isQL ? Color.blue : .cyan) : .secondary)
-                        .frame(width: 148, alignment: .leading)
                         .padding(.vertical, 5)
-                        .background(isActive ? (isQL ? Color.blue.opacity(0.15) : Color.cyan.opacity(0.15)) : Color.white.opacity(0.05))
+                        .padding(.horizontal, 8)
+                        .background(isActive ? (isQL ? Color.blue.opacity(0.12) : Color.cyan.opacity(0.12)) : Color.white.opacity(0.05))
                         .cornerRadius(6)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .macOnHover { hoverSR = $0 }
-
-                    // Frame Interpolation (LL FI)
-                    Menu {
-                        Picker(selection: Binding(
-                            get: { viewModel.frameInterpolationLevel },
-                            set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
-                        )) {
-                            Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
-                        } label: {
-                            EmptyView()
-                        }
-                        .pickerStyle(.inline)
-                    } label: {
-                        Text(hoverFI
-                            ? "Frame Interpolation: \(viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
-                            : "FI: \(viewModel.frameInterpolationLevel > 0 ? "\(viewModel.frameInterpolationLevel)x" : "Off")"
-                        )
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.frameInterpolationLevel > 0 ? .green : .secondary)
-                        .frame(width: 158, alignment: .leading)
-                        .padding(.vertical, 5)
-                        .background(viewModel.frameInterpolationLevel > 0 ? Color.green.opacity(0.15) : Color.white.opacity(0.05))
-                        .cornerRadius(6)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .macOnHover { hoverFI = $0 }
-
-                    // Motion Blur
-                    Menu {
-                        Picker(selection: Binding(
-                            get: { viewModel.motionBlurStrength },
-                            set: { viewModel.motionBlurStrength = $0; viewModel.updateEnhancements() }
-                        )) {
-                            Text("Off").tag(0)
-                            Text("5").tag(5)
-                            Text("10").tag(10)
-                            Text("20").tag(20)
-                            Text("30").tag(30)
-                        } label: {
-                            EmptyView()
-                        }
-                        .pickerStyle(.inline)
-                    } label: {
-                        Text(hoverMB
-                            ? "Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")"
-                            : "MB: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")"
-                        )
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.motionBlurStrength > 0 ? .purple : .secondary)
-                        .frame(width: 120, alignment: .leading)
-                        .padding(.vertical, 5)
-                        .background(viewModel.motionBlurStrength > 0 ? Color.purple.opacity(0.15) : Color.white.opacity(0.05))
-                        .cornerRadius(6)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .macOnHover { hoverMB = $0 }
-
-                    // Denoise
-                    Menu {
-                        Picker(selection: Binding(
-                            get: { viewModel.denoiseStrength },
-                            set: { viewModel.denoiseStrength = $0; viewModel.updateEnhancements() }
-                        )) {
-                            Text("Off").tag(0.0)
-                            Text("0.25").tag(0.25)
-                            Text("0.5").tag(0.5)
-                            Text("0.75").tag(0.75)
-                            Text("1.0").tag(1.0)
-                        } label: {
-                            EmptyView()
-                        }
-                        .pickerStyle(.inline)
-                    } label: {
-                        Text(hoverDN
-                            ? "Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")"
-                            : "DN: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")"
-                        )
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.denoiseStrength > 0 ? .orange : .secondary)
-                        .frame(width: 110, alignment: .leading)
-                        .padding(.vertical, 5)
-                        .background(viewModel.denoiseStrength > 0 ? Color.orange.opacity(0.15) : Color.white.opacity(0.05))
-                        .cornerRadius(6)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .macOnHover { hoverDN = $0 }
-
-                    // Sharpness Slider
-                    sharpnessControl
-
-                    // HDR Tone Mapping
-                    HStack(spacing: 4) {
-                        Text(hoverHDR
-                            ? "HDR: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : "Off")"
-                            : "HDR"
-                        )
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(viewModel.hdrStrength > 0 ? .yellow : .secondary)
-                        .frame(width: hoverHDR ? 90 : 28, alignment: .leading)
-                        Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
-                            .accentColor(.yellow)
-                            .labelsHidden()
-                            .frame(width: 60)
-                            .opacity(hoverHDR ? 1 : 0)
-                            .allowsHitTesting(hoverHDR)
-                    }
-                    .macOnHover { hoverHDR = $0 }
-                    .help("SDR to HDR tone mapping — expands highlights into display EDR headroom")
-
-                    Spacer()
-
-                    playbackSpeedControl
-
-                    Divider()
-                        .frame(height: 16)
-
-                    fullscreenButton
                 }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                
+                // Frame Interpolation Menu
+                Menu {
+                    Picker(selection: Binding(
+                        get: { viewModel.frameInterpolationLevel },
+                        set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
+                    )) {
+                        Text("Off").tag(0)
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
+                    } label: {
+                        EmptyView()
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    let isActive = viewModel.frameInterpolationLevel > 0
+                    Text("FI: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(isActive ? .green : .secondary)
+                        .padding(.vertical, 5)
+                        .padding(.horizontal, 8)
+                        .background(isActive ? Color.green.opacity(0.12) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                
+                // Motion Blur Menu
+                Menu {
+                    Picker(selection: Binding(
+                        get: { viewModel.motionBlurStrength },
+                        set: { viewModel.motionBlurStrength = $0; viewModel.updateEnhancements() }
+                    )) {
+                        Text("Off").tag(0)
+                        Text("5").tag(5)
+                        Text("10").tag(10)
+                        Text("20").tag(20)
+                        Text("30").tag(30)
+                    } label: {
+                        EmptyView()
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    let isActive = viewModel.motionBlurStrength > 0
+                    Text("MB: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(isActive ? .purple : .secondary)
+                        .padding(.vertical, 5)
+                        .padding(.horizontal, 8)
+                        .background(isActive ? Color.purple.opacity(0.12) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                
+                // Denoise Menu
+                Menu {
+                    Picker(selection: Binding(
+                        get: { viewModel.denoiseStrength },
+                        set: { viewModel.denoiseStrength = $0; viewModel.updateEnhancements() }
+                    )) {
+                        Text("Off").tag(0.0)
+                        Text("0.25").tag(0.25)
+                        Text("0.5").tag(0.5)
+                        Text("0.75").tag(0.75)
+                        Text("1.0").tag(1.0)
+                    } label: {
+                        EmptyView()
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    let isActive = viewModel.denoiseStrength > 0
+                    Text("DN: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(isActive ? .orange : .secondary)
+                        .padding(.vertical, 5)
+                        .padding(.horizontal, 8)
+                        .background(isActive ? Color.orange.opacity(0.12) : Color.white.opacity(0.05))
+                        .cornerRadius(6)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                // Image Adjustments Popover Button
+                Button(action: { showAdjustmentsPopover.toggle() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Adjustments")
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundColor((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? .cyan : .secondary)
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? Color.cyan.opacity(0.12) : Color.white.opacity(0.05))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .fixedSize()
+                .popover(isPresented: $showAdjustmentsPopover, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Image Adjustments")
+                            .font(.headline)
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")")
+                                .font(.caption)
+                            Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("HDR Boost: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : "Off")")
+                                .font(.caption)
+                            Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                        }
+                    }
+                    .padding(16)
+                    .frame(width: 220)
+                }
+                
+                Spacer()
+                
+                playbackSpeedControl
+                
+                Divider()
+                    .frame(height: 16)
+                
+                fullscreenButton
             }
-            .macOnHover { viewModel.isHoveringControlBar = $0 }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .padding(.horizontal, 24)
-            .padding(.bottom, 20)
         }
+        .macOnHover { viewModel.isHoveringControlBar = $0 }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 24)
+        .padding(.bottom, 20)
         .opacity(viewModel.showControls ? 1.0 : 0.0)
         .offset(y: viewModel.showControls ? 0 : 50)
         .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
