@@ -1578,6 +1578,7 @@ struct VTPlayerView: View {
             }
         }
         #endif
+        .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
     }
 
     @ViewBuilder
