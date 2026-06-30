@@ -446,7 +446,19 @@ final class VTPlayerViewModel {
     
     #if os(macOS)
     @objc func reloadRecentVideos() {
-        self.recentVideos = NSDocumentController.shared.recentDocumentURLs
+        let removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
+        self.recentVideos = NSDocumentController.shared.recentDocumentURLs.filter { url in
+            !removed.contains(url.path)
+        }
+    }
+    
+    func deleteRecentVideoMac(at url: URL) {
+        var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
+        if !removed.contains(url.path) {
+            removed.append(url.path)
+            UserDefaults.standard.set(removed, forKey: "VTRemovedRecentVideos")
+        }
+        reloadRecentVideos()
     }
     #endif
     
@@ -1476,6 +1488,7 @@ struct VTPlayerView: View {
         return Set(array)
     }()
     @State private var isPinnedExpanded = true
+    @State private var isSettingsExpanded = false
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
     @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
@@ -1504,6 +1517,17 @@ struct VTPlayerView: View {
             #else
             splitViewLayout
             #endif
+        }
+        .alert("Rename Video", isPresented: $showRenameAlert) {
+            TextField("New Name", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Rename") {
+                if let url = videoToRename {
+                    renameVideoFile(url, to: renameText)
+                }
+            }
+        } message: {
+            Text("Enter a new name for the video file.")
         }
         .fileImporter(
             isPresented: $showFileImporter,
@@ -1905,17 +1929,7 @@ extension VTPlayerView {
         } message: {
             Text("This will clear your recent playback history. The original video files will not be deleted.")
         }
-        .alert("Rename Video", isPresented: $showRenameAlert) {
-            TextField("New Name", text: $renameText)
-            Button("Cancel", role: .cancel) { }
-            Button("Rename") {
-                if let url = videoToRename {
-                    renameVideoFile(url, to: renameText)
-                }
-            }
-        } message: {
-            Text("Enter a new name for the video file.")
-        }
+
     }
 
     @ViewBuilder
@@ -2343,89 +2357,214 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var leftSidebar: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Section header matching macOS sidebar conventions
-            HStack {
-                Text("Recents")
-                    .font(.system(.callout, design: .default).weight(.semibold))
-                    .foregroundColor(.secondary)
-                Spacer()
-                if !viewModel.recentVideos.isEmpty {
-                    Button("Clear") {
-                        #if os(macOS)
-                        NSDocumentController.shared.clearRecentDocuments(nil)
-                        viewModel.reloadRecentVideos()
-                        #endif
+        List {
+            // Pinned videos
+            let pinnedList = viewModel.recentVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
+            let unpinnedList = viewModel.recentVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
+
+            if !pinnedList.isEmpty {
+                Section(isExpanded: $isPinnedExpanded) {
+                    ForEach(pinnedList, id: \.self) { url in
+                        macSidebarRow(for: url)
                     }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                } header: {
+                    Text("Pinned")
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
 
-            if viewModel.recentVideos.isEmpty {
-                VStack {
-                    Spacer()
+            Section(isExpanded: .constant(true)) {
+                if viewModel.recentVideos.isEmpty {
                     ContentUnavailableView {
                         Label("No Recents", systemImage: "clock")
                     } description: {
-                        Text("Open a video to see it here.")
+                        Text("Open a video file to begin.")
                     } actions: {
-                        VStack(spacing: 8) {
-                            Button(action: { showFileImporter = true }) {
-                                Text("Open from Files...")
-                            }
-                            .buttonStyle(.glassProminent)
-                            
-                            #if canImport(PhotosUI)
-                            PhotosPicker(
-                                selection: $selectedPhotoItem,
-                                matching: .videos,
-                                photoLibrary: .shared()
-                            ) {
-                                Text("Open from Photos...")
-                            }
-                            .buttonStyle(.glass)
-                            #endif
+                        Button(action: { showFileImporter = true }) {
+                            Text("Open Video File...")
+                        }
+                        .buttonStyle(.glassProminent)
+                    }
+                } else {
+                    ForEach(unpinnedList, id: \.self) { url in
+                        macSidebarRow(for: url)
+                    }
+                }
+            } header: {
+                Text("Recents")
+            }
+
+            Section(isExpanded: $isSettingsExpanded) {
+                Toggle("Show File Extensions", isOn: $showFileExtensions)
+                    .font(.subheadline)
+                    .padding(.vertical, 2)
+
+                Divider()
+
+                Group {
+                    Text("Default Enhancement Level")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .bold()
+                        .padding(.top, 4)
+
+                    Picker("Super Resolution", selection: $defaultSRLevel) {
+                        Text("Off").tag(0)
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
+                    }
+
+                    if viewModel.modelManager.status == .ready {
+                        Picker("Quality SR", selection: $defaultQSRLevel) {
+                            Text("Off").tag(0)
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
                         }
                     }
-                    Spacer()
-                }
-            } else {
-                List(viewModel.recentVideos, id: \.self) { url in
-                    Button(action: {
-                        viewModel.openRecentVideo(url)
-                    }) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "film")
-                                .foregroundColor(.secondary)
-                                .frame(width: 16)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(url.lastPathComponent)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .font(.system(.subheadline, design: .default))
-                                Text(url.path.replacingOccurrences(of: url.lastPathComponent, with: "").trimmingCharacters(in: CharacterSet(charactersIn: "/")))
-                                    .lineLimit(1)
-                                    .truncationMode(.head)
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .padding(.vertical, 3)
-                        .padding(.horizontal, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(url == viewModel.videoURL ? Color.accentColor.opacity(0.15) : Color.clear)
-                        .cornerRadius(4)
+
+                    Picker("Frame Interpolation", selection: $defaultFILevel) {
+                        Text("Off").tag(0)
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
                     }
-                    .buttonStyle(.plain)
-                    .help(url.path)
+
+                    Picker("Motion Blur", selection: $defaultMBLevel) {
+                        Text("Off").tag(0)
+                        ForEach(1...30, id: \.self) { val in
+                            Text("\(val)").tag(val)
+                        }
+                    }
+
+                    Picker("Denoise", selection: $defaultDNLevel) {
+                        Text("Off").tag(0.0)
+                        Text("0.25").tag(0.25)
+                        Text("0.50").tag(0.50)
+                        Text("0.75").tag(0.75)
+                        Text("1.00").tag(1.00)
+                    }
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sharpness: \(defaultSharpness > 0.0 ? String(format: "%.2f", defaultSharpness) : "Off")")
+                        .font(.caption)
+                    Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.05)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("HDR Boost: \(defaultHDRBoost > 0.0 ? String(format: "%.2f", defaultHDRBoost) : "Off")")
+                        .font(.caption)
+                    Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.05)
+                }
+            } header: {
+                Text("Default Settings")
+            }
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom) {
+            if !viewModel.recentVideos.isEmpty {
+                Button(action: {
+                    #if os(macOS)
+                    NSDocumentController.shared.clearRecentDocuments(nil)
+                    UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
+                    viewModel.reloadRecentVideos()
+                    #endif
+                }) {
+                    Text("Clear Recents")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(.ultraThinMaterial)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func macSidebarRow(for url: URL) -> some View {
+        let isPinned = pinnedVideos.contains(url.lastPathComponent)
+        Button(action: {
+            viewModel.openRecentVideo(url)
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: isPinned ? "pin.fill" : "film")
+                    .foregroundColor(isPinned ? .orange : .secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(width: 16)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .font(.system(.body, design: .default).weight(.medium))
+                        .foregroundColor(url == viewModel.videoURL ? .accentColor : .primary)
+                    
+                    Text(url.deletingLastPathComponent().path)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .font(.system(size: 10, design: .default))
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 10))
+                }
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(url == viewModel.videoURL ? Color.accentColor.opacity(0.12) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(url.path)
+        .transition(.asymmetric(
+            insertion: .move(edge: .top).combined(with: .opacity),
+            removal: .opacity
+        ))
+        .contextMenu {
+            Button {
+                togglePin(for: url)
+            } label: {
+                Label(isPinned ? "Unpin Video" : "Pin Video", systemImage: isPinned ? "pin.slash" : "pin")
+            }
+            
+            Button {
+                videoToRename = url
+                renameText = url.deletingPathExtension().lastPathComponent
+                showRenameAlert = true
+            } label: {
+                Label("Rename File", systemImage: "pencil")
+            }
+            
+            Button {
+                #if os(macOS)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(url.lastPathComponent, forType: .string)
+                #endif
+            } label: {
+                Label("Copy Name", systemImage: "doc.on.doc")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    #if os(macOS)
+                    viewModel.deleteRecentVideoMac(at: url)
+                    #endif
+                }
+            } label: {
+                Label("Remove from List", systemImage: "trash")
             }
         }
     }
