@@ -2406,7 +2406,7 @@ extension VTPlayerView {
                 }
             }
 
-            Section(isExpanded: .constant(true)) {
+            Section {
                 if viewModel.recentVideos.isEmpty {
                     ContentUnavailableView {
                         Label("No Recents", systemImage: "clock")
@@ -2425,11 +2425,12 @@ extension VTPlayerView {
                     if !viewModel.recentVideos.isEmpty {
                         Button(action: { showClearAllAlert = true }) {
                             Image(systemName: "trash")
-                                .font(.system(size: 11))
+                                .font(.system(size: 10))
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(.secondary)
                         .help("Clear all recent videos")
+                        .padding(.trailing, 2)
                     }
                 }
             }
