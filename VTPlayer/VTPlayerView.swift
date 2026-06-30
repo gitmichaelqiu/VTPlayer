@@ -152,6 +152,7 @@ final class VTPlayerViewModel {
     var isFullScreen = false
     var showControls = true
     var isHoveringControlBar = false
+    var showAdjustmentsPopover = false
     
     var currentBackgroundColor: Color {
         if isFullScreen {
@@ -615,7 +616,7 @@ final class VTPlayerViewModel {
             #if os(iOS)
             let shouldHide = self.isPlaying && !self.isPaused
             #else
-            let shouldHide = self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar
+            let shouldHide = self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar && !self.showAdjustmentsPopover
             #endif
             if shouldHide {
                 self.showControls = false
@@ -1500,7 +1501,6 @@ struct VTPlayerView: View {
     }()
     @State private var isPinnedExpanded = true
     @State private var isSettingsExpanded = false
-    @State private var showAdjustmentsPopover = false
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
     @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
@@ -2822,7 +2822,7 @@ extension VTPlayerView {
                 .help("Denoise — filters compression noise and high-frequency grain")
 
                 // Image Adjustments Popover Button
-                Button(action: { showAdjustmentsPopover.toggle() }) {
+                Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "slider.horizontal.3")
                         Text("Adjustments")
@@ -2836,7 +2836,10 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .popover(isPresented: $showAdjustmentsPopover, arrowEdge: .top) {
+                .popover(isPresented: Binding(
+                    get: { viewModel.showAdjustmentsPopover },
+                    set: { viewModel.showAdjustmentsPopover = $0 }
+                ), arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Image Adjustments")
                             .font(.headline)
