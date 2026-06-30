@@ -1581,7 +1581,8 @@ struct VTPlayerView: View {
         if !viewModel.isFullScreen {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 leftSidebar
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 500)
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+                    .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
             } detail: {
                 videoContent
                     .inspector(isPresented: Binding(
@@ -1589,7 +1590,8 @@ struct VTPlayerView: View {
                         set: { viewModel.showSidebar = $0 }
                     )) {
                         rightSidebar
-                            .inspectorColumnWidth(min: 200, ideal: 260, max: 500)
+                            .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
+                            .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
                     }
                     .toolbar {
                         ToolbarItemGroup(placement: .primaryAction) {
@@ -2437,12 +2439,13 @@ extension VTPlayerView {
     @ViewBuilder
     private func macSidebarRow(for url: URL) -> some View {
         let isPinned = pinnedVideos.contains(url.lastPathComponent)
-        Button(action: {
+        let isActive = (url == viewModel.videoURL)
+        return Button(action: {
             viewModel.openRecentVideo(url)
         }) {
             HStack(spacing: 8) {
-                Image(systemName: isPinned ? "pin.fill" : "film")
-                    .foregroundColor(isPinned ? .orange : .secondary)
+                Image(systemName: isActive ? "play.fill" : (isPinned ? "pin.fill" : "film"))
+                    .foregroundColor(isActive ? .accentColor : (isPinned ? .orange : .secondary))
                     .font(.system(size: 11, weight: .medium))
                     .frame(width: 16)
                 
@@ -2451,7 +2454,7 @@ extension VTPlayerView {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.body, design: .default).weight(.medium))
-                        .foregroundColor(url == viewModel.videoURL ? .accentColor : .primary)
+                        .foregroundColor(.primary)
                     
                     Text(url.deletingLastPathComponent().path)
                         .lineLimit(1)
@@ -2462,7 +2465,7 @@ extension VTPlayerView {
                 
                 Spacer()
                 
-                if isPinned {
+                if isPinned && !isActive {
                     Image(systemName: "pin.fill")
                         .foregroundColor(.orange)
                         .font(.system(size: 10))
@@ -2473,7 +2476,7 @@ extension VTPlayerView {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(url == viewModel.videoURL ? Color.accentColor.opacity(0.12) : Color.clear)
+                    .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
             )
         }
         .buttonStyle(.plain)
