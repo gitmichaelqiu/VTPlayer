@@ -2933,13 +2933,13 @@ extension VTPlayerView {
                 window.toggleFullScreen(nil)
             }
         }) {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
+            Image(systemName: viewModel.isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                 .font(.body.weight(.semibold))
                 .foregroundColor(.primary)
         }
         .buttonStyle(.glass)
         .keyboardShortcut("f", modifiers: [])
-        .help("Toggle Fullscreen (F)")
+        .help(viewModel.isFullScreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)")
         #else
         EmptyView()
         #endif
