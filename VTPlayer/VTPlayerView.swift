@@ -2712,7 +2712,7 @@ extension VTPlayerView {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
                     let isActive = scale > 0
-                    Text(isQL ? "SR: \(scale)x QL" : "SR: \(isActive ? "\(scale)x" : "Off")")
+                    Text(isQL ? "Super Res: \(scale)x QL" : "Super Res: \(isActive ? "\(scale)x" : "Off")")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isActive ? (isQL ? Color.blue : .cyan) : .secondary)
                         .padding(.vertical, 5)
@@ -2722,6 +2722,7 @@ extension VTPlayerView {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("Super Resolution — increases spatial resolution using neural upscaling")
                 
                 // Frame Interpolation Menu
                 Menu {
@@ -2738,7 +2739,7 @@ extension VTPlayerView {
                     .pickerStyle(.inline)
                 } label: {
                     let isActive = viewModel.frameInterpolationLevel > 0
-                    Text("FI: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")")
+                    Text("Interpolation: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isActive ? .green : .secondary)
                         .padding(.vertical, 5)
@@ -2748,6 +2749,7 @@ extension VTPlayerView {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("Frame Interpolation — increases video frame rate for fluid movement")
                 
                 // Motion Blur Menu
                 Menu {
@@ -2766,7 +2768,7 @@ extension VTPlayerView {
                     .pickerStyle(.inline)
                 } label: {
                     let isActive = viewModel.motionBlurStrength > 0
-                    Text("MB: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")")
+                    Text("Motion Blur: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isActive ? .purple : .secondary)
                         .padding(.vertical, 5)
@@ -2776,6 +2778,7 @@ extension VTPlayerView {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
                 
                 // Denoise Menu
                 Menu {
@@ -2794,7 +2797,7 @@ extension VTPlayerView {
                     .pickerStyle(.inline)
                 } label: {
                     let isActive = viewModel.denoiseStrength > 0
-                    Text("DN: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
+                    Text("Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isActive ? .orange : .secondary)
                         .padding(.vertical, 5)
@@ -2804,6 +2807,7 @@ extension VTPlayerView {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("Denoise — filters compression noise and high-frequency grain")
 
                 // Image Adjustments Popover Button
                 Button(action: { showAdjustmentsPopover.toggle() }) {
