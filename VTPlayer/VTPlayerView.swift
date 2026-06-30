@@ -118,8 +118,12 @@ final class VTPlayerViewModel {
     var duration: Double = 0.0
     var playbackSpeed: Double = 1.0 {
         didSet {
+            let clamped = max(0.5, min(2.0, playbackSpeed))
+            if clamped != playbackSpeed {
+                playbackSpeed = clamped
+            }
             if let player = player {
-                player.rate = Float(isPaused ? 0.0 : playbackSpeed)
+                player.rate = Float(isPaused ? 0.0 : clamped)
             }
         }
     }
@@ -2415,26 +2419,22 @@ extension VTPlayerView {
                     }
                 }
             } header: {
-                Text("Recents")
+                HStack {
+                    Text("Recents")
+                    Spacer()
+                    if !viewModel.recentVideos.isEmpty {
+                        Button("Clear All") {
+                            showClearAllAlert = true
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    }
+                }
             }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .bottom) {
-            if !viewModel.recentVideos.isEmpty {
-                Button(action: {
-                    showClearAllAlert = true
-                }) {
-                    Text("Clear Recents...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(.ultraThinMaterial)
-            }
-        }
     }
 
     @ViewBuilder
@@ -2717,11 +2717,11 @@ extension VTPlayerView {
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
                     let isActive = scale > 0
                     Text(isQL ? "Super Res: \(scale)x QL" : "Super Res: \(isActive ? "\(scale)x" : "Off")")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(isActive ? (isQL ? Color.blue : .cyan) : .secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
-                        .background(isActive ? (isQL ? Color.blue.opacity(0.12) : Color.cyan.opacity(0.12)) : Color.white.opacity(0.05))
+                        .padding(.horizontal, 10)
+                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                         .cornerRadius(6)
                 }
                 .menuStyle(.borderlessButton)
@@ -2744,11 +2744,11 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.frameInterpolationLevel > 0
                     Text("Interpolation: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(isActive ? .green : .secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
-                        .background(isActive ? Color.green.opacity(0.12) : Color.white.opacity(0.05))
+                        .padding(.horizontal, 10)
+                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                         .cornerRadius(6)
                 }
                 .menuStyle(.borderlessButton)
@@ -2773,11 +2773,11 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.motionBlurStrength > 0
                     Text("Motion Blur: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(isActive ? .purple : .secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
-                        .background(isActive ? Color.purple.opacity(0.12) : Color.white.opacity(0.05))
+                        .padding(.horizontal, 10)
+                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                         .cornerRadius(6)
                 }
                 .menuStyle(.borderlessButton)
@@ -2802,11 +2802,11 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.denoiseStrength > 0
                     Text("Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(isActive ? .orange : .secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
-                        .background(isActive ? Color.orange.opacity(0.12) : Color.white.opacity(0.05))
+                        .padding(.horizontal, 10)
+                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                         .cornerRadius(6)
                 }
                 .menuStyle(.borderlessButton)
@@ -2819,11 +2819,11 @@ extension VTPlayerView {
                         Image(systemName: "slider.horizontal.3")
                         Text("Adjustments")
                     }
-                    .font(.caption.weight(.medium))
-                    .foregroundColor((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? .cyan : .secondary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? .primary : .secondary)
                     .padding(.vertical, 5)
-                    .padding(.horizontal, 8)
-                    .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? Color.cyan.opacity(0.12) : Color.white.opacity(0.05))
+                    .padding(.horizontal, 10)
+                    .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -2911,11 +2911,11 @@ extension VTPlayerView {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 45, alignment: .trailing)
-            Slider(value: $viewModel.playbackSpeed, in: 0.25...4.0, step: 0.25)
+            Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
                 .frame(width: 80)
                 .accentColor(.cyan)
         }
-        .help("Adjust playback speed (0.25x - 4x)")
+        .help("Adjust playback speed (0.5x - 2x)")
     }
     
     @ViewBuilder
