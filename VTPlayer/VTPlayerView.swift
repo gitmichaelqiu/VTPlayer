@@ -1585,6 +1585,7 @@ struct VTPlayerView: View {
                     .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
             } detail: {
                 videoContent
+                    .frame(minWidth: 480, idealWidth: 720)
                     .inspector(isPresented: Binding(
                         get: { viewModel.showSidebar && viewModel.videoURL != nil },
                         set: { viewModel.showSidebar = $0 }
