@@ -2447,18 +2447,7 @@ extension VTPlayerView {
             viewModel.openRecentVideo(url)
         }) {
             HStack(spacing: 10) {
-                ZStack(alignment: .center) {
-                    VideoThumbnailView(url: url, width: 54, height: 36)
-                    
-                    if isActive {
-                        Color.black.opacity(0.45)
-                            .frame(width: 54, height: 36)
-                            .cornerRadius(6)
-                        Image(systemName: "play.fill")
-                            .foregroundColor(.white)
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                }
+                VideoThumbnailView(url: url, width: 54, height: 36)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
@@ -2519,6 +2508,14 @@ extension VTPlayerView {
             } label: {
                 Label("Copy Name", systemImage: "doc.on.doc")
             }
+            
+            #if os(macOS)
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Label("Show in Finder", systemImage: "folder")
+            }
+            #endif
             
             Divider()
             
