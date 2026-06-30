@@ -2423,12 +2423,13 @@ extension VTPlayerView {
                     Text("Recents")
                     Spacer()
                     if !viewModel.recentVideos.isEmpty {
-                        Button("Clear All") {
-                            showClearAllAlert = true
+                        Button(action: { showClearAllAlert = true }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
                         }
-                        .buttonStyle(.borderless)
-                        .font(.caption2)
+                        .buttonStyle(.plain)
                         .foregroundColor(.secondary)
+                        .help("Clear all recent videos")
                     }
                 }
             }
@@ -2444,23 +2445,31 @@ extension VTPlayerView {
         return Button(action: {
             viewModel.openRecentVideo(url)
         }) {
-            HStack(spacing: 8) {
-                Image(systemName: isActive ? "play.fill" : (isPinned ? "pin.fill" : "film"))
-                    .foregroundColor(isActive ? .accentColor : (isPinned ? .orange : .secondary))
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(width: 16)
+            HStack(spacing: 10) {
+                ZStack(alignment: .center) {
+                    VideoThumbnailView(url: url, width: 54, height: 36)
+                    
+                    if isActive {
+                        Color.black.opacity(0.45)
+                            .frame(width: 54, height: 36)
+                            .cornerRadius(6)
+                        Image(systemName: "play.fill")
+                            .foregroundColor(.white)
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                }
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .font(.system(.body, design: .default).weight(.medium))
+                        .font(.system(.subheadline, design: .default).weight(.medium))
                         .foregroundColor(.primary)
                     
                     Text(url.deletingLastPathComponent().path)
                         .lineLimit(1)
                         .truncationMode(.head)
-                        .font(.system(size: 10, design: .default))
+                        .font(.system(size: 9, design: .default))
                         .foregroundStyle(.secondary)
                 }
                 
@@ -2469,11 +2478,11 @@ extension VTPlayerView {
                 if isPinned && !isActive {
                     Image(systemName: "pin.fill")
                         .foregroundColor(.orange)
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                 }
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -3367,9 +3376,12 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 struct VideoThumbnailView: View {
     let url: URL
+    var width: CGFloat = 90
+    var height: CGFloat = 60
     @State private var thumbnail: Image? = nil
     @State private var durationString: String? = nil
     
@@ -3379,11 +3391,11 @@ struct VideoThumbnailView: View {
                 thumbnail
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 90, height: 60)
+                    .frame(width: width, height: height)
                     .clipped()
             } else {
-                Color(.secondarySystemGroupedBackground)
-                    .frame(width: 90, height: 60)
+                Color.gray.opacity(0.15)
+                    .frame(width: width, height: height)
                     .overlay(
                         Image(systemName: "video.fill")
                             .font(.body)
@@ -3402,7 +3414,7 @@ struct VideoThumbnailView: View {
                     .padding(4)
             }
         }
-        .frame(width: 90, height: 60)
+        .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .onAppear {
             loadMetadata()
@@ -3435,12 +3447,10 @@ struct VideoThumbnailView: View {
             // Request frame at 1.0 second or start
             let time = CMTime(seconds: 1.0, preferredTimescale: 600)
             if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil) {
-                let uiImage = UIImage(cgImage: cgImage)
                 DispatchQueue.main.async {
-                    self.thumbnail = Image(uiImage: uiImage)
+                    self.thumbnail = Image(decorative: cgImage, scale: 1.0)
                 }
             }
         }
     }
 }
-#endif
