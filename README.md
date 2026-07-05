@@ -1,6 +1,11 @@
-# VTPlayer
-
-**Hardware-accelerated real-time video enhancement player for Apple Silicon.**
+<h1 align="center">
+  <img src="./VTPlayerIcon.png" width="25%" alt=""/>  
+  <p></p>
+  <p align="center">VTPlayer</p>
+</h1>
+<h3>
+<p align="center"><i>Magic Your Videos.</i></p>
+</h3>
 
 VTPlayer uses Apple's VideoToolbox frame processing APIs to upscale, interpolate, denoise, and enhance video in real time on the Apple Neural Engine (ANE) and GPU.
 
