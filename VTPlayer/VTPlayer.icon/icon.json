@@ -1,4 +1,7 @@
 {
+  "features" : [
+    "refractivity"
+  ],
   "fill" : {
     "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
   },
@@ -53,14 +56,49 @@
           }
         }
       ],
+      "refractivity-specializations" : [
+        {
+          "value" : {
+            "depth" : 0,
+            "enabled" : true,
+            "strength" : 0.5
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "depth" : 0,
+            "enabled" : true,
+            "strength" : 0.5
+          }
+        }
+      ],
       "shadow" : {
-        "kind" : "neutral",
+        "kind" : "layer-color",
         "opacity" : 0.6
       },
-      "translucency" : {
-        "enabled" : false,
-        "value" : 0.2
-      }
+      "translucency-specializations" : [
+        {
+          "value" : {
+            "enabled" : true,
+            "value" : 0.4
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "enabled" : true,
+            "value" : 0.35
+          }
+        },
+        {
+          "appearance" : "tinted",
+          "value" : {
+            "enabled" : true,
+            "value" : 0
+          }
+        }
+      ]
     },
     {
       "hidden" : false,
