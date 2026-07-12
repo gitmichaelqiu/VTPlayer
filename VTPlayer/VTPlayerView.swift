@@ -226,6 +226,7 @@ final class VTPlayerViewModel {
     private var timeJumpedObserver: Any?
     private var rateObserver: NSKeyValueObservation?
     private var playbackGeneration: UInt64 = 0
+    private var seekGeneration: UInt64 = 0
     private var isInitializingPipeline = false
 
     // Audio sync monitoring (diagnostic only — never pauses player)
@@ -659,6 +660,8 @@ final class VTPlayerViewModel {
 
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
+        seekGeneration &+= 1
+        let requestGeneration = seekGeneration
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
@@ -674,7 +677,8 @@ final class VTPlayerViewModel {
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
             guard completed, let self = self else { return }
             Task { @MainActor in
-                guard self.player === player else { return }
+                guard requestGeneration == self.seekGeneration,
+                      self.player === player else { return }
 
                 // Re-assert player rate — AVPlayer can transiently drop
                 // rate to 0 during seek, causing arrow-key seeks to
@@ -682,7 +686,11 @@ final class VTPlayerViewModel {
                 if shouldPlay && self.isPlaying && !self.isPaused {
                     player.rate = targetRate
                 }
-                await self.triggerSingleFrameUpdate(at: time)
+                await self.triggerSingleFrameUpdate(
+                    at: time,
+                    for: player,
+                    requestGeneration: requestGeneration
+                )
             }
         }
     }
@@ -711,6 +719,8 @@ final class VTPlayerViewModel {
 
     /// Seeks and draws the frame immediately during continuous scrubbing.
     func scrub(to seconds: Double) {
+        seekGeneration &+= 1
+        let requestGeneration = seekGeneration
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
@@ -721,13 +731,19 @@ final class VTPlayerViewModel {
         }
         guard let player = player else { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
+            guard completed, let self = self else { return }
+            Task { @MainActor in
+                guard requestGeneration == self.seekGeneration,
+                      self.player === player,
+                      let url = self.videoURL else { return }
 
-        // Read a single frame via AVAssetReader (video track is disabled
-        // on AVPlayer, so copyPixelBuffer won't work).
-        if let url = videoURL,
-           let pixelBuffer = readSingleFrame(from: url, at: time) {
-            self.renderer.render(pixelBuffer: pixelBuffer)
+                // Read a single frame via AVAssetReader (video track is
+                // disabled on AVPlayer, so copyPixelBuffer won't work).
+                if let pixelBuffer = self.readSingleFrame(from: url, at: time) {
+                    self.renderer.render(pixelBuffer: pixelBuffer)
+                }
+            }
         }
     }
 
@@ -737,10 +753,15 @@ final class VTPlayerViewModel {
         seek(to: target)
     }
 
-    private func triggerSingleFrameUpdate(at time: CMTime) async {
+    private func triggerSingleFrameUpdate(
+        at time: CMTime,
+        for player: AVPlayer,
+        requestGeneration: UInt64
+    ) async {
         guard let url = videoURL else { return }
         // Small delay to let the seek settle
         try? await Task.sleep(nanoseconds: 10_000_000)
+        guard requestGeneration == seekGeneration, self.player === player else { return }
         if let pixelBuffer = readSingleFrame(from: url, at: time) {
             self.renderer.render(pixelBuffer: pixelBuffer)
         }
@@ -1244,6 +1265,7 @@ final class VTPlayerViewModel {
     /// Pauses/stops playback entirely.
     func stop() {
         playbackGeneration += 1
+        seekGeneration &+= 1
         if self.currentTime > 0 {
             self.saveProgress()
         }
