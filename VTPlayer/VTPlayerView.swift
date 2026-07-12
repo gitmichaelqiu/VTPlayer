@@ -2763,7 +2763,7 @@ extension VTPlayerView {
                     let isActive = scale > 0
                     Text(isQL ? "Super Res: \(scale)x QL" : "Super Res: \(isActive ? "\(scale)x" : "Off")")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(isActive ? .primary : .secondary)
+                        .foregroundStyle(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
                         .padding(.horizontal, 10)
                         .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -2790,7 +2790,7 @@ extension VTPlayerView {
                     let isActive = viewModel.frameInterpolationLevel > 0
                     Text("Interpolation: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(isActive ? .primary : .secondary)
+                        .foregroundStyle(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
                         .padding(.horizontal, 10)
                         .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -2819,7 +2819,7 @@ extension VTPlayerView {
                     let isActive = viewModel.motionBlurStrength > 0
                     Text("Motion Blur: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(isActive ? .primary : .secondary)
+                        .foregroundStyle(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
                         .padding(.horizontal, 10)
                         .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -2848,7 +2848,7 @@ extension VTPlayerView {
                     let isActive = viewModel.denoiseStrength > 0
                     Text("Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(isActive ? .primary : .secondary)
+                        .foregroundStyle(isActive ? .primary : .secondary)
                         .padding(.vertical, 5)
                         .padding(.horizontal, 10)
                         .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -2865,7 +2865,7 @@ extension VTPlayerView {
                         Text("Adjustments")
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundColor((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? .primary : .secondary)
+                    .foregroundStyle((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? .primary : .secondary)
                     .padding(.vertical, 5)
                     .padding(.horizontal, 10)
                     .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -2925,7 +2925,7 @@ extension VTPlayerView {
         Button(action: { viewModel.togglePlayPause() }) {
             Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
                 .font(.title3.weight(.semibold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
         }
         .buttonStyle(.glass)
         .keyboardShortcut(.space, modifiers: [])
@@ -2939,7 +2939,7 @@ extension VTPlayerView {
                 : "SH"
             )
             .font(.caption.weight(.medium))
-            .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
+            .foregroundStyle(viewModel.sharpness > 0 ? .cyan : .secondary)
             .frame(width: hoverSH ? 90 : 22, alignment: .leading)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                 .tint(.cyan)
@@ -2957,7 +2957,7 @@ extension VTPlayerView {
         HStack(spacing: 6) {
             Text(String(format: "%.2fx", viewModel.playbackSpeed))
                 .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 45, alignment: .trailing)
             Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
                 .frame(width: 80)
@@ -2976,7 +2976,7 @@ extension VTPlayerView {
         }) {
             Image(systemName: viewModel.isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                 .font(.body.weight(.semibold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
         }
         .buttonStyle(.glass)
         .keyboardShortcut("f", modifiers: [])
@@ -2997,7 +2997,7 @@ struct QLModelStatusView: View {
     var body: some View {
         let modelStatus = modelManager.status
         LabeledContent("QL Model", value: modelStatusLabel(modelStatus))
-            .foregroundColor(modelStatusColor(modelStatus))
+            .foregroundStyle(modelStatusColor(modelStatus))
         if case .downloading(let progress) = modelStatus {
             ProgressView(value: progress)
                 .progressViewStyle(.linear)
