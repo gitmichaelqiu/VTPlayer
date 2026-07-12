@@ -236,8 +236,6 @@ final class VTPlayerViewModel {
     }
 
     @ObservationIgnored nonisolated(unsafe) private var cursorHidden = false
-    @ObservationIgnored nonisolated(unsafe) private let displayTickLock = NSLock()
-    @ObservationIgnored nonisolated(unsafe) private var displayTickScheduled = false
     private var inactivityTask: Task<Void, Never>?
     
     // AVPlayer components
@@ -245,12 +243,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
     @ObservationIgnored private var producerTask: Task<Void, Never>?
     @ObservationIgnored private var consumerTask: Task<Void, Never>?
-    #if os(macOS)
-    @ObservationIgnored private var displayLink: CVDisplayLink?
-    @ObservationIgnored private var displayLinkContext: UnsafeMutableRawPointer?
-    #else
     @ObservationIgnored private var displayLink: CADisplayLink?
-    #endif
     @ObservationIgnored private var processedFramesCount = 0
     @ObservationIgnored private var fpsTimer = DispatchTime.now()
     @ObservationIgnored private var diagTimer = DispatchTime.now()
@@ -1010,19 +1003,14 @@ final class VTPlayerViewModel {
         }
     }
 
-    #if os(macOS)
     private func stopDisplayLinkIfNeeded() {
         if let link = displayLink {
-            CVDisplayLinkStop(link)
-            CVDisplayLinkSetOutputCallback(link, nil, nil)
+            link.invalidate()
             displayLink = nil
-        }
-        if let context = displayLinkContext {
-            Unmanaged<VTPlayerViewModel>.fromOpaque(context).release()
-            displayLinkContext = nil
         }
     }
 
+    #if os(macOS)
     private func setNativeVideoEnabled(_ enabled: Bool) {
         guard let tracks = player?.currentItem?.tracks else { return }
         for track in tracks where track.assetTrack?.mediaType == .video {
@@ -1370,48 +1358,16 @@ final class VTPlayerViewModel {
     private func startDisplayLinkIfNeeded() {
         guard displayLink == nil else { return }
 
-        // Start CVDisplayLink (macOS) or CADisplayLink (iOS)
+        // Use the same display-link scheduler on both platforms.
         #if os(macOS)
-        var newLink: CVDisplayLink?
-        if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
-            let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
-                guard let displayLinkContext else { return kCVReturnSuccess }
-                let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext).takeUnretainedValue()
-                vm.scheduleDisplayTick()
-                return kCVReturnSuccess
-            }
-            let context = Unmanaged.passRetained(self).toOpaque()
-            self.displayLinkContext = context
-            CVDisplayLinkSetOutputCallback(link, callback, context)
-            CVDisplayLinkStart(link)
-            self.displayLink = link
-        }
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        let link = window.displayLink(target: self, selector: #selector(caDisplayLinkTick))
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
+        #endif
         link.add(to: .main, forMode: .common)
         self.displayLink = link
-        #endif
     }
-
-    #if os(macOS)
-    private nonisolated func scheduleDisplayTick() {
-        displayTickLock.lock()
-        guard !displayTickScheduled else {
-            displayTickLock.unlock()
-            return
-        }
-        displayTickScheduled = true
-        displayTickLock.unlock()
-
-        DispatchQueue.main.async { @MainActor [weak self] in
-            guard let self else { return }
-            self.displayTickLock.lock()
-            self.displayTickScheduled = false
-            self.displayTickLock.unlock()
-            self.tickDisplayLink()
-        }
-    }
-    #endif
     #endif
 
     @MainActor
@@ -1482,11 +1438,9 @@ final class VTPlayerViewModel {
         }
     }
 
-    #if !os(macOS)
     @objc private func caDisplayLinkTick() {
         self.tickDisplayLink()
     }
-    #endif
 
     /// Pauses/stops playback entirely.
     func stop() {
