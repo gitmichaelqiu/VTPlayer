@@ -242,6 +242,7 @@ final class VTPlayerViewModel {
     private var consumerTask: Task<Void, Never>?
     #if os(macOS)
     private var displayLink: CVDisplayLink?
+    private var displayLinkContext: UnsafeMutableRawPointer?
     #else
     private var displayLink: CADisplayLink?
     #endif
@@ -278,6 +279,7 @@ final class VTPlayerViewModel {
     private var playerItemObserver: Any?
     private var timeJumpedObserver: Any?
     private var rateObserver: NSKeyValueObservation?
+    private var timeObserverToken: Any?
     private var playbackGeneration: UInt64 = 0
     private var seekGeneration: UInt64 = 0
     private var isInitializingPipeline = false
@@ -423,6 +425,21 @@ final class VTPlayerViewModel {
                     
                     self.player = newPlayer
                     self.videoOutput = output
+
+                    let timeObserver = newPlayer.addPeriodicTimeObserver(
+                        forInterval: CMTime(value: 1, timescale: 30),
+                        queue: .main
+                    ) { [weak self] time in
+                        guard let self else { return }
+                        let seconds = CMTimeGetSeconds(time)
+                        guard seconds.isFinite else { return }
+                        Task { @MainActor [weak self] in
+                            guard let self,
+                                  self.videoURL == url else { return }
+                            self.currentTime = seconds
+                        }
+                    }
+                    self.timeObserverToken = timeObserver
                     
                     // Observe play ending to auto-rewind
                     let observer = NotificationCenter.default.addObserver(
@@ -920,10 +937,7 @@ final class VTPlayerViewModel {
         player.pause()
         self.isPaused = true
         #if os(macOS)
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            self.displayLink = nil
-        }
+        stopDisplayLinkIfNeeded()
         #else
         if let link = displayLink {
             link.invalidate()
@@ -944,6 +958,18 @@ final class VTPlayerViewModel {
     }
 
     #if os(macOS)
+    private func stopDisplayLinkIfNeeded() {
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            CVDisplayLinkSetOutputCallback(link, nil, nil)
+            displayLink = nil
+        }
+        if let context = displayLinkContext {
+            Unmanaged<VTPlayerViewModel>.fromOpaque(context).release()
+            displayLinkContext = nil
+        }
+    }
+
     private func setNativeVideoEnabled(_ enabled: Bool) {
         guard let tracks = player?.currentItem?.tracks else { return }
         for track in tracks where track.assetTrack?.mediaType == .video {
@@ -955,6 +981,7 @@ final class VTPlayerViewModel {
     private func stopPlaybackLoopOnly() {
         #if os(macOS)
         setNativeVideoEnabled(true)
+        stopDisplayLinkIfNeeded()
         #endif
         playbackGeneration += 1
         endActiveCoordinator()
@@ -962,13 +989,8 @@ final class VTPlayerViewModel {
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
-        
-        #if os(macOS)
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            self.displayLink = nil
-        }
-        #else
+
+        #if !os(macOS)
         if let link = displayLink {
             link.invalidate()
             self.displayLink = nil
@@ -1276,11 +1298,13 @@ final class VTPlayerViewModel {
         var newLink: CVDisplayLink?
         if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
             let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
-                let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext!).takeUnretainedValue()
+                guard let displayLinkContext else { return kCVReturnSuccess }
+                let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext).takeUnretainedValue()
                 vm.scheduleDisplayTick()
                 return kCVReturnSuccess
             }
-            let context = Unmanaged.passUnretained(self).toOpaque()
+            let context = Unmanaged.passRetained(self).toOpaque()
+            self.displayLinkContext = context
             CVDisplayLinkSetOutputCallback(link, callback, context)
             CVDisplayLinkStart(link)
             self.displayLink = link
@@ -1390,6 +1414,7 @@ final class VTPlayerViewModel {
     func stop() {
         #if os(macOS)
         setNativeVideoEnabled(false)
+        stopDisplayLinkIfNeeded()
         #endif
         playbackGeneration += 1
         seekGeneration &+= 1
