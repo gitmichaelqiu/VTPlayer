@@ -177,6 +177,8 @@ final class VTPlayerViewModel {
     var fps: Double = 0.0
     var droppedFrames = 0
     var aneUsagePercent: Double = 0.0
+    @ObservationIgnored private var pendingDroppedFrames = 0
+    @ObservationIgnored private var lastDiagnosticsPublish = DispatchTime.now()
     
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false
@@ -239,21 +241,21 @@ final class VTPlayerViewModel {
     
     // AVPlayer components
     private(set) var player: AVPlayer?
-    private var videoOutput: AVPlayerItemVideoOutput?
-    private var producerTask: Task<Void, Never>?
-    private var consumerTask: Task<Void, Never>?
+    @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
+    @ObservationIgnored private var producerTask: Task<Void, Never>?
+    @ObservationIgnored private var consumerTask: Task<Void, Never>?
     #if os(macOS)
-    private var displayLink: CVDisplayLink?
-    private var displayLinkContext: UnsafeMutableRawPointer?
+    @ObservationIgnored private var displayLink: CVDisplayLink?
+    @ObservationIgnored private var displayLinkContext: UnsafeMutableRawPointer?
     #else
-    private var displayLink: CADisplayLink?
+    @ObservationIgnored private var displayLink: CADisplayLink?
     #endif
-    private var processedFramesCount = 0
-    private var fpsTimer = DispatchTime.now()
-    private var diagTimer = DispatchTime.now()
-    private var processedFrameCache: [VTFrame] = []
-    private var processedFrameCacheStart = 0
-    private let cacheLock = NSRecursiveLock()
+    @ObservationIgnored private var processedFramesCount = 0
+    @ObservationIgnored private var fpsTimer = DispatchTime.now()
+    @ObservationIgnored private var diagTimer = DispatchTime.now()
+    @ObservationIgnored private var processedFrameCache: [VTFrame] = []
+    @ObservationIgnored private var processedFrameCacheStart = 0
+    @ObservationIgnored private let cacheLock = NSRecursiveLock()
     private func lockCache<T>(_ block: () -> T) -> T {
         cacheLock.lock()
         defer { cacheLock.unlock() }
@@ -270,6 +272,20 @@ final class VTPlayerViewModel {
         guard immediately || abs(seconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
         lastPublishedCurrentTime = seconds
         currentTime = seconds
+    }
+
+    private func publishProcessingDiagnostics(_ processingTime: Double? = nil) {
+        let now = DispatchTime.now()
+        let elapsed = Double(now.uptimeNanoseconds - lastDiagnosticsPublish.uptimeNanoseconds) / 1_000_000_000.0
+        guard elapsed >= 0.1 else { return }
+
+        if let processingTime {
+            frameProcessingTime = processingTime
+        }
+        droppedFrames += pendingDroppedFrames
+        pendingDroppedFrames = 0
+        aneUsagePercent = 0.0
+        lastDiagnosticsPublish = now
     }
 
     private func compactProcessedFrameCacheIfNeeded() {
@@ -1244,7 +1260,8 @@ final class VTPlayerViewModel {
                         self.processedFrameCacheStart >= self.processedFrameCache.count
                     }
                     if !isEmpty && frameSecs < currentSecs - 0.10 {
-                        self.droppedFrames += 1
+                        self.pendingDroppedFrames += 1
+                        self.publishProcessingDiagnostics()
                         continue
                     }
                 }
@@ -1257,10 +1274,9 @@ final class VTPlayerViewModel {
 
                     guard gen == self.playbackGeneration else { break }
 
-                    self.frameProcessingTime = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-
-                    // ANE usage not yet measurable via public API — placeholder for future telemetry
-                    self.aneUsagePercent = 0.0
+                    self.publishProcessingDiagnostics(
+                        Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
+                    )
 
                     if outputFrames.count < 2 && self.frameInterpolationLevel > 0 {
                         print("⚠️ FI: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
@@ -1408,7 +1424,8 @@ final class VTPlayerViewModel {
             processedFramesCount += drained
             self.publishCurrentTime(currentSecs)
             if drained > 1 {
-                self.droppedFrames += drained - 1
+                self.pendingDroppedFrames += drained - 1
+                self.publishProcessingDiagnostics()
             }
         }
         
