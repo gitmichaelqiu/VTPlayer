@@ -421,7 +421,7 @@ final class VTPlayerViewModel {
                     #if os(macOS)
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                     self.recordRecentDateIfNeeded(for: url)
-                    self.reloadRecentVideos()
+                    self.addRecentVideoMac(url)
                     #endif
                     
                     self.duration = durationSecs
@@ -557,6 +557,24 @@ final class VTPlayerViewModel {
         guard dates[url.path] == nil else { return }
         dates[url.path] = Date().timeIntervalSince1970
         UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
+    }
+
+    private func addRecentVideoMac(_ url: URL) {
+        var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
+        removed.removeAll { $0 == url.path }
+        if removed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
+        } else {
+            UserDefaults.standard.set(removed, forKey: "VTRemovedRecentVideos")
+        }
+
+        var urls = NSDocumentController.shared.recentDocumentURLs.filter { recentURL in
+            !removed.contains(recentURL.path)
+        }
+        if !urls.contains(url) {
+            urls.insert(url, at: 0)
+        }
+        recentVideos = urls
     }
     
     func deleteRecentVideoMac(at url: URL) {
