@@ -2512,12 +2512,13 @@ extension VTPlayerView {
 
                 Spacer(minLength: 8)
 
-                Button(role: .destructive) {
+                Button {
                     showClearAllAlert = true
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
                 .help("Clear playback history")
                 .disabled(viewModel.recentVideos.isEmpty)
             }
