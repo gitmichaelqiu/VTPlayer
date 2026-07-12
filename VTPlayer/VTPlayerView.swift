@@ -674,11 +674,13 @@ final class VTPlayerViewModel {
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
             guard completed, let self = self else { return }
             Task { @MainActor in
+                guard self.player === player else { return }
+
                 // Re-assert player rate — AVPlayer can transiently drop
                 // rate to 0 during seek, causing arrow-key seeks to
                 // unexpectedly pause playback.
-                if shouldPlay {
-                    self.player?.rate = targetRate
+                if shouldPlay && self.isPlaying && !self.isPaused {
+                    player.rate = targetRate
                 }
                 await self.triggerSingleFrameUpdate(at: time)
             }
