@@ -2503,11 +2503,15 @@ extension VTPlayerView {
 
             HStack(spacing: 8) {
                 Menu {
-                    Picker("Sort By", selection: $sortBy) {
+                    Button {
+                        sortBy = .dateAdded
+                    } label: {
                         Label("Date Added", systemImage: "calendar")
-                            .tag(SortOption.dateAdded)
+                    }
+                    Button {
+                        sortBy = .name
+                    } label: {
                         Label("Name", systemImage: "textformat.abc")
-                            .tag(SortOption.name)
                     }
                 } label: {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
