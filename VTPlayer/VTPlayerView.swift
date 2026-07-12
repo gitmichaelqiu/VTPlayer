@@ -1104,13 +1104,13 @@ final class VTPlayerViewModel {
                     continue
                 }
 
-                // Large cache target — buffer frames ahead so the consumer
-                // always has processed frames to render even when the
-                // pipeline is slower than real-time.
+                // Keep a modest look-ahead so the consumer can absorb brief
+                // processor spikes without retaining an unnecessarily large
+                // decoded frame backlog on macOS.
                 let count = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
-                if count >= 60 {
+                if count >= 24 {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
