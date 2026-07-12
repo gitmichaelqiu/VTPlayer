@@ -475,7 +475,7 @@ public actor VTFrameProcessorCoordinator {
             &outputBuffer
         ) == kCVReturnSuccess,
         let outputBuffer else {
-            return nil
+            return frame
         }
 
         guard VTPixelTransferSessionTransferImage(
@@ -483,7 +483,7 @@ public actor VTFrameProcessorCoordinator {
             from: frame.buffer,
             to: outputBuffer
         ) == kCVReturnSuccess else {
-            return nil
+            return frame
         }
 
         propagateColorAttachments(from: frame.buffer, to: outputBuffer)
