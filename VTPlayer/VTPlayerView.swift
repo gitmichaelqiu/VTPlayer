@@ -2585,6 +2585,7 @@ extension VTPlayerView {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            .frame(minWidth: 0, maxWidth: .infinity)
 
             Divider()
 
@@ -2646,13 +2647,12 @@ extension VTPlayerView {
                         .font(.system(size: 9, design: .default))
                         .foregroundStyle(.secondary)
                 }
-                
-                Spacer()
-                
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
