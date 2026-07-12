@@ -131,6 +131,11 @@ public actor VTFrameProcessorCoordinator {
     }
 
     private func propagateColorAttachments(from source: CVPixelBuffer, to destination: CVPixelBuffer) {
+        // VideoToolbox's output pool does not always inherit the source
+        // buffer's color metadata. Propagate the complete attachment set
+        // before reinforcing the color keys used by Core Image's YUV decoder.
+        CVBufferPropagateAttachments(source, destination)
+
         let keys: [CFString] = [
             kCVImageBufferColorPrimariesKey,
             kCVImageBufferTransferFunctionKey,
@@ -142,6 +147,35 @@ public actor VTFrameProcessorCoordinator {
             if let value = CVBufferCopyAttachment(source, key, nil) {
                 CVBufferSetAttachment(destination, key, value, .shouldPropagate)
             }
+        }
+
+        // Some decoder paths provide no color attachments at all. The
+        // VideoToolbox video path is nominally Rec. 709, and leaving the
+        // matrix unspecified can make the destination's chroma plane render
+        // as a solid green image in Core Image.
+        if CVBufferCopyAttachment(destination, kCVImageBufferColorPrimariesKey, nil) == nil {
+            CVBufferSetAttachment(
+                destination,
+                kCVImageBufferColorPrimariesKey,
+                kCVImageBufferColorPrimaries_ITU_R_709_2,
+                .shouldPropagate
+            )
+        }
+        if CVBufferCopyAttachment(destination, kCVImageBufferTransferFunctionKey, nil) == nil {
+            CVBufferSetAttachment(
+                destination,
+                kCVImageBufferTransferFunctionKey,
+                kCVImageBufferTransferFunction_ITU_R_709_2,
+                .shouldPropagate
+            )
+        }
+        if CVBufferCopyAttachment(destination, kCVImageBufferYCbCrMatrixKey, nil) == nil {
+            CVBufferSetAttachment(
+                destination,
+                kCVImageBufferYCbCrMatrixKey,
+                kCVImageBufferYCbCrMatrix_ITU_R_709_2,
+                .shouldPropagate
+            )
         }
     }
 
