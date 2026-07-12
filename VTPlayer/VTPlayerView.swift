@@ -302,6 +302,7 @@ final class VTPlayerViewModel {
     
     private func setupPlayer(with url: URL) {
         let asset = AVAsset(url: url)
+        let setupGeneration = playbackGeneration
         
         Task {
             do {
@@ -363,6 +364,9 @@ final class VTPlayerViewModel {
                 
                 // Update properties on @MainActor
                 await MainActor.run {
+                    guard setupGeneration == self.playbackGeneration,
+                          self.videoURL == url else { return }
+
                     #if os(macOS)
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                     self.reloadRecentVideos()
@@ -465,12 +469,31 @@ final class VTPlayerViewModel {
     }
     
     func deleteRecentVideoMac(at url: URL) {
+        let wasSelected = videoURL == url
+
         var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
         if !removed.contains(url.path) {
             removed.append(url.path)
             UserDefaults.standard.set(removed, forKey: "VTRemovedRecentVideos")
         }
         reloadRecentVideos()
+
+        if wasSelected {
+            stop()
+            videoURL = nil
+        }
+    }
+
+    func clearRecentVideosMac() {
+        let hadSelectedVideo = videoURL != nil
+        NSDocumentController.shared.clearRecentDocuments(nil)
+        UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
+        reloadRecentVideos()
+
+        if hadSelectedVideo {
+            stop()
+            videoURL = nil
+        }
     }
     #endif
     
@@ -1211,6 +1234,7 @@ final class VTPlayerViewModel {
 
     /// Pauses/stops playback entirely.
     func stop() {
+        playbackGeneration += 1
         if self.currentTime > 0 {
             self.saveProgress()
         }
@@ -1442,6 +1466,10 @@ final class VTPlayerViewModel {
     }
     
     func deleteRecentVideoIOS(at indexSet: IndexSet) {
+        let removedURLs = indexSet.compactMap { index in
+            recentVideos.indices.contains(index) ? recentVideos[index] : nil
+        }
+
         for idx in indexSet {
             if idx < recentVideos.count {
                 deleteTempFile(for: recentVideos[idx])
@@ -1449,14 +1477,25 @@ final class VTPlayerViewModel {
         }
         self.recentVideos.remove(atOffsets: indexSet)
         saveRecentVideosIOS()
+
+        if let selectedURL = videoURL,
+           removedURLs.contains(where: { $0 == selectedURL }) {
+            stop()
+            videoURL = nil
+        }
     }
-    
+
     func clearRecentVideosIOS() {
         for url in recentVideos {
             deleteTempFile(for: url)
         }
         self.recentVideos.removeAll()
         saveRecentVideosIOS()
+
+        if videoURL != nil {
+            stop()
+            videoURL = nil
+        }
     }
     #endif
 
@@ -1545,9 +1584,7 @@ struct VTPlayerView: View {
             Button("Cancel", role: .cancel) { }
             Button("Clear History", role: .destructive) {
                 #if os(macOS)
-                NSDocumentController.shared.clearRecentDocuments(nil)
-                UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
-                viewModel.reloadRecentVideos()
+                viewModel.clearRecentVideosMac()
                 #else
                 viewModel.clearRecentVideosIOS()
                 #endif
