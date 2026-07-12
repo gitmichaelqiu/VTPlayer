@@ -130,6 +130,21 @@ public actor VTFrameProcessorCoordinator {
         return status == kCVReturnSuccess ? pool : nil
     }
 
+    private func propagateColorAttachments(from source: CVPixelBuffer, to destination: CVPixelBuffer) {
+        let keys: [CFString] = [
+            kCVImageBufferColorPrimariesKey,
+            kCVImageBufferTransferFunctionKey,
+            kCVImageBufferYCbCrMatrixKey,
+            kCVImageBufferGammaLevelKey
+        ]
+
+        for key in keys {
+            if let value = CVBufferGetAttachment(source, key, nil)?.takeUnretainedValue() {
+                CVBufferSetAttachment(destination, key, value, .shouldPropagate)
+            }
+        }
+    }
+
     // MARK: - Start Session
 
     public func startSession(width: Int, height: Int) throws {
@@ -357,6 +372,10 @@ public actor VTFrameProcessorCoordinator {
         for stage in orderedStages {
             guard let instance = stages[stage] else { continue }
             currentFrames = try await processStage(stage, instance: instance, inputFrames: currentFrames)
+        }
+
+        for outputFrame in currentFrames {
+            propagateColorAttachments(from: frame.buffer, to: outputFrame.buffer)
         }
 
         return currentFrames
