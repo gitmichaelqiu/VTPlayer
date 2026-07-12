@@ -2609,6 +2609,8 @@ extension VTPlayerView {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.bar)
         }
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .clipped()
     }
 
     @ViewBuilder
