@@ -139,7 +139,7 @@ public actor VTFrameProcessorCoordinator {
         ]
 
         for key in keys {
-            if let value = CVBufferGetAttachment(source, key, nil)?.takeUnretainedValue() {
+            if let value = CVBufferCopyAttachment(source, key, nil) {
                 CVBufferSetAttachment(destination, key, value, .shouldPropagate)
             }
         }
