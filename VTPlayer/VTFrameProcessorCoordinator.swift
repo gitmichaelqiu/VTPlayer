@@ -89,6 +89,14 @@ public actor VTFrameProcessorCoordinator {
     // Fallback transfer session (for unsupported 2nd stage SR scaler)
     private var fallbackTransferSession: VTPixelTransferSession?
 
+    // Fast scaling path for interpolated frames when temporal processing runs
+    // before the heavy SR stage.
+    private var interpolationTransferSession: VTPixelTransferSession?
+
+    // 4x FI is substantially cheaper at source resolution. Keep the
+    // existing combined 2x SR + 2x FI mode unchanged.
+    private var temporalFirstForSRInterpolation = false
+
     // Second spatial stage for 4x LL SR cascading (2x → 2x)
     private var secondSpatialProcessor: VTFrameProcessor?
     private var secondSpatialPool: CVPixelBufferPool?
@@ -147,6 +155,8 @@ public actor VTFrameProcessorCoordinator {
         self.outputHistory.removeAll()
         self.upscaledFrameHistory.removeAll()
         self.stages.removeAll()
+        self.interpolationTransferSession = nil
+        self.temporalFirstForSRInterpolation = false
 
         var currentWidth = width
         var currentHeight = height
@@ -183,10 +193,28 @@ public actor VTFrameProcessorCoordinator {
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel >= 2
         let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
+        let useTemporalFirstForSRInterpolation = frameInterpolationLevel == 4 && (hasQualitySR || hasLLSR)
+        self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
         let needsSpatial = hasQualitySR || (hasLLSR && !inCombinedMode)
 
-        if needsSpatial {
+        func configureSpatialStages() throws {
+            guard needsSpatial else { return }
+
+            if useTemporalFirstForSRInterpolation {
+                var transferSession: VTPixelTransferSession?
+                let status = VTPixelTransferSessionCreate(
+                    allocator: kCFAllocatorDefault,
+                    pixelTransferSessionOut: &transferSession
+                )
+                guard status == kCVReturnSuccess, let session = transferSession else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to create interpolation transfer session"])
+                }
+                configureTransferSession(session)
+                self.interpolationTransferSession = session
+            }
+
             if hasQualitySR {
                 // Quality SR — single stage at requested scale
                 let scale = qualitySuperResolutionScaleFactor
@@ -267,6 +295,10 @@ public actor VTFrameProcessorCoordinator {
             }
         }
 
+        if !useTemporalFirstForSRInterpolation {
+            try configureSpatialStages()
+        }
+
         // ── 3. Temporal Stage ─────────────────────────────────────────
         if frameInterpolationLevel > 0 {
             if inCombinedMode {
@@ -310,6 +342,10 @@ public actor VTFrameProcessorCoordinator {
                 }
                 addStage(.temporal, processor: proc, pool: pool, outW: currentWidth, outH: currentHeight)
             }
+        }
+
+        if useTemporalFirstForSRInterpolation {
+            try configureSpatialStages()
         }
 
         // ── 4. Motion Blur Stage ──────────────────────────────────────
@@ -379,9 +415,15 @@ public actor VTFrameProcessorCoordinator {
         var currentFrames: [VTFrame] = [frame]
 
         // Process stages in order
-        let orderedStages = PipelineStage.allCases
-            .filter { stages.keys.contains($0) }
-            .sorted()
+        let orderedStages: [PipelineStage]
+        if temporalFirstForSRInterpolation {
+            orderedStages = [.denoise, .temporal, .spatial, .motionBlur]
+                .filter { stages.keys.contains($0) }
+        } else {
+            orderedStages = PipelineStage.allCases
+                .filter { stages.keys.contains($0) }
+                .sorted()
+        }
 
         for stage in orderedStages {
             guard let instance = stages[stage] else { continue }
@@ -453,7 +495,12 @@ public actor VTFrameProcessorCoordinator {
 
         // Get the previous source frame (ring buffer index 1 = the frame before current)
         let prevSourceFP: VTFrameProcessorFrame
-        let historyToUse = stages.keys.contains(.spatial) ? upscaledFrameHistory : frameHistory
+        let historyToUse: [VTFrameProcessorFrame]
+        if temporalFirstForSRInterpolation {
+            historyToUse = frameHistory
+        } else {
+            historyToUse = stages.keys.contains(.spatial) ? upscaledFrameHistory : frameHistory
+        }
         if historyToUse.count >= 2 {
             prevSourceFP = historyToUse[1]
         } else {
@@ -577,7 +624,25 @@ public actor VTFrameProcessorCoordinator {
         for f in inputFrames {
             var currentBuffer = f.buffer
 
-            if qualitySuperResolutionScaleFactor > 0 {
+            if temporalFirstForSRInterpolation && f.isInterpolated,
+               let transferSession = interpolationTransferSession {
+                let finalPool = secondSpatialPool ?? pool
+                var outputBuffer: CVPixelBuffer?
+                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, finalPool, &outputBuffer) == kCVReturnSuccess,
+                      let destinationBuffer = outputBuffer else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                        userInfo: [NSLocalizedDescriptionKey: "Interpolated frame pool allocation failed"])
+                }
+                guard VTPixelTransferSessionTransferImage(
+                    transferSession,
+                    from: currentBuffer,
+                    to: destinationBuffer
+                ) == kCVReturnSuccess else {
+                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
+                        userInfo: [NSLocalizedDescriptionKey: "Interpolated frame scaling failed"])
+                }
+                currentBuffer = destinationBuffer
+            } else if qualitySuperResolutionScaleFactor > 0 {
                 // Quality SR
                 var buf1: CVPixelBuffer?
                 guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,
@@ -669,13 +734,16 @@ public actor VTFrameProcessorCoordinator {
 
             outputFrames.append(VTFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp, isInterpolated: f.isInterpolated))
 
-            if let outFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp) {
+            if !temporalFirstForSRInterpolation || !f.isInterpolated,
+               let outFP = VTFrameProcessorFrame(buffer: currentBuffer, presentationTimeStamp: f.presentationTimeStamp) {
                 outputHistory.insert(outFP, at: 0)
                 if outputHistory.count > maxHistoryLength {
                     outputHistory.removeLast()
                 }
 
-                // Track in upscaled frame history for the temporal interpolation stage / motion blur
+                // Track source outputs for the temporal interpolation stage / motion blur.
+                // In temporal-first mode, interpolated frames must not displace the
+                // previous source frame in the history ring.
                 upscaledFrameHistory.insert(outFP, at: 0)
                 if upscaledFrameHistory.count > maxHistoryLength {
                     upscaledFrameHistory.removeLast()
@@ -792,6 +860,12 @@ public actor VTFrameProcessorCoordinator {
             VTPixelTransferSessionInvalidate(session)
         }
         fallbackTransferSession = nil
+
+        if let session = interpolationTransferSession {
+            VTPixelTransferSessionInvalidate(session)
+        }
+        interpolationTransferSession = nil
+        temporalFirstForSRInterpolation = false
 
         frameHistory.removeAll()
         outputHistory.removeAll()
