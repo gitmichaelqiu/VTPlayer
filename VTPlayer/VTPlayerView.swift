@@ -1212,7 +1212,7 @@ final class VTPlayerViewModel {
                 lastFrameToRender = firstFrame
                 self.lastRenderedPTS = firstFrame.presentationTimeStamp
                 drained += 1
-                self.processedFrameCache.removeFirst()
+                self.processedFrameCache = Array(self.processedFrameCache.dropFirst())
             }
         }
         
@@ -2500,27 +2500,21 @@ extension VTPlayerView {
                     Button {
                         sortBy = .dateAdded
                     } label: {
-                        Label {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .opacity(sortBy == .dateAdded ? 1 : 0)
+                                .frame(width: 12)
                             Text("Date Added")
-                        } icon: {
-                            if sortBy == .dateAdded {
-                                Image(systemName: "checkmark")
-                            } else {
-                                Image(systemName: "calendar")
-                            }
                         }
                     }
                     Button {
                         sortBy = .name
                     } label: {
-                        Label {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .opacity(sortBy == .name ? 1 : 0)
+                                .frame(width: 12)
                             Text("Name")
-                        } icon: {
-                            if sortBy == .name {
-                                Image(systemName: "checkmark")
-                            } else {
-                                Image(systemName: "textformat.abc")
-                            }
                         }
                     }
                 } label: {
