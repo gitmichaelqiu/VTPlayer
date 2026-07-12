@@ -2407,7 +2407,7 @@ extension VTPlayerView {
                     if let error = viewModel.srInitializationError {
                         LabeledContent("Error") {
                             Text(error)
-                                .foregroundColor(.red)
+                                .foregroundStyle(.red)
                                 .font(.caption)
                         }
                     }
@@ -2466,7 +2466,7 @@ extension VTPlayerView {
                                 .font(.system(size: 10))
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .help("Clear all recent videos")
                         .padding(.trailing, 2)
                     }
@@ -2492,7 +2492,7 @@ extension VTPlayerView {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.subheadline, design: .default).weight(.medium))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                     
                     Text(url.deletingLastPathComponent().path)
                         .lineLimit(1)
@@ -2505,7 +2505,7 @@ extension VTPlayerView {
                 
                 if isPinned && !isActive {
                     Image(systemName: "pin.fill")
-                        .foregroundColor(.orange)
+                        .foregroundStyle(.orange)
                         .font(.system(size: 9))
                 }
             }
@@ -2580,12 +2580,12 @@ extension VTPlayerView {
                 LabeledContent("Display Rate") {
                     Text(String(format: "%.1f Hz", viewModel.fps))
                         .monospacedDigit()
-                        .foregroundColor(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                        .foregroundStyle(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                 }
                 LabeledContent("Cached Frames") {
                     Text("\(viewModel.frameCacheCount)")
                         .monospacedDigit()
-                        .foregroundColor(viewModel.frameCacheCount > 10 ? .blue : .secondary)
+                        .foregroundStyle(viewModel.frameCacheCount > 10 ? .blue : .secondary)
                 }
             }
             
@@ -2606,14 +2606,14 @@ extension VTPlayerView {
             
             Section("Super Resolution Specs") {
                 LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
-                    .foregroundColor(viewModel.srIsSupported ? .blue : .secondary)
+                    .foregroundStyle(viewModel.srIsSupported ? .blue : .secondary)
                 
                 LabeledContent("Scales", value: viewModel.srSupportedScales)
                 
                 let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                 let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
                 LabeledContent("Active State", value: scale > 0 ? "\(isQL ? "Quality" : "Low Latency") \(scale)x" : "Off")
-                    .foregroundColor(scale > 0 ? .blue : .secondary)
+                    .foregroundStyle(scale > 0 ? .blue : .secondary)
                 
                 if viewModel.qualitySuperResolutionScaleFactor > 0 {
                     QLModelStatusView(modelManager: viewModel.modelManager)
@@ -2621,10 +2621,10 @@ extension VTPlayerView {
                 
                 if let initError = viewModel.srInitializationError {
                     LabeledContent("SR Status", value: "Error")
-                        .foregroundColor(.red)
+                        .foregroundStyle(.red)
                     Text(initError)
                         .font(.system(.caption2, design: .default))
-                        .foregroundColor(.red)
+                        .foregroundStyle(.red)
                         .lineLimit(3)
                 }
             }
