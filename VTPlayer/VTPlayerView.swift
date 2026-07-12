@@ -2482,13 +2482,7 @@ extension VTPlayerView {
                 }
 
                 Section(isExpanded: $isRecentsExpanded) {
-                    if unpinnedList.isEmpty {
-                        ContentUnavailableView {
-                            Label("No Recents", systemImage: "clock")
-                        } description: {
-                            Text("Open a video from the title bar.")
-                        }
-                    } else {
+                    if !unpinnedList.isEmpty {
                         ForEach(unpinnedList, id: \.self) { url in
                             macSidebarRow(for: url)
                         }
@@ -2707,13 +2701,15 @@ extension VTPlayerView {
     private var mainVideoArea: some View {
         VStack(spacing: 0) {
             ZStack {
-                VTMetalRendererView(renderer: viewModel.renderer)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .cornerRadius(viewModel.isFullScreen ? 0 : 8)
-                    .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
-                    .padding(.top, viewModel.isFullScreen ? 0 : 16)
-                    .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
-                    .ignoresSafeArea(viewModel.isFullScreen ? .all : [])
+                if viewModel.videoURL != nil {
+                    VTMetalRendererView(renderer: viewModel.renderer)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .cornerRadius(viewModel.isFullScreen ? 0 : 8)
+                        .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
+                        .padding(.top, viewModel.isFullScreen ? 0 : 16)
+                        .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
+                        .ignoresSafeArea(viewModel.isFullScreen ? .all : [])
+                }
                 
                 if viewModel.videoURL == nil {
                     ContentUnavailableView {
