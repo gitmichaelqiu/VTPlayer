@@ -185,6 +185,20 @@ public actor VTFrameProcessorCoordinator {
         }
     }
 
+    private func propagateRGBColorAttachments(from source: CVPixelBuffer, to destination: CVPixelBuffer) {
+        let keys: [CFString] = [
+            kCVImageBufferColorPrimariesKey,
+            kCVImageBufferTransferFunctionKey,
+            kCVImageBufferGammaLevelKey
+        ]
+
+        for key in keys {
+            if let value = CVBufferCopyAttachment(source, key, nil) {
+                CVBufferSetAttachment(destination, key, value, .shouldPropagate)
+            }
+        }
+    }
+
     // MARK: - Start Session
 
     public func startSession(width: Int, height: Int) throws {
@@ -455,7 +469,15 @@ public actor VTFrameProcessorCoordinator {
         #endif
 
         for outputFrame in currentFrames {
+            #if os(macOS)
+            if CVPixelBufferGetPixelFormatType(outputFrame.buffer) == kCVPixelFormatType_32BGRA {
+                propagateRGBColorAttachments(from: frame.buffer, to: outputFrame.buffer)
+            } else {
+                propagateColorAttachments(from: frame.buffer, to: outputFrame.buffer)
+            }
+            #else
             propagateColorAttachments(from: frame.buffer, to: outputFrame.buffer)
+            #endif
         }
 
         return currentFrames
@@ -486,7 +508,7 @@ public actor VTFrameProcessorCoordinator {
             return frame
         }
 
-        propagateColorAttachments(from: frame.buffer, to: outputBuffer)
+        propagateRGBColorAttachments(from: frame.buffer, to: outputBuffer)
         return VTFrame(
             buffer: outputBuffer,
             presentationTimeStamp: frame.presentationTimeStamp,
