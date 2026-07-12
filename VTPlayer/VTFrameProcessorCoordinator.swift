@@ -70,6 +70,9 @@ public actor VTFrameProcessorCoordinator {
 
     private var stages: [PipelineStage: StageInstance] = [:]
     private var isSessionActive = false
+    private var activeProcessCount = 0
+    private var endRequested = false
+    private var endWaiters: [CheckedContinuation<Void, Never>] = []
 
     // Source dimensions for the pipeline
     private var sourceWidth = 0
@@ -157,6 +160,9 @@ public actor VTFrameProcessorCoordinator {
 
         self.sourceWidth = width
         self.sourceHeight = height
+        self.endRequested = false
+        self.activeProcessCount = 0
+        self.endWaiters.removeAll()
         self.frameHistory.removeAll()
         self.outputHistory.removeAll()
         self.upscaledFrameHistory.removeAll()
@@ -383,8 +389,22 @@ public actor VTFrameProcessorCoordinator {
 
     // MARK: - Process Frame
 
+    private func beginProcessing() -> Bool {
+        guard isSessionActive, !endRequested else { return false }
+        activeProcessCount += 1
+        return true
+    }
+
+    private func finishProcessing() {
+        activeProcessCount = max(0, activeProcessCount - 1)
+        if endRequested && activeProcessCount == 0 {
+            completeEndSession()
+        }
+    }
+
     public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
-        guard isSessionActive else { return [frame] }
+        guard beginProcessing() else { return [frame] }
+        defer { finishProcessing() }
 
         // Track this frame in history
         if let fpFrame = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp) {
@@ -819,7 +839,28 @@ public actor VTFrameProcessorCoordinator {
 
     // MARK: - End Session
 
-    public func endSession() {
+    public func endSession() async {
+        guard isSessionActive else { return }
+        if endRequested {
+            if activeProcessCount > 0 {
+                await withCheckedContinuation { continuation in
+                    endWaiters.append(continuation)
+                }
+            }
+            return
+        }
+
+        endRequested = true
+        if activeProcessCount > 0 {
+            await withCheckedContinuation { continuation in
+                endWaiters.append(continuation)
+            }
+        } else {
+            completeEndSession()
+        }
+    }
+
+    private func completeEndSession() {
         guard isSessionActive else { return }
 
         for (_, instance) in stages {
@@ -850,6 +891,13 @@ public actor VTFrameProcessorCoordinator {
         outputHistory.removeAll()
         upscaledFrameHistory.removeAll()
         isSessionActive = false
+        endRequested = false
+
+        let waiters = endWaiters
+        endWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 
     public func clearHistory() {
