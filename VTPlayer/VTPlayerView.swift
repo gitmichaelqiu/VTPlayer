@@ -865,8 +865,16 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+    private func endActiveCoordinator() {
+        let coordinator = activeCoordinator
+        activeCoordinator = nil
+        guard let coordinator else { return }
+        Task { await coordinator.endSession() }
+    }
+
     private func stopPlaybackLoopOnly() {
         playbackGeneration += 1
+        endActiveCoordinator()
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
@@ -897,6 +905,7 @@ final class VTPlayerViewModel {
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
+        endActiveCoordinator()
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
@@ -985,6 +994,7 @@ final class VTPlayerViewModel {
                 denoiseStrength: dnStrength,
                 qualityPrioritization: qualPrior
             )
+            guard !Task.isCancelled, gen == self.playbackGeneration else { return }
             self.activeCoordinator = coordinator
 
             // Pause the player during coordinator init so the audio clock
@@ -999,6 +1009,7 @@ final class VTPlayerViewModel {
                 self.srInitializationError = nil
                 try await coordinator.startSession(width: videoWidth, height: videoHeight)
             } catch {
+                guard gen == self.playbackGeneration else { return }
                 self.srInitializationError = error.localizedDescription
                 print("Failed to initialize coordinator session: \(error.localizedDescription)")
                 // Stop playback entirely so the consumer and audio sync don't hang
@@ -1269,7 +1280,7 @@ final class VTPlayerViewModel {
             self.saveProgress()
         }
         saveVideoSettings()
-        activeCoordinator = nil
+        endActiveCoordinator()
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
