@@ -2560,10 +2560,11 @@ extension VTPlayerView {
                     Text("Name")
                         .tag(SortOption.name)
                 } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                    Text(sortBy.rawValue)
                 }
                 .pickerStyle(.menu)
                 .menuStyle(.borderlessButton)
+                .foregroundStyle(.secondary)
                 .help("Sort recent videos")
 
                 Spacer(minLength: 8)
