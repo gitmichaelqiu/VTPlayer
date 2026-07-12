@@ -1422,16 +1422,17 @@ final class VTPlayerViewModel {
             self.saveProgress()
         }
         saveVideoSettings()
+        if let token = timeObserverToken, let player {
+            player.removeTimeObserver(token)
+        }
+        timeObserverToken = nil
         endActiveCoordinator()
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
         #if os(macOS)
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            self.displayLink = nil
-        }
+        stopDisplayLinkIfNeeded()
         #else
         if let link = displayLink {
             link.invalidate()
@@ -2972,8 +2973,9 @@ extension VTPlayerView {
             // Keep every enhancement control available at narrow widths.
             // The bar scrolls horizontally instead of silently removing the
             // controls that are useful while tuning playback.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+            GeometryReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
                 // Play/Pause button
                 playPauseButton
                 
@@ -3161,10 +3163,12 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
                 
-                    fullscreenButton
+                        fullscreenButton
+                    }
+                    .frame(minWidth: max(0, proxy.size.width - 48), alignment: .leading)
                 }
-
             }
+            .frame(height: 36)
         }
         .macOnHover { viewModel.isHoveringControlBar = $0 }
         .padding(.horizontal, 20)
