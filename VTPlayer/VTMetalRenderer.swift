@@ -108,8 +108,15 @@ public final class VTMetalRenderer: MTKView {
         let drawableSize = self.drawableSize
         let destinationTexture = drawable.texture
         
-        // Create CoreImage image wrapping the pixel buffer
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        // Use an explicit sRGB destination when Core Image wraps VideoToolbox
+        // YUV buffers. macOS can otherwise lose the buffer's matrix while
+        // importing an SR destination buffer, which presents its chroma plane
+        // as a solid green image. iOS keeps the native video color pipeline
+        // attached; making the destination explicit keeps both paths stable.
+        let renderColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer, options: [
+            .colorSpace: renderColorSpace
+        ])
 
         // Apply optional sharpness filter
         let sharpenedImage: CIImage
@@ -178,7 +185,7 @@ public final class VTMetalRenderer: MTKView {
             to: destinationTexture,
             commandBuffer: commandBuffer,
             bounds: targetRect,
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: renderColorSpace
         )
         
         commandBuffer.present(drawable)
