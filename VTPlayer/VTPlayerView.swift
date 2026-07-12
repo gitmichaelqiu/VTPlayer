@@ -688,11 +688,7 @@ final class VTPlayerViewModel {
     #endif
     
     func userActivityDetected() {
-        #if os(iOS)
         let shouldAutoHide = isPlaying && !isPaused
-        #else
-        let shouldAutoHide = isFullScreen && isPlaying && !isPaused
-        #endif
         
         if shouldAutoHide {
             self.showControls = true
@@ -735,12 +731,12 @@ final class VTPlayerViewModel {
             #if os(iOS)
             let shouldHide = self.isPlaying && !self.isPaused
             #else
-            let shouldHide = self.isFullScreen && self.isPlaying && !self.isPaused && !self.isHoveringControlBar && !self.showAdjustmentsPopover
+            let shouldHide = self.isPlaying && !self.isPaused && !self.isHoveringControlBar && !self.showAdjustmentsPopover
             #endif
             if shouldHide {
                 self.showControls = false
                 #if os(macOS)
-                if !self.cursorHidden {
+                if self.isFullScreen && !self.cursorHidden {
                     NSCursor.hide()
                     self.cursorHidden = true
                 }
