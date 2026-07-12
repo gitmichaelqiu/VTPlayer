@@ -1606,7 +1606,7 @@ struct VTPlayerView: View {
             }
         }
         #if canImport(PhotosUI)
-        .onChange(of: selectedPhotoItem) { item in
+        .onChange(of: selectedPhotoItem) { _, item in
             guard let item = item else { return }
             Task {
                 if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
@@ -3133,7 +3133,7 @@ struct PlaybackSettingsView: View {
                         Text("2x").tag(2)
                         Text("4x").tag(4)
                     }
-                    .onChange(of: viewModel.superResolutionLevel) { _ in
+                    .onChange(of: viewModel.superResolutionLevel) { _, _ in
                         viewModel.updateEnhancements()
                     }
                     
@@ -3143,7 +3143,7 @@ struct PlaybackSettingsView: View {
                             Text("2x Quality SR").tag(2)
                             Text("4x Quality SR").tag(4)
                         }
-                        .onChange(of: viewModel.qualitySuperResolutionScaleFactor) { _ in
+                        .onChange(of: viewModel.qualitySuperResolutionScaleFactor) { _, _ in
                             viewModel.updateEnhancements()
                         }
                     }
@@ -3152,7 +3152,7 @@ struct PlaybackSettingsView: View {
                         Text("2x").tag(2)
                         Text("4x").tag(4)
                     }
-                    .onChange(of: viewModel.frameInterpolationLevel) { _ in
+                    .onChange(of: viewModel.frameInterpolationLevel) { _, _ in
                         viewModel.updateEnhancements()
                     }
                     
@@ -3163,7 +3163,7 @@ struct PlaybackSettingsView: View {
                         Text("20").tag(20)
                         Text("30").tag(30)
                     }
-                    .onChange(of: viewModel.motionBlurStrength) { _ in
+                    .onChange(of: viewModel.motionBlurStrength) { _, _ in
                         viewModel.updateEnhancements()
                     }
                     
@@ -3174,7 +3174,7 @@ struct PlaybackSettingsView: View {
                         Text("0.75").tag(0.75)
                         Text("1.00").tag(1.0)
                     }
-                    .onChange(of: viewModel.denoiseStrength) { _ in
+                    .onChange(of: viewModel.denoiseStrength) { _, _ in
                         viewModel.updateEnhancements()
                     }
                 }
