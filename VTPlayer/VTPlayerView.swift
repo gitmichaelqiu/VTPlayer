@@ -276,7 +276,7 @@ final class VTPlayerViewModel {
     init() {
         self.renderer = VTMetalRenderer(frame: .zero, device: nil)
         #if os(macOS)
-        self.recentVideos = NSDocumentController.shared.recentDocumentURLs
+        self.reloadRecentVideos()
         
         NotificationCenter.default.addObserver(
             self,
@@ -387,6 +387,7 @@ final class VTPlayerViewModel {
 
                     #if os(macOS)
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
+                    self.recordRecentDateIfNeeded(for: url)
                     self.reloadRecentVideos()
                     #endif
                     
@@ -485,13 +486,34 @@ final class VTPlayerViewModel {
     #if os(macOS)
     @objc func reloadRecentVideos() {
         let removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
-        self.recentVideos = NSDocumentController.shared.recentDocumentURLs.filter { url in
+        let urls = NSDocumentController.shared.recentDocumentURLs.filter { url in
             !removed.contains(url.path)
         }
+
+        // NSDocumentController orders these by most recently opened, while
+        // the sidebar's default sort is the date the item was added.
+        var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
+        let migrationNow = Date().timeIntervalSince1970
+        for (index, url) in urls.enumerated() where dates[url.path] == nil {
+            dates[url.path] = migrationNow - Double(index)
+        }
+        UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
+        self.recentVideos = urls
+    }
+
+    private func recordRecentDateIfNeeded(for url: URL) {
+        var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
+        guard dates[url.path] == nil else { return }
+        dates[url.path] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
     }
     
     func deleteRecentVideoMac(at url: URL) {
         let wasSelected = videoURL == url
+
+        var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
+        dates.removeValue(forKey: url.path)
+        UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
 
         var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
         if !removed.contains(url.path) {
@@ -510,6 +532,7 @@ final class VTPlayerViewModel {
         let hadSelectedVideo = videoURL != nil
         NSDocumentController.shared.clearRecentDocuments(nil)
         UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
+        UserDefaults.standard.removeObject(forKey: "VTRecentVideosDatesMac")
         reloadRecentVideos()
 
         if hadSelectedVideo {
@@ -2517,11 +2540,23 @@ extension VTPlayerView {
     }
     #endif
 
+    private func sortedMacRecentVideos() -> [URL] {
+        switch sortBy {
+        case .name:
+            return viewModel.recentVideos.sorted {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            }
+        case .dateAdded:
+            let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
+            return viewModel.recentVideos.sorted {
+                (dates[$0.path] ?? 0) > (dates[$1.path] ?? 0)
+            }
+        }
+    }
+
     @ViewBuilder
     private var leftSidebar: some View {
-        let sortedVideos = sortBy == .name
-            ? viewModel.recentVideos.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-            : viewModel.recentVideos
+        let sortedVideos = sortedMacRecentVideos()
         let pinnedList = sortedVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
         let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
 
