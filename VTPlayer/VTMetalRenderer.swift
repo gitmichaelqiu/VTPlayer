@@ -72,11 +72,35 @@ public final class VTMetalRenderer: MTKView {
         // visible stutter even though FPS averages look correct.
         self.setNeedsDisplay(self.bounds)
     }
+
+    /// Removes the currently displayed frame and redraws the view as black.
+    public func clear() {
+        self.currentPixelBuffer = nil
+        self.currentFrameIsInterpolated = false
+        self.setNeedsDisplay(self.bounds)
+    }
     
     public override func draw(_ rect: CGRect) {
+        guard let drawable = currentDrawable,
+              let queue = commandQueue else {
+            return
+        }
+
+        if currentPixelBuffer == nil {
+            guard let commandBuffer = queue.makeCommandBuffer() else { return }
+            let renderPassDescriptor = MTLRenderPassDescriptor()
+            renderPassDescriptor.colorAttachments[0].texture = drawable.texture
+            renderPassDescriptor.colorAttachments[0].loadAction = .clear
+            renderPassDescriptor.colorAttachments[0].clearColor = clearColor
+            renderPassDescriptor.colorAttachments[0].storeAction = .store
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
+            encoder.endEncoding()
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+            return
+        }
+
         guard let pixelBuffer = currentPixelBuffer,
-              let drawable = currentDrawable,
-              let queue = commandQueue,
               let context = ciContext else {
             return
         }

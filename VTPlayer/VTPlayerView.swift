@@ -1323,6 +1323,7 @@ final class VTPlayerViewModel {
         self.srInitializationError = nil
         self.isInitializingPipeline = false
         self.enhancementsPendingRestart = false
+        self.renderer.clear()
         self.userActivityDetected()
     }
 
