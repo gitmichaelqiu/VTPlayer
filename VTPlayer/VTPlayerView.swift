@@ -2496,30 +2496,15 @@ extension VTPlayerView {
             Divider()
 
             HStack(spacing: 8) {
-                Menu {
-                    Button {
-                        sortBy = .dateAdded
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark")
-                                .opacity(sortBy == .dateAdded ? 1 : 0)
-                                .frame(width: 12)
-                            Text("Date Added")
-                        }
-                    }
-                    Button {
-                        sortBy = .name
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark")
-                                .opacity(sortBy == .name ? 1 : 0)
-                                .frame(width: 12)
-                            Text("Name")
-                        }
-                    }
+                Picker(selection: $sortBy) {
+                    Text("Date Added")
+                        .tag(SortOption.dateAdded)
+                    Text("Name")
+                        .tag(SortOption.name)
                 } label: {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
+                .pickerStyle(.menu)
                 .menuStyle(.borderlessButton)
                 .help("Sort recent videos")
 
