@@ -177,7 +177,7 @@ final class VTPlayerViewModel {
     var frameCacheCount: Int {
         cacheLock.lock()
         defer { cacheLock.unlock() }
-        return processedFrameCache.count
+        return max(0, processedFrameCache.count - processedFrameCacheStart)
     }
 
     // Sharpness Control (0.0 = off, >0 applies CIUnsharpMask)
@@ -211,11 +211,26 @@ final class VTPlayerViewModel {
     private var fpsTimer = DispatchTime.now()
     private var diagTimer = DispatchTime.now()
     private var processedFrameCache: [VTFrame] = []
+    private var processedFrameCacheStart = 0
     private let cacheLock = NSRecursiveLock()
     private func lockCache<T>(_ block: () -> T) -> T {
         cacheLock.lock()
         defer { cacheLock.unlock() }
         return block()
+    }
+
+    private func clearProcessedFrameCache() {
+        processedFrameCache.removeAll(keepingCapacity: true)
+        processedFrameCacheStart = 0
+    }
+
+    private func compactProcessedFrameCacheIfNeeded() {
+        guard processedFrameCacheStart > 0 else { return }
+        let totalCount = processedFrameCache.count
+        if processedFrameCacheStart >= 64 || processedFrameCacheStart * 2 >= totalCount {
+            processedFrameCache = Array(processedFrameCache[processedFrameCacheStart...])
+            processedFrameCacheStart = 0
+        }
     }
     private var securityScopedURL: URL?
     #if os(iOS)
@@ -665,7 +680,7 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
-        lockCache { self.processedFrameCache.removeAll() }
+        lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         Task { @MainActor in
             await self.activeCoordinator?.clearHistory()
@@ -699,7 +714,7 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         let currentTime = player.currentTime()
         
-        lockCache { self.processedFrameCache.removeAll() }
+        lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime
         self.lastRenderedPTS = currentTime
         Task { @MainActor in
@@ -724,7 +739,7 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
-        lockCache { self.processedFrameCache.removeAll() }
+        lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         Task { @MainActor in
             await self.activeCoordinator?.clearHistory()
@@ -895,7 +910,7 @@ final class VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
-        lockCache { processedFrameCache.removeAll() }
+        lockCache { clearProcessedFrameCache() }
     }
 
     private func startPlaybackLoop() {
@@ -910,7 +925,7 @@ final class VTPlayerViewModel {
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
 
-        lockCache { processedFrameCache.removeAll() }
+        lockCache { clearProcessedFrameCache() }
         if let player = player {
             let adjusted = CMTimeSubtract(player.currentTime(), frameDuration)
             lastPulledTime = adjusted > .zero ? adjusted : .zero
@@ -1067,7 +1082,9 @@ final class VTPlayerViewModel {
                 // Large cache target — buffer frames ahead so the consumer
                 // always has processed frames to render even when the
                 // pipeline is slower than real-time.
-                let count = self.lockCache { self.processedFrameCache.count }
+                let count = self.lockCache {
+                    max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
+                }
                 if count >= 60 {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
@@ -1093,7 +1110,9 @@ final class VTPlayerViewModel {
                     let currentSecs = CMTimeGetSeconds(player.currentTime())
                     let frameSecs = CMTimeGetSeconds(vtFrame.presentationTimeStamp)
                     // If the frame is late by more than 100ms, skip processing it
-                    let isEmpty = self.lockCache { self.processedFrameCache.isEmpty }
+                    let isEmpty = self.lockCache {
+                        self.processedFrameCacheStart >= self.processedFrameCache.count
+                    }
                     if !isEmpty && frameSecs < currentSecs - 0.10 {
                         self.droppedFrames += 1
                         continue
@@ -1124,7 +1143,8 @@ final class VTPlayerViewModel {
                     self.lockCache {
                         for outFrame in outputFrames {
                             let pts = outFrame.presentationTimeStamp
-                            var lo = 0, hi = self.processedFrameCache.count
+                            var lo = self.processedFrameCacheStart
+                            var hi = self.processedFrameCache.count
                             while lo < hi {
                                 let mid = (lo + hi) / 2
                                 if self.processedFrameCache[mid].presentationTimeStamp < pts {
@@ -1135,6 +1155,7 @@ final class VTPlayerViewModel {
                             }
                             self.processedFrameCache.insert(outFrame, at: lo)
                         }
+                        self.compactProcessedFrameCacheIfNeeded()
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
@@ -1214,7 +1235,8 @@ final class VTPlayerViewModel {
         var drained = 0
         
         self.lockCache {
-            while let firstFrame = self.processedFrameCache.first {
+            while self.processedFrameCacheStart < self.processedFrameCache.count {
+                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
                 let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
                 if frameTime > currentSecs + 0.005 {
                     break
@@ -1223,8 +1245,9 @@ final class VTPlayerViewModel {
                 lastFrameToRender = firstFrame
                 self.lastRenderedPTS = firstFrame.presentationTimeStamp
                 drained += 1
-                self.processedFrameCache = Array(self.processedFrameCache.dropFirst())
+                self.processedFrameCacheStart += 1
             }
+            self.compactProcessedFrameCacheIfNeeded()
         }
         
         if let frame = lastFrameToRender {
@@ -1252,8 +1275,10 @@ final class VTPlayerViewModel {
             var firstFrame: VTFrame? = nil
             var cacheCount = 0
             self.lockCache {
-                firstFrame = self.processedFrameCache.first
-                cacheCount = self.processedFrameCache.count
+                if self.processedFrameCacheStart < self.processedFrameCache.count {
+                    firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
+                }
+                cacheCount = max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
             }
             
             if let first = firstFrame {
@@ -1307,7 +1332,7 @@ final class VTPlayerViewModel {
         audioSyncTask = nil
         audioSyncLatency = 0
         lastRenderedPTS = .zero
-        lockCache { processedFrameCache.removeAll() }
+        lockCache { clearProcessedFrameCache() }
         
         if let observer = playerItemObserver {
             NotificationCenter.default.removeObserver(observer)
