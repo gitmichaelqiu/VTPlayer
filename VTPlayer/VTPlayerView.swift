@@ -2551,7 +2551,6 @@ extension VTPlayerView {
 
     @ViewBuilder
     private func macSidebarRow(for url: URL) -> some View {
-        let isPinned = pinnedVideos.contains(url.lastPathComponent)
         let isActive = (url == viewModel.videoURL)
         return Button(action: {
             viewModel.openRecentVideo(url)
@@ -2575,11 +2574,6 @@ extension VTPlayerView {
                 
                 Spacer()
                 
-                if isPinned && !isActive {
-                    Image(systemName: "pin.fill")
-                        .foregroundStyle(.orange)
-                        .font(.system(size: 9))
-                }
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
