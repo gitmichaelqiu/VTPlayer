@@ -62,6 +62,42 @@ struct VTMetalRendererView: NSViewRepresentable {
 }
 #endif
 
+#if os(macOS)
+private struct MacNativeVideoPlayer: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> MacNativeVideoPlayerView {
+        MacNativeVideoPlayerView(player: player)
+    }
+
+    func updateNSView(_ nsView: MacNativeVideoPlayerView, context: Context) {
+        nsView.playerLayer.player = player
+    }
+}
+
+private final class MacNativeVideoPlayerView: NSView {
+    let playerLayer = AVPlayerLayer()
+
+    init(player: AVPlayer) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer = CALayer()
+        playerLayer.player = player
+        playerLayer.videoGravity = .resizeAspect
+        layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
+    }
+}
+#endif
+
 /// The Main ViewModel managing the playback loop, synchronization, and processor pipeline.
 @Observable
 @MainActor
@@ -104,7 +140,7 @@ final class VTPlayerViewModel {
     
     // Playback Progress & Stats
     var isPipelineActive: Bool {
-        #if os(iOS)
+        #if os(macOS) || os(iOS)
         return (superResolutionLevel > 0 || 
                 frameInterpolationLevel > 0 || 
                 qualitySuperResolutionScaleFactor > 0 || 
@@ -363,20 +399,6 @@ final class VTPlayerViewModel {
                 let item = AVPlayerItem(asset: asset)
                 item.add(output)
 
-                #if os(macOS)
-                // Disable the video track on AVPlayer so it only decodes
-                // audio.  Video frames are read separately via
-                // VTFrameSequence (AVAssetReader).  Without this, the
-                // AVPlayer's internal video decoder competes with the
-                // VTFrameProcessor for ANE/hardware resources, starving
-                // FI and making the video appear to play in slow motion.
-                for track in item.tracks {
-                    if track.assetTrack?.mediaType == .video {
-                        track.isEnabled = false
-                    }
-                }
-                #endif
-
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
                 
@@ -462,6 +484,9 @@ final class VTPlayerViewModel {
                     
                     // Restore per-video enhancement settings
                     self.loadVideoSettings(for: url)
+                    #if os(macOS)
+                    self.setNativeVideoEnabled(!self.isPipelineActive)
+                    #endif
 
                     // Start rendering/processing loop
                     self.play()
@@ -830,6 +855,9 @@ final class VTPlayerViewModel {
 
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
+        #if os(macOS)
+        setNativeVideoEnabled(!isPipelineActive)
+        #endif
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
             if isPipelineActive {
@@ -877,6 +905,9 @@ final class VTPlayerViewModel {
                 startDisplayLinkIfNeeded()
             }
         } else {
+            #if os(macOS)
+            setNativeVideoEnabled(true)
+            #endif
             stopPlaybackLoopOnly()
         }
         #endif
@@ -912,7 +943,19 @@ final class VTPlayerViewModel {
         Task { await coordinator.endSession() }
     }
 
+    #if os(macOS)
+    private func setNativeVideoEnabled(_ enabled: Bool) {
+        guard let tracks = player?.currentItem?.tracks else { return }
+        for track in tracks where track.assetTrack?.mediaType == .video {
+            track.isEnabled = enabled
+        }
+    }
+    #endif
+
     private func stopPlaybackLoopOnly() {
+        #if os(macOS)
+        setNativeVideoEnabled(true)
+        #endif
         playbackGeneration += 1
         endActiveCoordinator()
         producerTask?.cancel()
@@ -939,6 +982,9 @@ final class VTPlayerViewModel {
     }
 
     private func startPlaybackLoop() {
+        #if os(macOS)
+        setNativeVideoEnabled(false)
+        #endif
         playbackGeneration += 1
         let gen = playbackGeneration
         producerTask?.cancel()
@@ -2640,7 +2686,7 @@ extension VTPlayerView {
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .clipped()
             .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
             .background(
