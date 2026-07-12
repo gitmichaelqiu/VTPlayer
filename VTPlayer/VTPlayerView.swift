@@ -2493,7 +2493,7 @@ extension VTPlayerView {
                         }
                     }
                 } header: {
-                    Label("Recents", systemImage: "clock")
+                    Text("Recents")
                 }
             }
             .listStyle(.sidebar)
