@@ -2589,31 +2589,18 @@ extension VTPlayerView {
 
             Divider()
 
-            HStack(spacing: 8) {
-                Picker(selection: $sortBy) {
-                    Text("Date Added")
-                        .tag(SortOption.dateAdded)
-                    Text("Name")
-                        .tag(SortOption.name)
-                } label: {
-                    Text(sortBy.rawValue)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    sortPicker
+                    Spacer(minLength: 8)
+                    deleteHistoryButton
                 }
-                .pickerStyle(.menu)
-                .menuStyle(.borderlessButton)
-                .foregroundStyle(.secondary)
-                .help("Sort recent videos")
 
-                Spacer(minLength: 8)
-
-                Button {
-                    showClearAllAlert = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                HStack(spacing: 12) {
+                    sortPicker
+                    Spacer(minLength: 4)
+                    deleteHistoryButton.labelStyle(.iconOnly)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Clear playback history")
-                .disabled(viewModel.recentVideos.isEmpty)
             }
             .font(.system(size: 12, weight: .medium))
             .controlSize(.small)
@@ -2653,6 +2640,7 @@ extension VTPlayerView {
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipped()
+            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
@@ -2710,6 +2698,34 @@ extension VTPlayerView {
                 Label("Remove from List", systemImage: "trash")
             }
         }
+    }
+
+    private var sortPicker: some View {
+        Picker(selection: $sortBy) {
+            Text("Date Added")
+                .tag(SortOption.dateAdded)
+            Text("Name")
+                .tag(SortOption.name)
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+                .labelStyle(.iconOnly)
+        }
+        .pickerStyle(.menu)
+        .menuStyle(.borderlessButton)
+        .foregroundStyle(.secondary)
+        .help("Sort recent videos")
+    }
+
+    private var deleteHistoryButton: some View {
+        Button {
+            showClearAllAlert = true
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help("Clear playback history")
+        .disabled(viewModel.recentVideos.isEmpty)
     }
     
     @ViewBuilder
