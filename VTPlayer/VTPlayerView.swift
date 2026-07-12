@@ -1203,8 +1203,7 @@ final class VTPlayerViewModel {
         var drained = 0
         
         self.lockCache {
-            while !self.processedFrameCache.isEmpty {
-                let firstFrame = self.processedFrameCache[0]
+            while let firstFrame = self.processedFrameCache.first {
                 let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
                 if frameTime > currentSecs + 0.005 {
                     break
