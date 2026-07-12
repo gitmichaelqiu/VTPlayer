@@ -195,6 +195,8 @@ final class VTPlayerViewModel {
     }
 
     @ObservationIgnored nonisolated(unsafe) private var cursorHidden = false
+    @ObservationIgnored nonisolated(unsafe) private let displayTickLock = NSLock()
+    @ObservationIgnored nonisolated(unsafe) private var displayTickScheduled = false
     private var inactivityTask: Task<Void, Never>?
     
     // AVPlayer components
@@ -1206,9 +1208,7 @@ final class VTPlayerViewModel {
         if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
             let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
                 let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext!).takeUnretainedValue()
-                DispatchQueue.main.async {
-                    vm.tickDisplayLink()
-                }
+                vm.scheduleDisplayTick()
                 return kCVReturnSuccess
             }
             let context = Unmanaged.passUnretained(self).toOpaque()
@@ -1222,6 +1222,26 @@ final class VTPlayerViewModel {
         self.displayLink = link
         #endif
     }
+
+    #if os(macOS)
+    private nonisolated func scheduleDisplayTick() {
+        displayTickLock.lock()
+        guard !displayTickScheduled else {
+            displayTickLock.unlock()
+            return
+        }
+        displayTickScheduled = true
+        displayTickLock.unlock()
+
+        DispatchQueue.main.async { @MainActor [weak self] in
+            guard let self else { return }
+            self.displayTickLock.lock()
+            self.displayTickScheduled = false
+            self.displayTickLock.unlock()
+            self.tickDisplayLink()
+        }
+    }
+    #endif
     #endif
 
     @MainActor
