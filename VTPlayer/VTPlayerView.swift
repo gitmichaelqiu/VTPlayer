@@ -806,6 +806,8 @@ final class VTPlayerViewModel {
             if enhancementsPendingRestart || producerTask == nil {
                 enhancementsPendingRestart = false
                 startPlaybackLoop()
+            } else {
+                startDisplayLinkIfNeeded()
             }
         } else {
             stopPlaybackLoopOnly()
@@ -1095,43 +1097,7 @@ final class VTPlayerViewModel {
             await coordinator.endSession()
         }
         
-        // Start CVDisplayLink (macOS) or CADisplayLink (iOS)
-        #if os(macOS)
-        if let link = self.displayLink {
-            CVDisplayLinkStop(link)
-            self.displayLink = nil
-        }
-        #else
-        if let link = self.displayLink {
-            link.invalidate()
-            self.displayLink = nil
-        }
-        #endif
-        
-        self.processedFramesCount = 0
-        self.fpsTimer = DispatchTime.now()
-        self.diagTimer = DispatchTime.now()
-        
-        #if os(macOS)
-        var newLink: CVDisplayLink?
-        if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
-            let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
-                let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext!).takeUnretainedValue()
-                DispatchQueue.main.async {
-                    vm.tickDisplayLink()
-                }
-                return kCVReturnSuccess
-            }
-            let context = Unmanaged.passUnretained(self).toOpaque()
-            CVDisplayLinkSetOutputCallback(link, callback, context)
-            CVDisplayLinkStart(link)
-            self.displayLink = link
-        }
-        #else
-        let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
-        link.add(to: .main, forMode: .common)
-        self.displayLink = link
-        #endif
+        startDisplayLinkIfNeeded()
 
         audioSyncTask?.cancel()
         audioSyncTask = Task {
@@ -1159,6 +1125,32 @@ final class VTPlayerViewModel {
                 }
             }
         }
+    }
+
+    private func startDisplayLinkIfNeeded() {
+        guard displayLink == nil else { return }
+
+        // Start CVDisplayLink (macOS) or CADisplayLink (iOS)
+        #if os(macOS)
+        var newLink: CVDisplayLink?
+        if CVDisplayLinkCreateWithActiveCGDisplays(&newLink) == kCVReturnSuccess, let link = newLink {
+            let callback: CVDisplayLinkOutputCallback = { (displayLink, inNow, inOutputTime, flagsIn, flagsOut, displayLinkContext) -> CVReturn in
+                let vm = Unmanaged<VTPlayerViewModel>.fromOpaque(displayLinkContext!).takeUnretainedValue()
+                DispatchQueue.main.async {
+                    vm.tickDisplayLink()
+                }
+                return kCVReturnSuccess
+            }
+            let context = Unmanaged.passUnretained(self).toOpaque()
+            CVDisplayLinkSetOutputCallback(link, callback, context)
+            CVDisplayLinkStart(link)
+            self.displayLink = link
+        }
+        #else
+        let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
+        link.add(to: .main, forMode: .common)
+        self.displayLink = link
+        #endif
     }
     #endif
 
