@@ -3207,7 +3207,7 @@ extension VTPlayerView {
                 
                         fullscreenButton
                     }
-                    .frame(minWidth: max(0, proxy.size.width - 48), alignment: .leading)
+                    .frame(minWidth: proxy.size.width, alignment: .leading)
                 }
             }
             .frame(height: 30)
