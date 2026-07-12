@@ -108,15 +108,10 @@ public final class VTMetalRenderer: MTKView {
         let drawableSize = self.drawableSize
         let destinationTexture = drawable.texture
         
-        // Use an explicit sRGB destination when Core Image wraps VideoToolbox
-        // YUV buffers. macOS can otherwise lose the buffer's matrix while
-        // importing an SR destination buffer, which presents its chroma plane
-        // as a solid green image. iOS keeps the native video color pipeline
-        // attached; making the destination explicit keeps both paths stable.
-        let renderColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer, options: [
-            .colorSpace: renderColorSpace
-        ])
+        // Keep Core Image's native VideoToolbox color handling. The macOS SR
+        // path converts enhanced frames to BGRA before they reach here, while
+        // interpolation-only frames retain the decoder's original metadata.
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
 
         // Apply optional sharpness filter
         let sharpenedImage: CIImage
@@ -130,22 +125,10 @@ public final class VTMetalRenderer: MTKView {
             sharpenedImage = ciImage
         }
 
-        // Frame interpolation can produce a small luminance drop when its
-        // video-range output is imported by Core Image. Restore that level
-        // before applying the user-controlled image adjustment.
-        let brightnessCorrectedImage: CIImage
-        if currentFrameIsInterpolated {
-            brightnessCorrectedImage = sharpenedImage.applyingFilter("CIExposureAdjust", parameters: [
-                kCIInputEVKey: 0.08
-            ])
-        } else {
-            brightnessCorrectedImage = sharpenedImage
-        }
-
         // Apply optional brightness/contrast boost (exposure + saturation + contrast)
         let hdrImage: CIImage
         if hdrStrength > 0 {
-            hdrImage = brightnessCorrectedImage
+            hdrImage = sharpenedImage
                 .applyingFilter("CIExposureAdjust", parameters: [
                     kCIInputEVKey: hdrStrength * 0.75
                 ])
@@ -154,7 +137,7 @@ public final class VTMetalRenderer: MTKView {
                     kCIInputContrastKey: 1.0 + hdrStrength * 0.1
                 ])
         } else {
-            hdrImage = brightnessCorrectedImage
+            hdrImage = sharpenedImage
         }
 
         // Calculate aspect ratio locking transformation
@@ -197,7 +180,7 @@ public final class VTMetalRenderer: MTKView {
             to: destinationTexture,
             commandBuffer: commandBuffer,
             bounds: targetRect,
-            colorSpace: renderColorSpace
+            colorSpace: CGColorSpaceCreateDeviceRGB()
         )
         
         commandBuffer.present(drawable)
