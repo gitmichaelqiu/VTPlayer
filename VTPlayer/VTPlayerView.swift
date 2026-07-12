@@ -1570,6 +1570,7 @@ struct VTPlayerView: View {
         return Set(array)
     }()
     @State private var isPinnedExpanded = true
+    @State private var isRecentsExpanded = true
     @State private var isSettingsExpanded = false
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     
@@ -2460,52 +2461,79 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var leftSidebar: some View {
-        List {
-            // Pinned videos
-            let pinnedList = viewModel.recentVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
-            let unpinnedList = viewModel.recentVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
+        let sortedVideos = sortBy == .name
+            ? viewModel.recentVideos.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+            : viewModel.recentVideos
+        let pinnedList = sortedVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
+        let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
 
-            if !pinnedList.isEmpty {
-                Section(isExpanded: $isPinnedExpanded) {
-                    ForEach(pinnedList, id: \.self) { url in
-                        macSidebarRow(for: url)
+        VStack(spacing: 0) {
+            List {
+                if !pinnedList.isEmpty {
+                    Section(isExpanded: $isPinnedExpanded) {
+                        ForEach(pinnedList, id: \.self) { url in
+                            macSidebarRow(for: url)
+                        }
+                    } header: {
+                        Label("Pinned", systemImage: "pin.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+
+                Section(isExpanded: $isRecentsExpanded) {
+                    if unpinnedList.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Recents", systemImage: "clock")
+                        } description: {
+                            Text("Open a video from the title bar.")
+                        }
+                    } else {
+                        ForEach(unpinnedList, id: \.self) { url in
+                            macSidebarRow(for: url)
+                        }
                     }
                 } header: {
-                    Text("Pinned")
+                    Label("Recents", systemImage: "clock")
+                        .font(.caption.weight(.semibold))
                 }
             }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
 
-            Section {
-                if viewModel.recentVideos.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Recents", systemImage: "clock")
-                    } description: {
-                        Text("Open a video from the title bar.")
+            Divider()
+
+            HStack(spacing: 8) {
+                Menu {
+                    Picker("Sort By", selection: $sortBy) {
+                        Label("Date Added", systemImage: "calendar")
+                            .tag(SortOption.dateAdded)
+                        Label("Name", systemImage: "textformat.abc")
+                            .tag(SortOption.name)
                     }
-                } else {
-                    ForEach(unpinnedList, id: \.self) { url in
-                        macSidebarRow(for: url)
-                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
-            } header: {
-                HStack {
-                    Text("Recents")
-                    Spacer()
-                    if !viewModel.recentVideos.isEmpty {
-                        Button(action: { showClearAllAlert = true }) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 10))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Clear all recent videos")
-                        .padding(.trailing, 2)
-                    }
+                .menuStyle(.borderlessButton)
+                .help("Sort recent videos")
+
+                Spacer(minLength: 8)
+
+                Button(role: .destructive) {
+                    showClearAllAlert = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
                 }
+                .buttonStyle(.borderless)
+                .help("Clear playback history")
+                .disabled(viewModel.recentVideos.isEmpty)
             }
+            .font(.system(size: 12, weight: .medium))
+            .controlSize(.small)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.bar)
         }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
