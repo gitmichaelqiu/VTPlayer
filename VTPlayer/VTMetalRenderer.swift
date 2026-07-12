@@ -115,10 +115,16 @@ public final class VTMetalRenderer: MTKView {
 
         // Apply optional sharpness filter
         let sharpenedImage: CIImage
-        // Do not impose a sharpen pass on interpolated frames.  In combined
-        // SR + FI playback that would run CIUnsharpMask on every upscaled
-        // interpolated frame even when the user has disabled sharpness.
-        if sharpness > 0 {
+        if currentFrameIsInterpolated {
+            // Interpolated frames are hardware-scaled after source-resolution
+            // FI, while source frames use SR. A small luminance-only pass
+            // keeps the two frame types visually consistent without the much
+            // heavier UnsharpMask pass that previously hurt throughput.
+            sharpenedImage = ciImage.applyingFilter("CISharpenLuminance", parameters: [
+                kCIInputSharpnessKey: 0.25,
+                kCIInputRadiusKey: 0.5
+            ])
+        } else if sharpness > 0 {
             sharpenedImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
                 kCIInputIntensityKey: sharpness,
                 kCIInputRadiusKey: 0.5
