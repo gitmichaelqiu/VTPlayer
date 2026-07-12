@@ -89,12 +89,6 @@ public actor VTFrameProcessorCoordinator {
     // Fallback transfer session (for unsupported 2nd stage SR scaler)
     private var fallbackTransferSession: VTPixelTransferSession?
 
-    #if os(macOS)
-    // Final color conversion for enhanced frames before Core Image/Metal.
-    private var rendererTransferSession: VTPixelTransferSession?
-    private var rendererPixelBufferPool: CVPixelBufferPool?
-    #endif
-
     // Second spatial stage for 4x LL SR cascading (2x → 2x)
     private var secondSpatialProcessor: VTFrameProcessor?
     private var secondSpatialPool: CVPixelBufferPool?
@@ -137,20 +131,6 @@ public actor VTFrameProcessorCoordinator {
         let poolAttributes = [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary
         let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, poolAttributes, dict as CFDictionary, &pool)
         return status == kCVReturnSuccess ? pool : nil
-    }
-
-    private func propagateRGBColorAttachments(from source: CVPixelBuffer, to destination: CVPixelBuffer) {
-        let keys: [CFString] = [
-            kCVImageBufferColorPrimariesKey,
-            kCVImageBufferTransferFunctionKey,
-            kCVImageBufferGammaLevelKey
-        ]
-
-        for key in keys {
-            if let value = CVBufferCopyAttachment(source, key, nil) {
-                CVBufferSetAttachment(destination, key, value, .shouldPropagate)
-            }
-        }
     }
 
     // MARK: - Start Session
@@ -363,25 +343,7 @@ public actor VTFrameProcessorCoordinator {
         // the hardware transfer session for the final enhanced frame. This
         // mirrors the native iOS presentation path and avoids Core Image
         // decoding an SR chroma plane directly on macOS.
-        if hasQualitySR || hasLLSR {
-            var transferSession: VTPixelTransferSession?
-            let transferStatus = VTPixelTransferSessionCreate(
-                allocator: kCFAllocatorDefault,
-                pixelTransferSessionOut: &transferSession
-            )
-            if transferStatus == kCVReturnSuccess, let transferSession {
-                configureTransferSession(transferSession)
-                self.rendererTransferSession = transferSession
-                self.rendererPixelBufferPool = makePool(
-                    width: currentWidth,
-                    height: currentHeight,
-                    from: [
-                        kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
-                        kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]
-                    ]
-                )
-            }
-        }
+        // macOS uses the same native YUV renderer path as iOS.
         #endif
 
         self.isSessionActive = true
@@ -426,56 +388,8 @@ public actor VTFrameProcessorCoordinator {
             currentFrames = try await processStage(stage, instance: instance, inputFrames: currentFrames)
         }
 
-        #if os(macOS)
-        if rendererTransferSession != nil, rendererPixelBufferPool != nil {
-            currentFrames = currentFrames.compactMap { convertForRenderer($0) }
-        }
-        #endif
-
-        for outputFrame in currentFrames {
-            #if os(macOS)
-            if CVPixelBufferGetPixelFormatType(outputFrame.buffer) == kCVPixelFormatType_32BGRA {
-                propagateRGBColorAttachments(from: frame.buffer, to: outputFrame.buffer)
-            }
-            #endif
-        }
-
         return currentFrames
     }
-
-    #if os(macOS)
-    private func convertForRenderer(_ frame: VTFrame) -> VTFrame? {
-        guard let transferSession = rendererTransferSession,
-              let pool = rendererPixelBufferPool else {
-            return frame
-        }
-
-        var outputBuffer: CVPixelBuffer?
-        guard CVPixelBufferPoolCreatePixelBuffer(
-            kCFAllocatorDefault,
-            pool,
-            &outputBuffer
-        ) == kCVReturnSuccess,
-        let outputBuffer else {
-            return frame
-        }
-
-        guard VTPixelTransferSessionTransferImage(
-            transferSession,
-            from: frame.buffer,
-            to: outputBuffer
-        ) == kCVReturnSuccess else {
-            return frame
-        }
-
-        propagateRGBColorAttachments(from: frame.buffer, to: outputBuffer)
-        return VTFrame(
-            buffer: outputBuffer,
-            presentationTimeStamp: frame.presentationTimeStamp,
-            isInterpolated: frame.isInterpolated
-        )
-    }
-    #endif
 
     private func processStage(_ stage: PipelineStage, instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {
         switch stage {
@@ -878,14 +792,6 @@ public actor VTFrameProcessorCoordinator {
             VTPixelTransferSessionInvalidate(session)
         }
         fallbackTransferSession = nil
-
-        #if os(macOS)
-        if let session = rendererTransferSession {
-            VTPixelTransferSessionInvalidate(session)
-        }
-        rendererTransferSession = nil
-        rendererPixelBufferPool = nil
-        #endif
 
         frameHistory.removeAll()
         outputHistory.removeAll()
