@@ -2127,7 +2127,7 @@ extension VTPlayerView {
                     } else {
                         Image(systemName: "cpu.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(.blue)
+                            .foregroundStyle(.blue)
                             .frame(width: 60, height: 60)
                             .background(Color(.secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -2139,10 +2139,10 @@ extension VTPlayerView {
                             .bold()
                         Text("Hardware-Accelerated AI Enhancer")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Text("Version 1.0")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
@@ -2180,7 +2180,7 @@ extension VTPlayerView {
                     .frame(width: 140)
                     Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
                         .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 24, alignment: .trailing)
                 }
                 
@@ -2191,7 +2191,7 @@ extension VTPlayerView {
                     .frame(width: 140)
                     Text(String(format: "%.2f", defaultDNLevel))
                         .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 32, alignment: .trailing)
                 }
                 
@@ -2202,7 +2202,7 @@ extension VTPlayerView {
                     .frame(width: 140)
                     Text(String(format: "%.1f", defaultSharpness))
                         .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 24, alignment: .trailing)
                 }
                 
@@ -2213,7 +2213,7 @@ extension VTPlayerView {
                     .frame(width: 140)
                     Text(String(format: "%.1f", defaultHDRBoost))
                         .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 24, alignment: .trailing)
                 }
             }
@@ -2241,7 +2241,7 @@ extension VTPlayerView {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Error: \(errMsg)")
                                 .font(.caption)
-                                .foregroundColor(.red)
+                                .foregroundStyle(.red)
                             
                             Button(action: {
                                 viewModel.downloadGlobalModel()
@@ -2257,7 +2257,7 @@ extension VTPlayerView {
                         ProgressView(value: progress) {
                             Text(String(format: "Downloading (%.0f%%)", progress * 100))
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         .progressViewStyle(.linear)
                         .padding(.vertical, 4)
@@ -2276,7 +2276,7 @@ extension VTPlayerView {
                     Spacer()
                     Text("Copyright © 2026 Michael Qiu. All rights reserved.")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Spacer()
                 }
             }
