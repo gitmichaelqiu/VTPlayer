@@ -690,9 +690,20 @@ public actor VTFrameProcessorCoordinator {
                 prevFP = historyToUse.count >= 2 ? historyToUse[1] : sourceFP
             }
 
+            let nextFP: VTFrameProcessorFrame
+            if idx + 1 < inputFrames.count,
+               let next = VTFrameProcessorFrame(
+                   buffer: inputFrames[idx + 1].buffer,
+                   presentationTimeStamp: inputFrames[idx + 1].presentationTimeStamp
+               ) {
+                nextFP = next
+            } else {
+                nextFP = sourceFP
+            }
+
             guard let params = VTMotionBlurParameters(
                 sourceFrame: sourceFP,
-                nextFrame: sourceFP,
+                nextFrame: nextFP,
                 previousFrame: prevFP,
                 nextOpticalFlow: nil,
                 previousOpticalFlow: nil,
