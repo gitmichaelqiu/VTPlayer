@@ -1875,7 +1875,7 @@ extension VTPlayerView {
                     if !viewModel.recentVideos.isEmpty {
                         Button(action: { showClearAllAlert = true }) {
                             Image(systemName: "trash")
-                                .foregroundColor(.red)
+                                .foregroundStyle(.red)
                         }
                         
                         // Sort option menu
@@ -1927,12 +1927,12 @@ extension VTPlayerView {
                 VStack(spacing: 12) {
                     Image(systemName: "video.badge.plus")
                         .font(.system(size: 56))
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .foregroundStyle(.secondary.opacity(0.5))
                     Text("No Videos")
                         .font(.headline)
                     Text("Tap the + button to add video files.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding()
@@ -2016,19 +2016,19 @@ extension VTPlayerView {
                     Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
                         .font(.body)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                     
                     Text(formatDateAdded(for: url))
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 
                 Spacer()
                 
                 Image(systemName: "chevron.right")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .buttonStyle(.plain)
@@ -2091,20 +2091,20 @@ extension VTPlayerView {
         switch status {
         case .notChecked:
             Text("Checking...")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         case .ready:
             Text("Ready")
-                .foregroundColor(.green)
+                .foregroundStyle(.green)
                 .bold()
         case .downloadRequired:
             Text("Download Required")
-                .foregroundColor(.orange)
+                .foregroundStyle(.orange)
         case .downloading(let progress):
             Text(String(format: "Downloading (%.0f%%)", progress * 100))
-                .foregroundColor(.blue)
+                .foregroundStyle(.blue)
         case .failed:
             Text("Failed")
-                .foregroundColor(.red)
+                .foregroundStyle(.red)
         }
     }
 
