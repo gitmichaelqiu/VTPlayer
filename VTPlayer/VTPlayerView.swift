@@ -982,6 +982,7 @@ final class VTPlayerViewModel {
                 print("Failed to initialize coordinator session: \(error.localizedDescription)")
                 // Stop playback entirely so the consumer and audio sync don't hang
                 // forever with an empty frame cache.
+                await coordinator.endSession()
                 self.stop()
                 return
             }
@@ -1000,10 +1001,15 @@ final class VTPlayerViewModel {
                 } else {
                     player.pause()
                 }
+            } else {
+                self.isInitializingPipeline = false
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
-            guard let videoURL = self.videoURL else { return }
+            guard let videoURL = self.videoURL else {
+                await coordinator.endSession()
+                return
+            }
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime)
             var frameIterator = frameSequence.makeAsyncIterator()
