@@ -130,10 +130,22 @@ public final class VTMetalRenderer: MTKView {
             sharpenedImage = ciImage
         }
 
+        // Frame interpolation can produce a small luminance drop when its
+        // video-range output is imported by Core Image. Restore that level
+        // before applying the user-controlled image adjustment.
+        let brightnessCorrectedImage: CIImage
+        if currentFrameIsInterpolated {
+            brightnessCorrectedImage = sharpenedImage.applyingFilter("CIExposureAdjust", parameters: [
+                kCIInputEVKey: 0.08
+            ])
+        } else {
+            brightnessCorrectedImage = sharpenedImage
+        }
+
         // Apply optional brightness/contrast boost (exposure + saturation + contrast)
         let hdrImage: CIImage
         if hdrStrength > 0 {
-            hdrImage = sharpenedImage
+            hdrImage = brightnessCorrectedImage
                 .applyingFilter("CIExposureAdjust", parameters: [
                     kCIInputEVKey: hdrStrength * 0.75
                 ])
@@ -142,7 +154,7 @@ public final class VTMetalRenderer: MTKView {
                     kCIInputContrastKey: 1.0 + hdrStrength * 0.1
                 ])
         } else {
-            hdrImage = sharpenedImage
+            hdrImage = brightnessCorrectedImage
         }
 
         // Calculate aspect ratio locking transformation
