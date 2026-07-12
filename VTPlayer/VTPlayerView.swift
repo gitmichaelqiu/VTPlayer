@@ -106,6 +106,8 @@ final class VTPlayerViewModel {
     var isPlaying = false
     var isPaused = false
     
+    private var lastPublishedCurrentTime = -Double.infinity
+
     // Feature Levels (0 = Off, 2 = 2x, 4 = 4x)
     var superResolutionLevel: Int = 0
     var frameInterpolationLevel: Int = 0
@@ -261,6 +263,13 @@ final class VTPlayerViewModel {
     private func clearProcessedFrameCache() {
         processedFrameCache.removeAll(keepingCapacity: true)
         processedFrameCacheStart = 0
+    }
+
+    private func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
+        guard seconds.isFinite else { return }
+        guard immediately || abs(seconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
+        lastPublishedCurrentTime = seconds
+        currentTime = seconds
     }
 
     private func compactProcessedFrameCacheIfNeeded() {
@@ -436,7 +445,7 @@ final class VTPlayerViewModel {
                         Task { @MainActor [weak self] in
                             guard let self,
                                   self.videoURL == url else { return }
-                            self.currentTime = seconds
+                            self.publishCurrentTime(seconds)
                         }
                     }
                     self.timeObserverToken = timeObserver
@@ -744,6 +753,7 @@ final class VTPlayerViewModel {
     func seek(to seconds: Double) {
         seekGeneration &+= 1
         let requestGeneration = seekGeneration
+        self.lastPublishedCurrentTime = seconds
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
@@ -803,6 +813,7 @@ final class VTPlayerViewModel {
     func scrub(to seconds: Double) {
         seekGeneration &+= 1
         let requestGeneration = seekGeneration
+        self.lastPublishedCurrentTime = seconds
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
@@ -1366,7 +1377,7 @@ final class VTPlayerViewModel {
         if let frame = lastFrameToRender {
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
             processedFramesCount += drained
-            self.currentTime = currentSecs
+            self.publishCurrentTime(currentSecs)
             if drained > 1 {
                 self.droppedFrames += drained - 1
             }
@@ -1469,6 +1480,7 @@ final class VTPlayerViewModel {
         self.isPlaying = false
         self.isPaused = false
         self.currentTime = 0.0
+        self.lastPublishedCurrentTime = -Double.infinity
         self.duration = 0.0
         self.fps = 0.0
         self.frameProcessingTime = 0.0
