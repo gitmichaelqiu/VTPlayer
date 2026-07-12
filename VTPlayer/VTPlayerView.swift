@@ -1388,6 +1388,9 @@ final class VTPlayerViewModel {
 
     /// Pauses/stops playback entirely.
     func stop() {
+        #if os(macOS)
+        setNativeVideoEnabled(false)
+        #endif
         playbackGeneration += 1
         seekGeneration &+= 1
         if self.currentTime > 0 {
@@ -1782,11 +1785,11 @@ struct VTPlayerView: View {
         if !viewModel.isFullScreen {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 leftSidebar
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 360)
                     .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
             } detail: {
                 videoContent
-                    .frame(minWidth: 480, idealWidth: 720)
+                    .frame(minWidth: 0, idealWidth: 720)
                     .inspector(isPresented: Binding(
                         get: { viewModel.showSidebar && viewModel.videoURL != nil },
                         set: { viewModel.showSidebar = $0 }
@@ -2852,13 +2855,27 @@ extension VTPlayerView {
         VStack(spacing: 0) {
             ZStack {
                 if viewModel.videoURL != nil {
-                    VTMetalRendererView(renderer: viewModel.renderer)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .cornerRadius(viewModel.isFullScreen ? 0 : 8)
-                        .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
-                        .padding(.top, viewModel.isFullScreen ? 0 : 16)
-                        .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
-                        .ignoresSafeArea(viewModel.isFullScreen ? .all : [])
+                    if viewModel.isPipelineActive {
+                        VTMetalRendererView(renderer: viewModel.renderer)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .cornerRadius(viewModel.isFullScreen ? 0 : 8)
+                            .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
+                            .padding(.top, viewModel.isFullScreen ? 0 : 16)
+                            .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
+                            .ignoresSafeArea(viewModel.isFullScreen ? .all : [])
+                    } else {
+                        #if os(macOS)
+                        if let player = viewModel.player {
+                            MacNativeVideoPlayer(player: player)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .cornerRadius(viewModel.isFullScreen ? 0 : 8)
+                                .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
+                                .padding(.top, viewModel.isFullScreen ? 0 : 16)
+                                .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
+                                .ignoresSafeArea(viewModel.isFullScreen ? .all : [])
+                        }
+                        #endif
+                    }
                 }
                 
                 if viewModel.videoURL == nil {
@@ -2927,7 +2944,10 @@ extension VTPlayerView {
             .padding(.horizontal, 12)
             
             // Bottom control actions
-            ViewThatFits(in: .horizontal) {
+            // Keep every enhancement control available at narrow widths.
+            // The bar scrolls horizontally instead of silently removing the
+            // controls that are useful while tuning playback.
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                 // Play/Pause button
                 playPauseButton
@@ -3119,23 +3139,6 @@ extension VTPlayerView {
                     fullscreenButton
                 }
 
-                HStack(spacing: 12) {
-                    playPauseButton
-
-                    Button {
-                        showSettingsSheet = true
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.body.weight(.semibold))
-                    }
-                    .buttonStyle(.glass)
-                    .help("Playback settings")
-
-                    Spacer(minLength: 8)
-
-                    playbackSpeedControl
-                    fullscreenButton
-                }
             }
         }
         .macOnHover { viewModel.isHoveringControlBar = $0 }
