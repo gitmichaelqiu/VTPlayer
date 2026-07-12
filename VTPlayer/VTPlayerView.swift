@@ -2501,12 +2501,28 @@ extension VTPlayerView {
                     Button {
                         sortBy = .dateAdded
                     } label: {
-                        Label("Date Added", systemImage: "calendar")
+                        Label {
+                            Text("Date Added")
+                        } icon: {
+                            if sortBy == .dateAdded {
+                                Image(systemName: "checkmark")
+                            } else {
+                                Image(systemName: "calendar")
+                            }
+                        }
                     }
                     Button {
                         sortBy = .name
                     } label: {
-                        Label("Name", systemImage: "textformat.abc")
+                        Label {
+                            Text("Name")
+                        } icon: {
+                            if sortBy == .name {
+                                Image(systemName: "checkmark")
+                            } else {
+                                Image(systemName: "textformat.abc")
+                            }
+                        }
                     }
                 } label: {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
