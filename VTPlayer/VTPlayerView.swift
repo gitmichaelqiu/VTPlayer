@@ -1054,6 +1054,7 @@ final class VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        isBuffering = false
         lockCache { clearProcessedFrameCache() }
     }
 
