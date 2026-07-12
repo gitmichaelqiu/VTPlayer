@@ -107,6 +107,7 @@ final class VTPlayerViewModel {
     var isPaused = false
     
     private var lastPublishedCurrentTime = -Double.infinity
+    @ObservationIgnored private var isBuffering = false
 
     // Feature Levels (0 = Off, 2 = 2x, 4 = 4x)
     var superResolutionLevel: Int = 0
@@ -500,7 +501,9 @@ final class VTPlayerViewModel {
                             switch player.timeControlStatus {
                             case .paused:
                                 if !self.isInitializingPipeline {
-                                    self.isPaused = true
+                                    if !self.isBuffering {
+                                        self.isPaused = true
+                                    }
                                 }
                             case .playing:
                                 if !self.isInitializingPipeline {
@@ -977,6 +980,7 @@ final class VTPlayerViewModel {
         guard let player = player else { return }
         player.pause()
         self.isPaused = true
+        self.isBuffering = false
         #if os(macOS)
         stopDisplayLinkIfNeeded()
         #else
@@ -1057,6 +1061,7 @@ final class VTPlayerViewModel {
         #if os(macOS)
         setNativeVideoEnabled(false)
         #endif
+        isBuffering = false
         playbackGeneration += 1
         let gen = playbackGeneration
         let oldProducer = producerTask
@@ -1210,7 +1215,7 @@ final class VTPlayerViewModel {
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
 
-                if self.isPaused {
+                if self.isPaused && !self.isBuffering {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }
@@ -1328,8 +1333,23 @@ final class VTPlayerViewModel {
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
+                let cacheCount = self.frameCacheCount
 
-                // Log desync for diagnostics but never pause the player.
+                // Keep the audio clock from outrunning the interpolated
+                // frame queue. The producer continues filling the cache
+                // while the display clock is held, avoiding burst drops when
+                // VideoToolbox briefly misses real-time processing.
+                if self.isBuffering {
+                    if cacheCount >= 8 {
+                        self.isBuffering = false
+                        player.rate = Float(self.playbackSpeed)
+                    }
+                } else if cacheCount <= 2 && latency > 0.05 {
+                    self.isBuffering = true
+                    player.pause()
+                }
+
+                // Log desync for diagnostics.
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {
@@ -1526,6 +1546,7 @@ final class VTPlayerViewModel {
         
         self.isPlaying = false
         self.isPaused = false
+        self.isBuffering = false
         self.currentTime = 0.0
         self.lastPublishedCurrentTime = -Double.infinity
         self.duration = 0.0
