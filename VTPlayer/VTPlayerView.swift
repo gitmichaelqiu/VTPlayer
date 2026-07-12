@@ -3187,7 +3187,7 @@ struct PlaybackSettingsView: View {
                             .frame(width: 150)
                         Text(String(format: "%.2f", viewModel.sharpness))
                             .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
                     }
                     
@@ -3198,7 +3198,7 @@ struct PlaybackSettingsView: View {
                             .frame(width: 150)
                         Text(String(format: "%.2f", viewModel.hdrStrength))
                             .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
                     }
                 }
@@ -3438,14 +3438,14 @@ struct VideoThumbnailView: View {
                     .overlay(
                         Image(systemName: "video.fill")
                             .font(.body)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     )
             }
             
             if let duration = durationString {
                 Text(duration)
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(Color.black.opacity(0.75))
