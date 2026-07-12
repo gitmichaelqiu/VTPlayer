@@ -2494,7 +2494,6 @@ extension VTPlayerView {
                     }
                 } header: {
                     Label("Recents", systemImage: "clock")
-                        .font(.caption.weight(.semibold))
                 }
             }
             .listStyle(.sidebar)
