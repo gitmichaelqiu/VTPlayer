@@ -957,11 +957,19 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-    private func endActiveCoordinator() {
+    private func endActiveCoordinator(after producer: Task<Void, Never>? = nil) {
         let coordinator = activeCoordinator
         activeCoordinator = nil
         guard let coordinator else { return }
-        Task { await coordinator.endSession() }
+
+        let producer = producer ?? producerTask
+        producer?.cancel()
+        Task {
+            if let producer {
+                await producer.value
+            }
+            await coordinator.endSession()
+        }
     }
 
     #if os(macOS)
@@ -991,11 +999,12 @@ final class VTPlayerViewModel {
         stopDisplayLinkIfNeeded()
         #endif
         playbackGeneration += 1
-        endActiveCoordinator()
+        let producer = producerTask
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
+        endActiveCoordinator(after: producer)
 
         #if !os(macOS)
         if let link = displayLink {
@@ -1016,11 +1025,12 @@ final class VTPlayerViewModel {
         #endif
         playbackGeneration += 1
         let gen = playbackGeneration
+        let oldProducer = producerTask
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
-        endActiveCoordinator()
+        endActiveCoordinator(after: oldProducer)
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
@@ -1129,6 +1139,7 @@ final class VTPlayerViewModel {
                 print("Failed to initialize coordinator session: \(error.localizedDescription)")
                 // Stop playback entirely so the consumer and audio sync don't hang
                 // forever with an empty frame cache.
+                self.activeCoordinator = nil
                 await coordinator.endSession()
                 self.stop()
                 return
@@ -1154,6 +1165,7 @@ final class VTPlayerViewModel {
 
             // Create VTFrameSequence to decode frames faster-than-real-time
             guard let videoURL = self.videoURL else {
+                self.activeCoordinator = nil
                 await coordinator.endSession()
                 return
             }
@@ -1265,6 +1277,9 @@ final class VTPlayerViewModel {
             }
 
             await coordinator.endSession()
+            if self.playbackGeneration == gen {
+                self.activeCoordinator = nil
+            }
         }
         
         startDisplayLinkIfNeeded()
@@ -1433,11 +1448,12 @@ final class VTPlayerViewModel {
             player.removeTimeObserver(token)
         }
         timeObserverToken = nil
-        endActiveCoordinator()
+        let producer = producerTask
         producerTask?.cancel()
         producerTask = nil
         consumerTask?.cancel()
         consumerTask = nil
+        endActiveCoordinator(after: producer)
         #if os(macOS)
         stopDisplayLinkIfNeeded()
         #else
