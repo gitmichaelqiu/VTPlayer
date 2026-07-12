@@ -388,6 +388,13 @@ public actor VTFrameProcessorCoordinator {
     public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
         guard isSessionActive else { return [frame] }
 
+        // Normalize the source before creating VideoToolbox frame objects.
+        // AVAssetReader does not consistently carry the color attachments on
+        // macOS, and the SR processor otherwise receives an ambiguous 420v
+        // chroma matrix. iOS decoder output already has these attachments,
+        // so this is a no-op there.
+        propagateColorAttachments(from: frame.buffer, to: frame.buffer)
+
         // Track this frame in history
         if let fpFrame = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp) {
             frameHistory.insert(fpFrame, at: 0)
