@@ -2879,7 +2879,8 @@ extension VTPlayerView {
             .padding(.horizontal, 12)
             
             // Bottom control actions
-            HStack(spacing: 16) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
                 // Play/Pause button
                 playPauseButton
                 
@@ -3067,7 +3068,26 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
                 
-                fullscreenButton
+                    fullscreenButton
+                }
+
+                HStack(spacing: 12) {
+                    playPauseButton
+
+                    Button {
+                        showSettingsSheet = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.body.weight(.semibold))
+                    }
+                    .buttonStyle(.glass)
+                    .help("Playback settings")
+
+                    Spacer(minLength: 8)
+
+                    playbackSpeedControl
+                    fullscreenButton
+                }
             }
         }
         .macOnHover { viewModel.isHoveringControlBar = $0 }
