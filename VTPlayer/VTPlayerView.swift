@@ -416,9 +416,13 @@ final class VTPlayerViewModel {
                         Task { @MainActor in
                             switch player.timeControlStatus {
                             case .paused:
-                                self.isPaused = true
+                                if !self.isInitializingPipeline {
+                                    self.isPaused = true
+                                }
                             case .playing:
-                                self.isPaused = false
+                                if !self.isInitializingPipeline {
+                                    self.isPaused = false
+                                }
                             case .waitingToPlayAtSpecifiedRate:
                                 break
                             @unknown default:
@@ -987,8 +991,13 @@ final class VTPlayerViewModel {
                 self.lastPulledTime = resumeTime
                 self.lastRenderedPTS = resumeTime
                 await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+                let shouldResume = self.isPlaying && !self.isPaused && gen == self.playbackGeneration
                 self.isInitializingPipeline = false
+                if shouldResume {
+                    player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+                } else {
+                    player.pause()
+                }
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
