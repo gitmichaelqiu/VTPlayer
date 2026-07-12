@@ -3180,7 +3180,7 @@ extension VTPlayerView {
                     .frame(minWidth: max(0, proxy.size.width - 48), alignment: .leading)
                 }
             }
-            .frame(height: 36)
+            .frame(height: 30)
         }
         .macOnHover { viewModel.isHoveringControlBar = $0 }
         .padding(.horizontal, 20)
