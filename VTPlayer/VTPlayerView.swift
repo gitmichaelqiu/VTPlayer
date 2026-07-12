@@ -2698,7 +2698,7 @@ extension VTPlayerView {
                         viewModel.seek(to: scrubTime)
                     }
                 })
-                .accentColor(.cyan)
+                .tint(.cyan)
                 .labelsHidden()
                 .onChange(of: viewModel.currentTime) { _, newValue in
                     if !isScrubbing {
@@ -2942,7 +2942,7 @@ extension VTPlayerView {
             .foregroundColor(viewModel.sharpness > 0 ? .cyan : .secondary)
             .frame(width: hoverSH ? 90 : 22, alignment: .leading)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                .accentColor(.cyan)
+                .tint(.cyan)
                 .labelsHidden()
                 .frame(width: 60)
                 .opacity(hoverSH ? 1 : 0)
@@ -2961,7 +2961,7 @@ extension VTPlayerView {
                 .frame(width: 45, alignment: .trailing)
             Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
                 .frame(width: 80)
-                .accentColor(.cyan)
+                .tint(.cyan)
         }
         .help("Adjust playback speed (0.5x - 2x)")
     }
