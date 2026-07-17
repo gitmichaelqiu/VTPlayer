@@ -117,12 +117,12 @@ public final class VTMetalRenderer: MTKView {
         let sharpenedImage: CIImage
         if currentFrameIsInterpolated {
             // Interpolated frames are hardware-scaled after source-resolution
-            // FI, while source frames use SR. A small luminance-only pass
-            // keeps the two frame types visually consistent without the much
-            // heavier UnsharpMask pass that previously hurt throughput.
+            // FI, while source frames use SR. Match the source-frame detail
+            // with a luminance-only pass; 0.25 was too subtle to prevent
+            // static captions from visibly pulsing between source and
+            // interpolated frames.
             sharpenedImage = ciImage.applyingFilter("CISharpenLuminance", parameters: [
-                kCIInputSharpnessKey: 0.25,
-                kCIInputRadiusKey: 0.5
+                kCIInputSharpnessKey: 0.8
             ])
         } else if sharpness > 0 {
             sharpenedImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
