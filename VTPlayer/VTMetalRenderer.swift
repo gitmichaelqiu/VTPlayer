@@ -58,26 +58,26 @@ public final class VTMetalRenderer: MTKView {
         }
     }
     
-    /// Updates the renderer with a new frame and schedules it to draw.
+    /// Updates the renderer with a new frame and encodes it immediately.
     /// - Parameters:
     ///   - pixelBuffer: The new CVPixelBuffer frame to display.
     ///   - isInterpolated: True if this is an interpolated frame.
     public func render(pixelBuffer: CVPixelBuffer, isInterpolated: Bool = false) {
         self.currentPixelBuffer = pixelBuffer
         self.currentFrameIsInterpolated = isInterpolated
-        // Schedule a draw pass on the next display refresh cycle rather
-        // than drawing synchronously.  draw() blocks on currentDrawable
-        // and CIContext.render(); for large SR-upscaled frames this can
-        // take 5-10ms, stalling the consumer's timing loop and causing
-        // visible stutter even though FPS averages look correct.
-        self.setNeedsDisplay(self.bounds)
+        // VTPlayerViewModel selects frames on the platform display link.
+        // Scheduling another AppKit redraw here introduces a second clock;
+        // macOS may coalesce two adjacent updates and visibly skip an
+        // interpolated frame. Encode directly on that tick so a selected
+        // frame maps to one presentation transaction.
+        self.draw()
     }
 
     /// Removes the currently displayed frame and redraws the view as black.
     public func clear() {
         self.currentPixelBuffer = nil
         self.currentFrameIsInterpolated = false
-        self.setNeedsDisplay(self.bounds)
+        self.draw()
     }
     
     public override func draw(_ rect: CGRect) {
