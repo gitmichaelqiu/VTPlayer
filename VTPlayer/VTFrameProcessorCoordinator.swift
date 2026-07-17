@@ -328,11 +328,14 @@ public actor VTFrameProcessorCoordinator {
                 currentHeight *= scale
             } else {
                 // Pure temporal interpolation (LL FI)
-                let numFrames = frameInterpolationLevel == 4 ? 3 : 1
+                // VideoToolbox expresses this as an interpolation exponent:
+                // 1 produces the midpoint for 2x, while 2 produces the
+                // quarter, midpoint, and three-quarter frames for 4x.
+                let interpolationExponent = frameInterpolationLevel == 4 ? 2 : 1
                 guard let config = VTLowLatencyFrameInterpolationConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,
-                    numberOfInterpolatedFrames: numFrames
+                    numberOfInterpolatedFrames: interpolationExponent
                 ) else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create FI config"])
