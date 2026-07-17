@@ -193,7 +193,11 @@ public actor VTFrameProcessorCoordinator {
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel >= 2
         let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
-        let useTemporalFirstForSRInterpolation = frameInterpolationLevel == 4 && (hasQualitySR || hasLLSR)
+        // Keep spatial processing ahead of temporal interpolation. Running
+        // FI at source resolution and scaling its output afterward is faster,
+        // but it substitutes ordinary scaled frames for most SR frames and
+        // makes text visibly pulse between soft and sharp.
+        let useTemporalFirstForSRInterpolation = false
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
         let needsSpatial = hasQualitySR || (hasLLSR && !inCombinedMode)

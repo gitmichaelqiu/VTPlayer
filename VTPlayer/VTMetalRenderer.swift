@@ -19,7 +19,6 @@ public final class VTMetalRenderer: MTKView {
     
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
-    private var currentFrameIsInterpolated = false
 
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
     public var sharpness: Float = 0.0
@@ -62,9 +61,8 @@ public final class VTMetalRenderer: MTKView {
     /// - Parameters:
     ///   - pixelBuffer: The new CVPixelBuffer frame to display.
     ///   - isInterpolated: True if this is an interpolated frame.
-    public func render(pixelBuffer: CVPixelBuffer, isInterpolated: Bool = false) {
+    public func render(pixelBuffer: CVPixelBuffer, isInterpolated _: Bool = false) {
         self.currentPixelBuffer = pixelBuffer
-        self.currentFrameIsInterpolated = isInterpolated
         // VTPlayerViewModel selects frames on the platform display link.
         // Scheduling another AppKit redraw here introduces a second clock;
         // macOS may coalesce two adjacent updates and visibly skip an
@@ -76,7 +74,6 @@ public final class VTMetalRenderer: MTKView {
     /// Removes the currently displayed frame and redraws the view as black.
     public func clear() {
         self.currentPixelBuffer = nil
-        self.currentFrameIsInterpolated = false
         self.draw()
     }
     
@@ -115,16 +112,7 @@ public final class VTMetalRenderer: MTKView {
 
         // Apply optional sharpness filter
         let sharpenedImage: CIImage
-        if currentFrameIsInterpolated {
-            // Interpolated frames are hardware-scaled after source-resolution
-            // FI, while source frames use SR. Match the source-frame detail
-            // with a luminance-only pass; 0.25 was too subtle to prevent
-            // static captions from visibly pulsing between source and
-            // interpolated frames.
-            sharpenedImage = ciImage.applyingFilter("CISharpenLuminance", parameters: [
-                kCIInputSharpnessKey: 0.8
-            ])
-        } else if sharpness > 0 {
+        if sharpness > 0 {
             sharpenedImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
                 kCIInputIntensityKey: sharpness,
                 kCIInputRadiusKey: 0.5
