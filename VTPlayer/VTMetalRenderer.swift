@@ -56,6 +56,35 @@ public final class VTMetalRenderer: MTKView {
             ])
         }
     }
+
+    #if os(macOS)
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateDrawableSizeForBackingScale()
+    }
+
+    public override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateDrawableSizeForBackingScale()
+    }
+
+    public override func layout() {
+        super.layout()
+        updateDrawableSizeForBackingScale()
+    }
+
+    /// SwiftUI supplies an NSView's bounds in points. Keep the Metal drawable
+    /// in backing pixels so enabling the processing pipeline does not render
+    /// at half resolution on a Retina display.
+    private func updateDrawableSizeForBackingScale() {
+        guard let window else { return }
+        let scale = window.backingScaleFactor
+        layer?.contentsScale = scale
+        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        guard size.width > 0, size.height > 0, drawableSize != size else { return }
+        drawableSize = size
+    }
+    #endif
     
     /// Updates the renderer with a new frame and encodes it immediately.
     /// - Parameters:
