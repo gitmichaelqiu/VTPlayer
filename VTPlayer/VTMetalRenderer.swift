@@ -42,16 +42,9 @@ public final class VTMetalRenderer: MTKView {
 
         self.framebufferOnly = false
         self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
-        #if os(macOS)
-        // AppKit coalesces setNeedsDisplay requests under load. Let MTKView
-        // own a display-driven render loop instead, matching UIKit's
-        // presentation model without blocking the playback display link.
-        self.enableSetNeedsDisplay = false
-        self.isPaused = true
-        self.preferredFramesPerSecond = 0
-        #else
         self.enableSetNeedsDisplay = true
         self.isPaused = true // We manually trigger drawing when a new frame is received
+        #if os(iOS)
         self.contentMode = .redraw
         #endif
 
@@ -100,10 +93,7 @@ public final class VTMetalRenderer: MTKView {
     public func render(pixelBuffer: CVPixelBuffer, isInterpolated _: Bool = false) {
         self.currentPixelBuffer = pixelBuffer
         #if os(macOS)
-        // Keep the latest frame available to MTKView's display-driven loop.
-        // Unlike AppKit invalidation, this does not coalesce playback into a
-        // low-rate redraw when the main run loop is busy.
-        self.isPaused = false
+        self.setNeedsDisplay(self.bounds)
         #else
         self.draw()
         #endif
@@ -113,8 +103,7 @@ public final class VTMetalRenderer: MTKView {
     public func clear() {
         self.currentPixelBuffer = nil
         #if os(macOS)
-        self.isPaused = true
-        self.draw()
+        self.setNeedsDisplay(self.bounds)
         #else
         self.draw()
         #endif
