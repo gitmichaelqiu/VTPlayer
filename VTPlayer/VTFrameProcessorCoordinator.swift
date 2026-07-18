@@ -291,11 +291,28 @@ public actor VTFrameProcessorCoordinator {
                 currentHeight *= scale
             } else {
                 // LL SR — first stage 2x
+                guard VTLowLatencySuperResolutionScalerConfiguration
+                    .supportedScaleFactors(frameWidth: currentWidth, frameHeight: currentHeight)
+                    .contains(2.0) else {
+                    throw NSError(
+                        domain: "VTFrameProcessorCoordinator",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Low Latency SR does not support \(currentWidth)x\(currentHeight) at 2x on this device"]
+                    )
+                }
                 let config1 = VTLowLatencySuperResolutionScalerConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,
                     scaleFactor: 2.0
                 )
+                guard !config1.sourcePixelBufferAttributes.isEmpty,
+                      !config1.destinationPixelBufferAttributes.isEmpty else {
+                    throw NSError(
+                        domain: "VTFrameProcessorCoordinator",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Low Latency SR returned no pixel buffer requirements"]
+                    )
+                }
                 let proc1 = VTFrameProcessor()
                 try proc1.startSession(configuration: config1)
                 let pool1 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: config1.destinationPixelBufferAttributes)

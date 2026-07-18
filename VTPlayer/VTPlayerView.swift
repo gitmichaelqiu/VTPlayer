@@ -1183,6 +1183,16 @@ final class VTPlayerViewModel {
                     effectiveSRLevel = qualitySR == 4 ? 4 : 2
                 }
             }
+
+            if effectiveSRLevel > 0 {
+                let supportedScales = VTLowLatencySuperResolutionScalerConfiguration
+                    .supportedScaleFactors(frameWidth: videoWidth, frameHeight: videoHeight)
+                if !supportedScales.contains(2.0) {
+                    self.srInitializationError = "Low Latency SR does not support \(videoWidth)x\(videoHeight) on this Mac; enhancement disabled."
+                    effectiveSRLevel = 0
+                    print("Low Latency SR unavailable for \(videoWidth)x\(videoHeight): \(supportedScales)")
+                }
+            }
             #endif
             let coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: effectiveSRLevel,
@@ -1206,7 +1216,9 @@ final class VTPlayerViewModel {
             self.player?.pause()
 
             do {
-                self.srInitializationError = nil
+                if effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0) {
+                    self.srInitializationError = nil
+                }
                 try await coordinator.startSession(width: videoWidth, height: videoHeight)
             } catch {
                 guard gen == self.playbackGeneration else { return }
