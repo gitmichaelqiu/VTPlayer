@@ -240,6 +240,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var displayLink: CADisplayLink?
     @ObservationIgnored private var presentedFramesCount = 0
     @ObservationIgnored private var displayRateSamples: [Double] = []
+    @ObservationIgnored private var displayRateMeasurementStart = DispatchTime.now()
     @ObservationIgnored private var fpsTimer = DispatchTime.now()
     @ObservationIgnored private var diagTimer = DispatchTime.now()
     @ObservationIgnored private var processedFrameCache: [VTFrame] = []
@@ -1130,6 +1131,7 @@ final class VTPlayerViewModel {
         presentedFramesCount = 0
         displayRateSamples.removeAll(keepingCapacity: true)
         displayRate1PercentLow = 0
+        displayRateMeasurementStart = .now()
         isBuffering = false
         lockCache { clearProcessedFrameCache() }
     }
@@ -1555,13 +1557,20 @@ final class VTPlayerViewModel {
         if elapsedFPSTime >= 1.0 {
             let measuredRate = Double(presentedFramesCount) / elapsedFPSTime
             self.fps = measuredRate
-            displayRateSamples.append(measuredRate)
-            if displayRateSamples.count > 60 {
-                displayRateSamples.removeFirst(displayRateSamples.count - 60)
+            let measurementAge = Double(now.uptimeNanoseconds - displayRateMeasurementStart.uptimeNanoseconds) / 1_000_000_000.0
+            // Ignore startup/reconfiguration warm-up, then retain a short
+            // rolling window so the metric reflects recent playback quality.
+            if measurementAge >= 2.0 {
+                displayRateSamples.append(measuredRate)
+                if displayRateSamples.count > 5 {
+                    displayRateSamples.removeFirst(displayRateSamples.count - 5)
+                }
+                let sortedRates = displayRateSamples.sorted()
+                let lowIndex = max(0, Int(ceil(Double(sortedRates.count) * 0.01)) - 1)
+                self.displayRate1PercentLow = sortedRates[lowIndex]
+            } else {
+                self.displayRate1PercentLow = measuredRate
             }
-            let sortedRates = displayRateSamples.sorted()
-            let lowIndex = max(0, Int(ceil(Double(sortedRates.count) * 0.01)) - 1)
-            self.displayRate1PercentLow = sortedRates[lowIndex]
             presentedFramesCount = 0
             fpsTimer = now
         }
@@ -1659,6 +1668,7 @@ final class VTPlayerViewModel {
         self.displayRate1PercentLow = 0.0
         self.presentedFramesCount = 0
         self.displayRateSamples.removeAll(keepingCapacity: true)
+        self.displayRateMeasurementStart = .now()
         self.frameProcessingTime = 0.0
         self.aneUsagePercent = 0.0
         self.srInitializationError = nil
@@ -3170,40 +3180,37 @@ extension VTPlayerView {
                 
                 // Super Resolution Menu
                 Menu {
-                    Picker(selection: Binding(
-                        get: {
-                            if viewModel.qualitySuperResolutionScaleFactor == 4 {
-                                4
-                            } else if viewModel.qualitySuperResolutionScaleFactor == 2 {
-                                3
-                            } else if viewModel.superResolutionLevel > 0 {
-                                viewModel.superResolutionLevel == 4 ? 2 : 1
-                            } else {
-                                0
-                            }
-                        },
-                        set: { tag in
-                            switch tag {
-                            case 1: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 2: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
-                            case 4: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
-                            default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
-                            }
-                            viewModel.updateEnhancements()
-                        }
-                    )) {
-                        Text("Off").tag(0)
-                        Divider()
-                        Text("Low Latency 2x").tag(1).disabled(!viewModel.availableSuperResolutionScales.contains(2))
-                        Text("Low Latency 4x").tag(2).disabled(!viewModel.availableSuperResolutionScales.contains(4))
-                        Divider()
-                        Text("Quality 2x").tag(3).disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
-                        Text("Quality 4x").tag(4).disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
-                    } label: {
-                        EmptyView()
+                    Button("Off") {
+                        viewModel.superResolutionLevel = 0
+                        viewModel.qualitySuperResolutionScaleFactor = 0
+                        viewModel.updateEnhancements()
                     }
-                    .pickerStyle(.inline)
+                    Divider()
+                    Button("Low Latency 2x") {
+                        viewModel.superResolutionLevel = 2
+                        viewModel.qualitySuperResolutionScaleFactor = 0
+                        viewModel.updateEnhancements()
+                    }
+                    .disabled(!viewModel.availableSuperResolutionScales.contains(2))
+                    Button("Low Latency 4x") {
+                        viewModel.superResolutionLevel = 4
+                        viewModel.qualitySuperResolutionScaleFactor = 0
+                        viewModel.updateEnhancements()
+                    }
+                    .disabled(!viewModel.availableSuperResolutionScales.contains(4))
+                    Divider()
+                    Button("Quality 2x") {
+                        viewModel.superResolutionLevel = 0
+                        viewModel.qualitySuperResolutionScaleFactor = 2
+                        viewModel.updateEnhancements()
+                    }
+                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
+                    Button("Quality 4x") {
+                        viewModel.superResolutionLevel = 0
+                        viewModel.qualitySuperResolutionScaleFactor = 4
+                        viewModel.updateEnhancements()
+                    }
+                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
@@ -3227,8 +3234,8 @@ extension VTPlayerView {
                         set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
                     )) {
                         Text("Off").tag(0)
-                        Text("2x").tag(2).disabled(!viewModel.availableSuperResolutionScales.contains(2))
-                        Text("4x").tag(4).disabled(!viewModel.availableSuperResolutionScales.contains(4))
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
                     } label: {
                         EmptyView()
                     }
