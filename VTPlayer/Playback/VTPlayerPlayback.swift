@@ -229,9 +229,10 @@ extension VTPlayerViewModel {
     }
 
     /// Returns the supported source-resolution tiers for the established
-    /// macOS temporal-first LL SR + FI2 path, ordered from cadence-safe to
-    /// higher-detail. The processor is restarted only between source frames
-    /// when this selection changes.
+    /// macOS temporal-first LL SR + FI2 path, ordered from lower-cost to
+    /// native-detail. Playback starts at native resolution and only steps
+    /// down after sustained deadline misses; SR must never silently begin by
+    /// throwing source detail away.
     func resolveAdaptiveSRFIInputSize() -> CGSize? {
         #if os(macOS)
         guard superResolutionLevel >= 2,
@@ -250,10 +251,24 @@ extension VTPlayerViewModel {
         }
 
         var tiers: [CGSize] = []
-        for (maxWidth, maxHeight) in [(640.0, 360.0), (960.0, 540.0)] {
-            let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
-            let width = alignedDimension(Double(videoWidth) * scale, maximum: Int(maxWidth))
-            let height = alignedDimension(Double(videoHeight) * scale, maximum: Int(maxHeight))
+        // Keep the native source as the highest tier. Lower tiers remain
+        // available as an automatic performance fallback, not the default.
+        let candidates: [(Double, Double)] = [
+            (640.0, 360.0),
+            (960.0, 540.0),
+            (Double(videoWidth), Double(videoHeight))
+        ]
+        for (maxWidth, maxHeight) in candidates {
+            let width: Int
+            let height: Int
+            if maxWidth == Double(videoWidth), maxHeight == Double(videoHeight) {
+                width = videoWidth
+                height = videoHeight
+            } else {
+                let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
+                width = alignedDimension(Double(videoWidth) * scale, maximum: Int(maxWidth))
+                height = alignedDimension(Double(videoHeight) * scale, maximum: Int(maxHeight))
+            }
             guard width > 0, height > 0,
                   VTLowLatencySuperResolutionScalerConfiguration
                     .supportedScaleFactors(frameWidth: width, frameHeight: height)
@@ -273,7 +288,7 @@ extension VTPlayerViewModel {
 
         if tiers != adaptiveSRFITiers {
             adaptiveSRFITiers = tiers
-            adaptiveSRFITierIndex = 0
+            adaptiveSRFITierIndex = max(0, tiers.count - 1)
             adaptiveSRFIDeadlineMisses = 0
             adaptiveSRFIHeadroomFrames = 0
             adaptiveSRFICacheStarvations = 0
