@@ -2267,6 +2267,20 @@ struct VTPlayerView: View {
     @State private var hoverSH = false
     @State private var hoverHDR = false
 
+    private var globallySupportedQualityScales: Set<Int> {
+        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+        if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
+           VTSuperResolutionScalerConfiguration.isSupported {
+            return Set(VTSuperResolutionScalerConfiguration.supportedScaleFactors.filter { $0 == 2 || $0 == 4 })
+        }
+        #endif
+        return []
+    }
+
+    private var globallySupportedLowLatencySR: Bool {
+        VTLowLatencySuperResolutionScalerConfiguration.isSupported
+    }
+
     var body: some View {
         Group {
             #if os(iOS)
@@ -2886,10 +2900,16 @@ extension VTPlayerView {
                     }
                 )) {
                     Text("Off").tag(0)
-                    Text("Low Latency 2x").tag(2)
-                    Text("Low Latency 4x").tag(4)
-                    Text("Quality 2x").tag(12)
-                    Text("Quality 4x").tag(14)
+                    if globallySupportedLowLatencySR {
+                        Text("Low Latency 2x").tag(2)
+                        Text("Low Latency 4x").tag(4)
+                    }
+                    if globallySupportedQualityScales.contains(2) {
+                        Text("Quality 2x").tag(12)
+                    }
+                    if globallySupportedQualityScales.contains(4) {
+                        Text("Quality 4x").tag(14)
+                    }
                 }
                 .pickerStyle(.menu)
                 .tint(.secondary)
@@ -3539,31 +3559,35 @@ extension VTPlayerView {
                         viewModel.updateEnhancements()
                     }
                     Divider()
-                    Button("Low Latency 2x") {
-                        viewModel.superResolutionLevel = 2
-                        viewModel.qualitySuperResolutionScaleFactor = 0
-                        viewModel.updateEnhancements()
+                    if viewModel.availableSuperResolutionScales.contains(2) {
+                        Button("Low Latency 2x") {
+                            viewModel.superResolutionLevel = 2
+                            viewModel.qualitySuperResolutionScaleFactor = 0
+                            viewModel.updateEnhancements()
+                        }
                     }
-                    .disabled(!viewModel.availableSuperResolutionScales.contains(2))
-                    Button("Low Latency 4x") {
-                        viewModel.superResolutionLevel = 4
-                        viewModel.qualitySuperResolutionScaleFactor = 0
-                        viewModel.updateEnhancements()
+                    if viewModel.availableSuperResolutionScales.contains(4) {
+                        Button("Low Latency 4x") {
+                            viewModel.superResolutionLevel = 4
+                            viewModel.qualitySuperResolutionScaleFactor = 0
+                            viewModel.updateEnhancements()
+                        }
                     }
-                    .disabled(!viewModel.availableSuperResolutionScales.contains(4))
                     Divider()
-                    Button("Quality 2x") {
-                        viewModel.superResolutionLevel = 0
-                        viewModel.qualitySuperResolutionScaleFactor = 2
-                        viewModel.updateEnhancements()
+                    if viewModel.availableQualitySuperResolutionScales.contains(2) {
+                        Button("Quality 2x") {
+                            viewModel.superResolutionLevel = 0
+                            viewModel.qualitySuperResolutionScaleFactor = 2
+                            viewModel.updateEnhancements()
+                        }
                     }
-                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
-                    Button("Quality 4x") {
-                        viewModel.superResolutionLevel = 0
-                        viewModel.qualitySuperResolutionScaleFactor = 4
-                        viewModel.updateEnhancements()
+                    if viewModel.availableQualitySuperResolutionScales.contains(4) {
+                        Button("Quality 4x") {
+                            viewModel.superResolutionLevel = 0
+                            viewModel.qualitySuperResolutionScaleFactor = 4
+                            viewModel.updateEnhancements()
+                        }
                     }
-                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
@@ -3981,14 +4005,18 @@ struct PlaybackSettingsView: View {
                         }
                     )) {
                         Text("Off").tag(0)
-                        Text("Low Latency 2x").tag(2)
-                            .disabled(!viewModel.availableSuperResolutionScales.contains(2))
-                        Text("Low Latency 4x").tag(4)
-                            .disabled(!viewModel.availableSuperResolutionScales.contains(4))
-                        Text("Quality 2x").tag(12)
-                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
-                        Text("Quality 4x").tag(14)
-                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
+                        if viewModel.availableSuperResolutionScales.contains(2) {
+                            Text("Low Latency 2x").tag(2)
+                        }
+                        if viewModel.availableSuperResolutionScales.contains(4) {
+                            Text("Low Latency 4x").tag(4)
+                        }
+                        if viewModel.availableQualitySuperResolutionScales.contains(2) {
+                            Text("Quality 2x").tag(12)
+                        }
+                        if viewModel.availableQualitySuperResolutionScales.contains(4) {
+                            Text("Quality 4x").tag(14)
+                        }
                     }
                     .pickerStyle(.menu)
                     .tint(.secondary)
