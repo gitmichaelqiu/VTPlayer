@@ -864,7 +864,11 @@ public actor VTFrameProcessorCoordinator {
             }
 
             _ = try await instance.processor.process(parameters: params)
-            outputFrames.append(VTFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp))
+            outputFrames.append(VTFrame(
+                buffer: destBuf,
+                presentationTimeStamp: frame.presentationTimeStamp,
+                isInterpolated: frame.isInterpolated
+            ))
         }
 
         return outputFrames
