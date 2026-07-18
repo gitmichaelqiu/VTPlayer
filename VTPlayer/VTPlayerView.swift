@@ -1175,6 +1175,7 @@ final class VTPlayerViewModel {
 
     private func stopPlaybackLoopOnly() {
         #if os(macOS)
+        renderer.setRenderingActive(false)
         setNativeVideoEnabled(true)
         stopDisplayLinkIfNeeded()
         #endif
