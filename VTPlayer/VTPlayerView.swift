@@ -241,6 +241,8 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var displayLink: CADisplayLink?
     @ObservationIgnored private var presentedFramesCount = 0
     @ObservationIgnored private var diagnosticPresentedFramesCount = 0
+    @ObservationIgnored private var diagnosticPresentedInterpolatedCount = 0
+    @ObservationIgnored private var diagnosticPresentedSourceCount = 0
     @ObservationIgnored private var producedFramesCount = 0
     @ObservationIgnored private var displayLinkTickCount = 0
     @ObservationIgnored private var displayRateSamples: [Double] = []
@@ -1212,6 +1214,8 @@ final class VTPlayerViewModel {
         audioSyncLatency = 0
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
+        diagnosticPresentedInterpolatedCount = 0
+        diagnosticPresentedSourceCount = 0
         producedFramesCount = 0
         displayLinkTickCount = 0
         displayRateSamples.removeAll(keepingCapacity: true)
@@ -1762,6 +1766,11 @@ final class VTPlayerViewModel {
             // drops below; they must not inflate the displayed FPS.
             presentedFramesCount += 1
             diagnosticPresentedFramesCount += 1
+            if frame.isInterpolated {
+                diagnosticPresentedInterpolatedCount += 1
+            } else {
+                diagnosticPresentedSourceCount += 1
+            }
             self.publishCurrentTime(min(currentSecs, duration))
             if drained > 1 {
                 self.pendingDroppedFrames += drained - 1
@@ -1809,15 +1818,19 @@ final class VTPlayerViewModel {
             let produced = producedFramesCount
             let callbacks = displayLinkTickCount
             let presented = diagnosticPresentedFramesCount
+            let interpolated = diagnosticPresentedInterpolatedCount
+            let source = diagnosticPresentedSourceCount
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
-                print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) rendered=\(curFPS)")
+                print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             } else {
-                print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) rendered=\(curFPS)")
+                print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             }
             producedFramesCount = 0
             displayLinkTickCount = 0
             diagnosticPresentedFramesCount = 0
+            diagnosticPresentedInterpolatedCount = 0
+            diagnosticPresentedSourceCount = 0
             diagTimer = now
         }
     }
@@ -1893,6 +1906,8 @@ final class VTPlayerViewModel {
         self.displayRate1PercentLow = 0.0
         self.presentedFramesCount = 0
         self.diagnosticPresentedFramesCount = 0
+        self.diagnosticPresentedInterpolatedCount = 0
+        self.diagnosticPresentedSourceCount = 0
         self.producedFramesCount = 0
         self.displayLinkTickCount = 0
         self.displayRateSamples.removeAll(keepingCapacity: true)
