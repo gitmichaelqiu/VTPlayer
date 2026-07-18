@@ -3914,7 +3914,7 @@ struct PlaybackSettingsView: View {
                         }
                         .disabled(!viewModel.availableSuperResolutionScales.contains(4))
                     } label: {
-                        LabeledContent("Super Resolution", value: viewModel.superResolutionLevel == 0 ? "Off" : "(viewModel.superResolutionLevel)x")
+                        LabeledContent("Super Resolution", value: viewModel.superResolutionLevel == 0 ? "Off" : "\(viewModel.superResolutionLevel)x")
                     }
                     
                     if viewModel.modelManager.status == .ready {
@@ -3936,7 +3936,7 @@ struct PlaybackSettingsView: View {
                             }
                             .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                         } label: {
-                            LabeledContent("Quality SR", value: viewModel.qualitySuperResolutionScaleFactor == 0 ? "Off" : "(viewModel.qualitySuperResolutionScaleFactor)x")
+                            LabeledContent("Quality SR", value: viewModel.qualitySuperResolutionScaleFactor == 0 ? "Off" : "\(viewModel.qualitySuperResolutionScaleFactor)x")
                         }
                     }
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
