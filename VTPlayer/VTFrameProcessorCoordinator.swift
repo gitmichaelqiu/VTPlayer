@@ -46,6 +46,35 @@ public actor VTFrameProcessorCoordinator {
         VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: width, frameHeight: height)
     }
 
+    /// Validates Quality SR at the same boundary that playback uses. The
+    /// configuration initializer can succeed even when a processor session
+    /// cannot be created for a particular resolution/scale on this machine.
+    public static func isQualitySuperResolutionSupported(width: Int, height: Int, scale: Int) -> Bool {
+        guard #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
+              VTSuperResolutionScalerConfiguration.isSupported,
+              let configuration = VTSuperResolutionScalerConfiguration(
+                  frameWidth: width,
+                  frameHeight: height,
+                  scaleFactor: scale,
+                  inputType: .video,
+                  usePrecomputedFlow: false,
+                  qualityPrioritization: .normal,
+                  revision: .revision1
+              ) else {
+            return false
+        }
+
+        let processor = VTFrameProcessor()
+        do {
+            try processor.startSession(configuration: configuration)
+            processor.endSession()
+            return true
+        } catch {
+            processor.endSession()
+            return false
+        }
+    }
+
     // MARK: - Configuration
 
     // Existing

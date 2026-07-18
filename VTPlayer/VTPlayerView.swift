@@ -490,13 +490,9 @@ final class VTPlayerViewModel {
                     // dimensions. A machine can expose the processor while a
                     // particular resolution still cannot create a session.
                     for scale in VTSuperResolutionScalerConfiguration.supportedScaleFactors where scale == 2 || scale == 4 {
-                        if let config = VTSuperResolutionScalerConfiguration(
-                            frameWidth: width, frameHeight: height,
-                            scaleFactor: scale, inputType: .video,
-                            usePrecomputedFlow: false,
-                            qualityPrioritization: .normal,
-                            revision: .revision1
-                        ), VTSuperResolutionScalerConfiguration.isSupported {
+                        if await VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(
+                            width: width, height: height, scale: scale
+                        ) {
                             availableQualityScales.insert(scale)
                         }
                     }
