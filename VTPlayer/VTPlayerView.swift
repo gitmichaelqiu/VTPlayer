@@ -1151,11 +1151,33 @@ final class VTPlayerViewModel {
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
         let adaptiveFISize: CGSize? = {
-            guard frameInterpolationLevel > 0,
-                  videoWidth > 1280 || videoHeight > 720 else { return nil }
-            let scale = min(1280.0 / Double(videoWidth), 720.0 / Double(videoHeight))
-            return CGSize(width: floor(Double(videoWidth) * scale / 2) * 2,
-                          height: floor(Double(videoHeight) * scale / 2) * 2)
+            guard frameInterpolationLevel > 0 else { return nil }
+            let combinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
+            guard combinedMode || videoWidth > 1280 || videoHeight > 720 else { return nil }
+            // Combined 2x SR + 2x FI is the heaviest real-time mode. When
+            // possible, feed it a smaller source so the processor has enough
+            // headroom to produce every output phase on time. Keep the normal
+            // FI cap for pure interpolation.
+            let maxWidth = superResolutionLevel == 2 && frameInterpolationLevel == 2 ? 960.0 : 1280.0
+            let maxHeight = superResolutionLevel == 2 && frameInterpolationLevel == 2 ? 540.0 : 720.0
+            let scale = min(maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
+            let candidate = CGSize(width: floor(Double(videoWidth) * scale / 2) * 2,
+                                   height: floor(Double(videoHeight) * scale / 2) * 2)
+            if combinedMode {
+                let candidateWidth = Int(candidate.width)
+                let candidateHeight = Int(candidate.height)
+                guard VTLowLatencySuperResolutionScalerConfiguration
+                    .supportedScaleFactors(frameWidth: candidateWidth, frameHeight: candidateHeight)
+                    .contains(2.0),
+                    VTLowLatencyFrameInterpolationConfiguration(
+                        frameWidth: candidateWidth,
+                        frameHeight: candidateHeight,
+                        spatialScaleFactor: 2
+                    ) != nil else {
+                    return nil
+                }
+            }
+            return candidate
         }()
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
         let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
