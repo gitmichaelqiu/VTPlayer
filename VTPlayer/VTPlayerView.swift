@@ -1997,11 +1997,6 @@ final class VTPlayerViewModel {
         hdrStrength = settings["hdrStrength"] as? Double ?? 0.0
         renderer.hdrStrength = Float(hdrStrength)
         qualitySuperResolutionScaleFactor = settings["qualitySuperResolutionScaleFactor"] as? Int ?? 0
-        // Migrate: QL SR only supports 4x, convert old 2x setting to LL SR 2x
-        if qualitySuperResolutionScaleFactor == 2 {
-            qualitySuperResolutionScaleFactor = 0
-            if superResolutionLevel == 0 { superResolutionLevel = 2 }
-        }
         motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
         qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
@@ -2020,11 +2015,10 @@ final class VTPlayerViewModel {
         hdrStrength = defHDR
         renderer.hdrStrength = Float(defHDR)
         
-        if modelManager.status == .ready {
-            qualitySuperResolutionScaleFactor = UserDefaults.standard.integer(forKey: "VTDefaultQSRLevel")
-        } else {
-            qualitySuperResolutionScaleFactor = 0
-        }
+        // Load the requested Quality SR default before capability validation;
+        // model readiness and per-scale support are checked when the video is
+        // opened, rather than silently converting or discarding QL2 here.
+        qualitySuperResolutionScaleFactor = UserDefaults.standard.integer(forKey: "VTDefaultQSRLevel")
         motionBlurStrength = UserDefaults.standard.integer(forKey: "VTDefaultMBLevel")
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1
