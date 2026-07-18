@@ -1725,7 +1725,12 @@ final class VTPlayerViewModel {
         var drained = 0
         let now = DispatchTime.now()
         let wallElapsed = Double(now.uptimeNanoseconds - lastPresentationWall.uptimeNanoseconds) / 1_000_000_000.0
-        let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.9
+        // MTKView callbacks may arrive around 48 Hz on a 60 Hz display.
+        // Requiring 90% of the 33 ms FI2 interval then presents every other
+        // callback (~24 Hz). A bounded 60% threshold lets the scheduler
+        // alternate one- and two-callback gaps, converging on the requested
+        // 30 Hz without allowing an unbounded burst.
+        let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.6
         let useWallClockPacing = frameInterpolationLevel > 0 && sourceFrameRate > 0
         
         self.lockCache {
