@@ -1271,7 +1271,6 @@ final class VTPlayerViewModel {
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
-        #if os(macOS)
         let adaptiveFISize: CGSize? = {
             guard frameInterpolationLevel > 0 else { return nil }
             let combinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
@@ -1318,11 +1317,6 @@ final class VTPlayerViewModel {
                                    height: ceil(Double(videoHeight) * scale / 16) * 16)
             return candidate
         }()
-        #else
-        // Keep the pre-existing iOS path: decode at the source dimensions and
-        // let CADisplayLink/VideoToolbox choose the native playback cadence.
-        let adaptiveFISize: CGSize? = nil
-        #endif
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
         let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
         let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
@@ -1755,14 +1749,7 @@ final class VTPlayerViewModel {
         // alternate one- and two-callback gaps, converging on the requested
         // 30 Hz without allowing an unbounded burst.
         let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.6
-        #if os(macOS)
         let useWallClockPacing = frameInterpolationLevel > 0 && sourceFrameRate > 0
-        #else
-        // iOS uses CADisplayLink plus immediate MTKView rendering. Preserve
-        // its established timestamp pacing instead of adding the macOS
-        // wall-clock gate to every display callback.
-        let useWallClockPacing = false
-        #endif
         
         self.lockCache {
             if useWallClockPacing {

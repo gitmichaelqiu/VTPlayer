@@ -282,13 +282,7 @@ public actor VTFrameProcessorCoordinator {
         // the documented extra scaled-source destination conflicts with the
         // initializer's equal phase/destination validation. Use a supported
         // temporal-first pipeline and apply LL SR to every generated frame.
-        #if os(macOS)
         let useTemporalFirstForSRInterpolation = superResolutionLevel == 2 && frameInterpolationLevel > 0
-        #else
-        // iOS previously used the native combined FI/SR ordering; keep that
-        // path unchanged because its CADisplayLink flow is already smooth.
-        let useTemporalFirstForSRInterpolation = false
-        #endif
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
         let needsSpatial = hasQualitySR || (hasLLSR && (!inCombinedMode || useTemporalFirstForSRInterpolation))
