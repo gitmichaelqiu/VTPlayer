@@ -277,25 +277,7 @@ extension VTFrameProcessorCoordinator {
         for f in inputFrames {
             var currentBuffer = f.buffer
 
-            if temporalFirstForSRInterpolation && f.isInterpolated,
-               let transferSession = interpolationTransferSession {
-                let finalPool = secondSpatialPool ?? pool
-                var outputBuffer: CVPixelBuffer?
-                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, finalPool, &outputBuffer) == kCVReturnSuccess,
-                      let destinationBuffer = outputBuffer else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                        userInfo: [NSLocalizedDescriptionKey: "Interpolated frame pool allocation failed"])
-                }
-                guard VTPixelTransferSessionTransferImage(
-                    transferSession,
-                    from: currentBuffer,
-                    to: destinationBuffer
-                ) == kCVReturnSuccess else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
-                        userInfo: [NSLocalizedDescriptionKey: "Interpolated frame scaling failed"])
-                }
-                currentBuffer = destinationBuffer
-            } else if qualitySuperResolutionScaleFactor > 0 {
+            if qualitySuperResolutionScaleFactor > 0 {
                 // Quality SR
                 var buf1: CVPixelBuffer?
                 guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,

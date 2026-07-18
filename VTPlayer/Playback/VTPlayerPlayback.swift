@@ -229,12 +229,12 @@ extension VTPlayerViewModel {
     }
 
     /// Returns the supported source-resolution tiers for the established
-    /// macOS temporal-first SR2 + FI2 path, ordered from cadence-safe to
+    /// macOS temporal-first LL SR + FI2 path, ordered from cadence-safe to
     /// higher-detail. The processor is restarted only between source frames
     /// when this selection changes.
     func resolveAdaptiveSRFIInputSize() -> CGSize? {
         #if os(macOS)
-        guard superResolutionLevel == 2,
+        guard superResolutionLevel >= 2,
               frameInterpolationLevel == 2,
               videoWidth > 0,
               videoHeight > 0,

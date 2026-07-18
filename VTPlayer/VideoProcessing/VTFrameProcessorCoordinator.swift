@@ -145,12 +145,9 @@ public actor VTFrameProcessorCoordinator {
     var rendererPixelBufferPool: CVPixelBufferPool?
     #endif
 
-    // Fast scaling path for interpolated frames when temporal processing runs
-    // before the heavy SR stage.
-    var interpolationTransferSession: VTPixelTransferSession?
-
-    // 4x FI is substantially cheaper at source resolution. Keep the
-    // existing combined 2x SR + 2x FI mode unchanged.
+    // FI must run at source resolution when it is paired with LL SR. Running
+    // the temporal processor after 4x SR makes it operate on sixteen times
+    // as many pixels and cannot sustain the generated-frame cadence.
     var temporalFirstForSRInterpolation = false
 
     // Second spatial stage for 4x LL SR cascading (2x → 2x)
@@ -249,7 +246,6 @@ public actor VTFrameProcessorCoordinator {
         self.outputHistory.removeAll()
         self.upscaledFrameHistory.removeAll()
         self.stages.removeAll()
-        self.interpolationTransferSession = nil
         self.temporalFirstForSRInterpolation = false
 
         var currentWidth = width
@@ -303,15 +299,12 @@ public actor VTFrameProcessorCoordinator {
         // while the equivalent SR4+FI2 path remains operational.
         let inCombinedMode = false
         #endif
-        // SR2 + FI2 uses temporal-first processing at the adaptive input size,
-        // then applies LL SR to every generated frame. This keeps the output
-        // cadence stable without mixing upscaled and non-upscaled frames.
-        // Combined SR2 + FI2 is unreliable across VideoToolbox revisions:
-        // the documented extra scaled-source destination conflicts with the
-        // initializer's equal phase/destination validation. Use a supported
-        // temporal-first pipeline and apply LL SR to every generated frame.
+        // Combined SR2 + FI2 is unreliable across VideoToolbox revisions.
+        // Run FI at source resolution and apply LL SR to every output frame.
+        // This preserves matched source/interpolated quality and, for SR4,
+        // avoids running the temporal processor on 16x-sized surfaces.
         #if os(macOS)
-        let useTemporalFirstForSRInterpolation = superResolutionLevel == 2 && frameInterpolationLevel > 0
+        let useTemporalFirstForSRInterpolation = superResolutionLevel >= 2 && frameInterpolationLevel > 0
         #else
         let useTemporalFirstForSRInterpolation = false
         #endif
@@ -492,22 +485,6 @@ public actor VTFrameProcessorCoordinator {
 
         if useTemporalFirstForSRInterpolation {
             try configureSpatialStages()
-
-            // In this macOS-only path, FI runs at source resolution. Preserve
-            // LL SR for source frames, but scale FI-generated frames with the
-            // VideoToolbox transfer engine. Running the neural SR processor on
-            // every generated frame otherwise doubles (or quadruples) the
-            // expensive spatial work without changing output dimensions.
-            var transferSession: VTPixelTransferSession?
-            guard VTPixelTransferSessionCreate(
-                allocator: kCFAllocatorDefault,
-                pixelTransferSessionOut: &transferSession
-            ) == kCVReturnSuccess, let transferSession else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create interpolated-frame transfer session"])
-            }
-            configureTransferSession(transferSession)
-            self.interpolationTransferSession = transferSession
         }
 
         // ── 4. Motion Blur Stage ──────────────────────────────────────
@@ -584,7 +561,7 @@ public actor VTFrameProcessorCoordinator {
 
     func completeEndSession() {
         var hasResources = isSessionActive || !stages.isEmpty || secondSpatialProcessor != nil ||
-            fallbackTransferSession != nil || interpolationTransferSession != nil
+            fallbackTransferSession != nil
         #if os(macOS)
         hasResources = hasResources || rendererTransferSession != nil || rendererPixelBufferPool != nil
         #endif
@@ -614,10 +591,6 @@ public actor VTFrameProcessorCoordinator {
         rendererPixelBufferPool = nil
         #endif
 
-        if let session = interpolationTransferSession {
-            VTPixelTransferSessionInvalidate(session)
-        }
-        interpolationTransferSession = nil
         temporalFirstForSRInterpolation = false
 
         frameHistory.removeAll()
