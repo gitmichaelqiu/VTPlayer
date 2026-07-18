@@ -3075,6 +3075,14 @@ extension VTPlayerView {
                     .foregroundStyle(viewModel.srIsSupported ? .blue : .secondary)
                 
                 LabeledContent("Scales", value: viewModel.srSupportedScales)
+                LabeledContent("Quality Scales") {
+                    let qualityScales = viewModel.availableQualitySuperResolutionScales
+                        .sorted()
+                        .map { "\($0)x" }
+                        .joined(separator: ", ")
+                    Text(qualityScales.isEmpty ? "None" : qualityScales)
+                        .monospacedDigit()
+                }
                 
                 let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                 let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
