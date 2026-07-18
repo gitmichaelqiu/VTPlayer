@@ -180,6 +180,7 @@ final class VTPlayerViewModel {
     /// keep unsupported choices visible but disabled.
     var availableSuperResolutionScales: Set<Int> = []
     var availableQualitySuperResolutionScales: Set<Int> = []
+    var readyQualitySuperResolutionScales: Set<Int> = []
     var srInitializationError: String? = nil
     
     // Recents List
@@ -478,6 +479,7 @@ final class VTPlayerViewModel {
         // the new video's loading window.
         availableSuperResolutionScales.removeAll()
         availableQualitySuperResolutionScales.removeAll()
+        readyQualitySuperResolutionScales.removeAll()
         let asset = AVAsset(url: url)
         let setupGeneration = playbackGeneration
         
@@ -520,6 +522,7 @@ final class VTPlayerViewModel {
                 // VideoToolbox can reject individual resolutions.
                 let availableSRScales: Set<Int> = scales.contains(2.0) ? [2, 4] : []
                 var availableQualityScales: Set<Int> = []
+                var readyQualityScales: Set<Int> = []
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
                    VTSuperResolutionScalerConfiguration.isSupported {
@@ -531,6 +534,14 @@ final class VTPlayerViewModel {
                             width: width, height: height, scale: scale
                         ) {
                             availableQualityScales.insert(scale)
+                            if let modelConfig = VTSuperResolutionScalerConfiguration(
+                                frameWidth: width, frameHeight: height,
+                                scaleFactor: scale, inputType: .video,
+                                usePrecomputedFlow: false, qualityPrioritization: .normal,
+                                revision: .revision1
+                            ), modelConfig.configurationModelStatus == .ready {
+                                readyQualityScales.insert(scale)
+                            }
                         }
                     }
                 }
@@ -579,6 +590,7 @@ final class VTPlayerViewModel {
                     self.srSupportedScales = scalesStr
                     self.availableSuperResolutionScales = availableSRScales
                     self.availableQualitySuperResolutionScales = availableQualityScales
+                    self.readyQualitySuperResolutionScales = readyQualityScales
                     
                     self.player = newPlayer
 
@@ -3505,14 +3517,14 @@ extension VTPlayerView {
                         viewModel.updateEnhancements()
                     }
                     .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2) ||
-                              viewModel.modelManager.status != .ready)
+                              !viewModel.readyQualitySuperResolutionScales.contains(2))
                     Button("Quality 4x") {
                         viewModel.superResolutionLevel = 0
                         viewModel.qualitySuperResolutionScaleFactor = 4
                         viewModel.updateEnhancements()
                     }
                     .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4) ||
-                              viewModel.modelManager.status != .ready)
+                              !viewModel.readyQualitySuperResolutionScales.contains(4))
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
@@ -3903,10 +3915,10 @@ struct PlaybackSettingsView: View {
                                 isSupported = viewModel.availableSuperResolutionScales.contains(selection)
                             case 12:
                                 isSupported = viewModel.availableQualitySuperResolutionScales.contains(2) &&
-                                    viewModel.modelManager.status == .ready
+                                    viewModel.readyQualitySuperResolutionScales.contains(2)
                             case 14:
                                 isSupported = viewModel.availableQualitySuperResolutionScales.contains(4) &&
-                                    viewModel.modelManager.status == .ready
+                                    viewModel.readyQualitySuperResolutionScales.contains(4)
                             default:
                                 isSupported = true
                             }
@@ -3938,10 +3950,10 @@ struct PlaybackSettingsView: View {
                             .disabled(!viewModel.availableSuperResolutionScales.contains(4))
                         Text("Quality 2x").tag(12)
                             .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2) ||
-                                      viewModel.modelManager.status != .ready)
+                                      !viewModel.readyQualitySuperResolutionScales.contains(2))
                         Text("Quality 4x").tag(14)
                             .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4) ||
-                                      viewModel.modelManager.status != .ready)
+                                      !viewModel.readyQualitySuperResolutionScales.contains(4))
                     }
                     .pickerStyle(.menu)
                     .tint(.secondary)
