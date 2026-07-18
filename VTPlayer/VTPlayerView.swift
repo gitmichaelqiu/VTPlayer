@@ -1090,7 +1090,11 @@ final class VTPlayerViewModel {
             guard let self = self else { return }
             
             defer {
-                self.producerTask = nil
+                // A replacement loop has a newer generation. Never let a
+                // cancelled predecessor erase its producer handle.
+                if self.playbackGeneration == gen {
+                    self.producerTask = nil
+                }
             }
 
             // Check Quality SR model availability before starting (macOS only)
