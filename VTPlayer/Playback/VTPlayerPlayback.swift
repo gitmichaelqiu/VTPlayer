@@ -568,14 +568,15 @@ extension VTPlayerViewModel {
             }
 
             #if os(macOS)
-            if effectiveSRLevel > 0 {
-                let supportedScales = VTLowLatencySuperResolutionScalerConfiguration
-                    .supportedScaleFactors(frameWidth: videoWidth, frameHeight: videoHeight)
-                if !supportedScales.contains(2.0) {
-                    self.srInitializationError = "Low Latency SR does not support \(videoWidth)x\(videoHeight) on this device; enhancement disabled."
+            if effectiveSRLevel > 0,
+               !VTFrameProcessorCoordinator.isLowLatencySuperResolutionSupported(
+                    width: pipelineWidth,
+                    height: pipelineHeight,
+                    scale: 2.0
+               ) {
+                    self.srInitializationError = "Low Latency SR does not support \(pipelineWidth)x\(pipelineHeight) on this device; enhancement disabled."
                     effectiveSRLevel = 0
-                    print("Low Latency SR unavailable for \(videoWidth)x\(videoHeight): \(supportedScales)")
-                }
+                    print("Low Latency SR session unavailable for \(pipelineWidth)x\(pipelineHeight)")
             }
             #endif
             #endif
