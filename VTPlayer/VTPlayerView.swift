@@ -1152,7 +1152,7 @@ final class VTPlayerViewModel {
             disabledSelection = true
         }
         if disabledSelection {
-            srInitializationError = "Selected super-resolution mode is unavailable for this video on this Mac."
+            srInitializationError = "Selected super-resolution mode is unavailable for this video on this device."
         }
     }
     
