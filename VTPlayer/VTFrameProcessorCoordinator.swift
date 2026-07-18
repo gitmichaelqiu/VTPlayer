@@ -282,7 +282,7 @@ public actor VTFrameProcessorCoordinator {
         // the documented extra scaled-source destination conflicts with the
         // initializer's equal phase/destination validation. Use a supported
         // temporal-first pipeline and apply LL SR to every generated frame.
-        let useTemporalFirstForSRInterpolation = superResolutionLevel == 2 && frameInterpolationLevel == 2
+        let useTemporalFirstForSRInterpolation = superResolutionLevel == 2 && frameInterpolationLevel > 0
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
         let needsSpatial = hasQualitySR || (hasLLSR && (!inCombinedMode || useTemporalFirstForSRInterpolation))
