@@ -156,6 +156,18 @@ public actor VTFrameProcessorCoordinator {
             CVBufferPropagateAttachments(source, destination)
         }
 
+        let colorKeys: [CFString] = [
+            kCVImageBufferColorPrimariesKey,
+            kCVImageBufferTransferFunctionKey,
+            kCVImageBufferYCbCrMatrixKey,
+            kCVImageBufferGammaLevelKey
+        ]
+        for key in colorKeys {
+            if let value = CVBufferCopyAttachment(source, key, nil) {
+                CVBufferSetAttachment(destination, key, value, .shouldPropagate)
+            }
+        }
+
         let defaults: [(CFString, CFTypeRef)] = [
             (kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2),
             (kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2),
