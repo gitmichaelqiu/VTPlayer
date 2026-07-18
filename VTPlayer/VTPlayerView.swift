@@ -1137,6 +1137,7 @@ final class VTPlayerViewModel {
     }
 
     private func startPlaybackLoop() {
+        let shouldResumePlayback = isPlaying && !isPaused
         #if os(macOS)
         setNativeVideoEnabled(false)
         #endif
@@ -1349,9 +1350,11 @@ final class VTPlayerViewModel {
                 self.lastPulledTime = resumeTime
                 self.lastRenderedPTS = resumeTime
                 await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                let shouldResume = self.isPlaying && !self.isPaused && gen == self.playbackGeneration
+                let shouldResume = shouldResumePlayback && gen == self.playbackGeneration
                 self.isInitializingPipeline = false
                 if shouldResume {
+                    self.isPlaying = true
+                    self.isPaused = false
                     player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 } else {
                     player.pause()
