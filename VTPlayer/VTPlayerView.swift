@@ -547,6 +547,8 @@ final class VTPlayerViewModel {
                 }
                 #endif
 
+                NSLog("CAPABILITY: video=\(width)x\(height) LL reported=\(scalesStr) LL menu=\(availableSRScales.sorted()) QL menu=\(availableQualityScales.sorted()) QL ready=\(readyQualityScales.sorted())")
+
                 // Quality SR has a second availability dimension: the
                 // per-resolution configuration may exist while its neural
                 // network weights are still unavailable. Check the model for
