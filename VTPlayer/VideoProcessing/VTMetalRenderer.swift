@@ -19,7 +19,6 @@ public final class VTMetalRenderer: MTKView {
     
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
-    private var currentFrameIsInterpolated = false
     #if os(macOS)
     private var renderingActive = false
     #endif
@@ -111,10 +110,10 @@ public final class VTMetalRenderer: MTKView {
     /// Updates the renderer with a new frame for presentation.
     /// - Parameters:
     ///   - pixelBuffer: The new CVPixelBuffer frame to display.
-    ///   - isInterpolated: True if this is an interpolated frame.
-    public func render(pixelBuffer: CVPixelBuffer, isInterpolated: Bool = false) {
+    ///   - isInterpolated: Retained for caller compatibility; rendering uses
+    ///     the same user-selected sharpness for source and generated frames.
+    public func render(pixelBuffer: CVPixelBuffer, isInterpolated _: Bool = false) {
         self.currentPixelBuffer = pixelBuffer
-        self.currentFrameIsInterpolated = isInterpolated
         #if os(macOS)
         if self.isPaused {
             self.draw()
@@ -136,7 +135,6 @@ public final class VTMetalRenderer: MTKView {
     /// Removes the currently displayed frame and redraws the view as black.
     public func clear() {
         self.currentPixelBuffer = nil
-        self.currentFrameIsInterpolated = false
         #if os(macOS)
         self.draw()
         #else
@@ -183,10 +181,9 @@ public final class VTMetalRenderer: MTKView {
 
         // Apply optional sharpness filter
         let sharpenedImage: CIImage
-        let sharpnessIntensity = currentFrameIsInterpolated ? max(sharpness, 1.25) : sharpness
-        if sharpnessIntensity > 0 {
+        if sharpness > 0 {
             sharpenedImage = (ciImage.applyingFilter("CIUnsharpMask", parameters: [
-                kCIInputIntensityKey: sharpnessIntensity,
+                kCIInputIntensityKey: sharpness,
                 kCIInputRadiusKey: 0.5
             ]))
         } else {
