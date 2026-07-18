@@ -189,12 +189,12 @@ extension VTFrameProcessorCoordinator {
             guard let params = VTLowLatencyFrameInterpolationParameters(
                 sourceFrame: sourceFP,
                 previousFrame: prevSourceFP,
-                // Spatial mode returns both the interpolated frame and the
-                // spatially-upscaled source frame.  VideoToolbox requires
-                // one phase entry per destination even though the second
-                // destination is the source-frame output; both entries use
-                // the only supported spatial interpolation phase.
-                interpolationPhase: [0.5, 0.5] as [Float],
+                // In spatial mode, VideoToolbox supports one interpolated
+                // midpoint plus an additional destination for the scaled
+                // source frame. Supplying a second 0.5 phase makes that
+                // source-output slot ambiguous and can yield alternating
+                // interpolation-quality frames at presentation time.
+                interpolationPhase: [0.5] as [Float],
                 destinationFrames: [destFrame1, destFrame2]
             ) else {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
