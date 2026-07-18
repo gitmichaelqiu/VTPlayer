@@ -42,11 +42,30 @@ public final class VTMetalRenderer: MTKView {
         }
     }
 
+    /// Optional perceptual compensation for SDR footage displayed in EDR.
+    /// It is intentionally neutral by default and affects midtones only.
+    public var hdrColorfulness: Float = 0.0 {
+        didSet {
+            requestRedrawForImageAdjustment()
+        }
+    }
+
     /// Whether the current drawable is configured to present extended-range
     /// content. This is false on displays without EDR headroom.
     public private(set) var isExtendedDynamicRangeActive = false
 
     private let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
+
+    private lazy var midtoneChromaKernel: CIColorKernel? = CIColorKernel(source: """
+        kernel vec4 midtoneChromaCompensation(__sample image, float amount) {
+            float luma = dot(image.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float shadowWeight = smoothstep(0.08, 0.25, luma);
+            float highlightWeight = 1.0 - smoothstep(0.60, 0.95, luma);
+            float compensation = amount * shadowWeight * highlightWeight;
+            vec3 compensated = mix(vec3(luma), image.rgb, 1.0 + compensation);
+            return vec4(compensated, image.a);
+        }
+        """)
 
     #if os(macOS)
     /// Called immediately before each MTKView draw so the owner can provide
@@ -287,10 +306,18 @@ public final class VTMetalRenderer: MTKView {
             // chroma relationships. Do not add saturation or contrast here:
             // EDR describes luminance headroom, and SDR footage contains no
             // HDR color information for us to reconstruct safely.
-            hdrImage = sharpenedImage
+            let expandedImage = sharpenedImage
                 .applyingFilter("CIExposureAdjust", parameters: [
                     kCIInputEVKey: exposureEV
                 ])
+            if hdrColorfulness > 0, let kernel = midtoneChromaKernel {
+                hdrImage = kernel.apply(
+                    extent: expandedImage.extent,
+                    arguments: [expandedImage, min(max(hdrColorfulness, 0), 1)]
+                ) ?? expandedImage
+            } else {
+                hdrImage = expandedImage
+            }
         } else {
             hdrImage = sharpenedImage
         }

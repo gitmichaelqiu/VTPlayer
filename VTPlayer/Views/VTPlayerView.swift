@@ -141,6 +141,7 @@ struct VTPlayerView: View {
     @AppStorage("VTDefaultDNLevel") var defaultDNLevel = 0.0
     @AppStorage("VTDefaultSharpness") var defaultSharpness = 0.0
     @AppStorage("VTDefaultHDRBoost") var defaultHDRBoost = 0.0
+    @AppStorage("VTDefaultHDRColorfulness") var defaultHDRColorfulness = 0.0
 
     @State var scrubTime: Double = 0.0
     @State var isScrubbing: Bool = false
@@ -437,7 +438,7 @@ struct VTPlayerView: View {
             let settingsKeys = [
                 "VTLastSRLevel_", "VTLastFILevel_", "VTLastQSRLevel_",
                 "VTLastMBLevel_", "VTLastDNLevel_", "VTLastSharpness_",
-                "VTLastHDRBoost_", "VTLastPosition_"
+                "VTLastHDRBoost_", "VTLastHDRColorfulness_", "VTLastPosition_"
             ]
             for keyPrefix in settingsKeys {
                 let oldKey = keyPrefix + url.lastPathComponent

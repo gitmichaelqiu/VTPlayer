@@ -119,6 +119,18 @@ struct PlaybackSettingsView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
                     }
+
+                    HStack {
+                        Text("HDR Colorfulness")
+                        Spacer()
+                        Slider(value: $viewModel.hdrColorfulness, in: 0...1, step: 0.05)
+                            .frame(width: 150)
+                            .disabled(viewModel.hdrStrength <= 0)
+                        Text(String(format: "%.2f", viewModel.hdrColorfulness))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
                 }
             }
             .navigationTitle("Playback Settings")

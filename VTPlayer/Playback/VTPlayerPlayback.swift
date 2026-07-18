@@ -5,6 +5,13 @@ import CoreVideo
 import MetalKit
 
 extension VTPlayerViewModel {
+    /// Converts monotonic uptime deltas without trapping if a timestamp was
+    /// reset after the caller captured `now` during a pipeline transition.
+    private func elapsedUptimeSeconds(since start: DispatchTime, until end: DispatchTime) -> Double {
+        guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return 0 }
+        return Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000.0
+    }
+
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
         validateEnhancementSelections()
@@ -1003,11 +1010,11 @@ extension VTPlayerViewModel {
         
         // Stats calculations
         let statsNow = DispatchTime.now()
-        let elapsedFPSTime = Double(statsNow.uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
+        let elapsedFPSTime = elapsedUptimeSeconds(since: fpsTimer, until: statsNow)
         if elapsedFPSTime >= 1.0 {
             let measuredRate = Double(presentedFramesCount) / elapsedFPSTime
             self.fps = measuredRate
-            let measurementAge = Double(statsNow.uptimeNanoseconds - displayRateMeasurementStart.uptimeNanoseconds) / 1_000_000_000.0
+            let measurementAge = elapsedUptimeSeconds(since: displayRateMeasurementStart, until: statsNow)
             // Ignore startup/reconfiguration warm-up, then retain a short
             // rolling window so the metric reflects recent playback quality.
             if measurementAge >= 2.0 {
@@ -1025,7 +1032,7 @@ extension VTPlayerViewModel {
             fpsTimer = statsNow
         }
         
-        let diagElapsed = Double(now.uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
+        let diagElapsed = elapsedUptimeSeconds(since: diagTimer, until: now)
         if diagElapsed >= 5.0 {
             let curRate = player.rate
             let curFPS = self.fps

@@ -142,6 +142,7 @@ final class VTPlayerViewModel {
     var denoiseIsActive: Bool { denoiseStrength > 0 }
     var sharpnessIsActive: Bool { sharpness > 0 }
     var hdrIsActive: Bool { hdrStrength > 0 }
+    var hdrColorfulnessIsActive: Bool { hdrColorfulness > 0 }
     /// Number of processed frames waiting to be displayed (observable by SwiftUI).
     var frameCacheCount: Int {
         cacheLock.lock()
@@ -167,6 +168,19 @@ final class VTPlayerViewModel {
             if (oldValue > 0) != (hdrStrength > 0), player != nil {
                 updateEnhancements()
             }
+        }
+    }
+
+    /// Perceptual chroma compensation for SDR-to-EDR presentation. This is a
+    /// creative preference, separate from the neutral HDR luminance mapping.
+    var hdrColorfulness: Double = 0.0 {
+        didSet {
+            let clamped = min(max(hdrColorfulness, 0), 1)
+            if clamped != hdrColorfulness {
+                hdrColorfulness = clamped
+                return
+            }
+            renderer.hdrColorfulness = Float(clamped)
         }
     }
 

@@ -18,6 +18,7 @@ extension VTPlayerViewModel {
             "playbackSpeed": playbackSpeed,
             "sharpness": sharpness,
             "hdrStrength": hdrStrength,
+            "hdrColorfulness": hdrColorfulness,
             "qualitySuperResolutionScaleFactor": qualitySuperResolutionScaleFactor,
             "motionBlurStrength": motionBlurStrength,
             "denoiseStrength": denoiseStrength,
@@ -41,6 +42,8 @@ extension VTPlayerViewModel {
         renderer.sharpness = Float(sharpness)
         hdrStrength = settings["hdrStrength"] as? Double ?? 0.0
         renderer.hdrStrength = Float(hdrStrength)
+        hdrColorfulness = settings["hdrColorfulness"] as? Double ?? 0.0
+        renderer.hdrColorfulness = Float(hdrColorfulness)
         qualitySuperResolutionScaleFactor = settings["qualitySuperResolutionScaleFactor"] as? Int ?? 0
         motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
@@ -59,6 +62,10 @@ extension VTPlayerViewModel {
         let defHDR = UserDefaults.standard.double(forKey: "VTDefaultHDRBoost")
         hdrStrength = defHDR
         renderer.hdrStrength = Float(defHDR)
+
+        let defHDRColorfulness = UserDefaults.standard.double(forKey: "VTDefaultHDRColorfulness")
+        hdrColorfulness = defHDRColorfulness
+        renderer.hdrColorfulness = Float(defHDRColorfulness)
         
         // Load the requested Quality SR default before capability validation;
         // model readiness and per-scale support are checked when the video is

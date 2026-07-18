@@ -566,10 +566,10 @@ extension VTPlayerView {
                         Text("Adjustments")
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? .primary : .secondary)
+                    .foregroundStyle((viewModel.sharpness > 0 || viewModel.hdrStrength > 0 || viewModel.hdrColorfulness > 0) ? .primary : .secondary)
                     .padding(.vertical, 5)
                     .padding(.horizontal, 10)
-                    .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0) ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+                    .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0 || viewModel.hdrColorfulness > 0) ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -594,6 +594,13 @@ extension VTPlayerView {
                             Text("HDR Boost: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : "Off")")
                                 .font(.caption)
                             Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("HDR Colorfulness: \(String(format: "%.2f", viewModel.hdrColorfulness))")
+                                .font(.caption)
+                            Slider(value: $viewModel.hdrColorfulness, in: 0...1, step: 0.05)
+                                .disabled(viewModel.hdrStrength <= 0)
                         }
                     }
                     .padding(16)

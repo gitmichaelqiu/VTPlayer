@@ -400,6 +400,18 @@ extension VTPlayerView {
                         .foregroundStyle(.secondary)
                         .frame(width: 24, alignment: .trailing)
                 }
+
+                HStack {
+                    Text("HDR Colorfulness")
+                    Spacer()
+                    Slider(value: $defaultHDRColorfulness, in: 0.0...1.0, step: 0.05)
+                    .frame(width: 140)
+                    .disabled(defaultHDRBoost <= 0)
+                    Text(String(format: "%.2f", defaultHDRColorfulness))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, alignment: .trailing)
+                }
             }
             
             // Quality SR Model Section
