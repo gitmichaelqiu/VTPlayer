@@ -244,6 +244,10 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var processedFrameCache: [VTFrame] = []
     @ObservationIgnored private var processedFrameCacheStart = 0
     @ObservationIgnored private let cacheLock = NSRecursiveLock()
+    /// Limit retained presentation frames by bytes, not a fixed frame count.
+    /// 4x SR can turn a single 1080p frame into a 33 MP image.
+    private let frameCacheMemoryBudget = 192 * 1024 * 1024
+    private let maximumFrameCacheCount = 24
     private func lockCache<T>(_ block: () -> T) -> T {
         cacheLock.lock()
         defer { cacheLock.unlock() }
@@ -283,6 +287,22 @@ final class VTPlayerViewModel {
             processedFrameCache = Array(processedFrameCache[processedFrameCacheStart...])
             processedFrameCacheStart = 0
         }
+    }
+
+    private var bufferedFrameLimit: Int {
+        let scale = max(1, max(superResolutionLevel, qualitySuperResolutionScaleFactor))
+        let outputPixels = Double(videoWidth) * Double(videoHeight) * Double(scale * scale)
+        guard outputPixels > 0 else { return maximumFrameCacheCount }
+
+        // The processors normally use YUV, but a four-byte estimate keeps
+        // the cache safe if VideoToolbox selects a packed destination format.
+        let estimatedBytesPerFrame = max(1.0, outputPixels * 4.0)
+        let budgetedFrames = Int(Double(frameCacheMemoryBudget) / estimatedBytesPerFrame)
+        return min(maximumFrameCacheCount, max(2, budgetedFrames))
+    }
+
+    private var resumeBufferFrameCount: Int {
+        min(8, max(2, bufferedFrameLimit / 2))
     }
     private var securityScopedURL: URL?
     #if os(iOS)
@@ -1223,7 +1243,7 @@ final class VTPlayerViewModel {
                 let count = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
-                if count >= 24 {
+                if count >= self.bufferedFrameLimit {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
@@ -1327,7 +1347,7 @@ final class VTPlayerViewModel {
                 // while the display clock is held, avoiding burst drops when
                 // VideoToolbox briefly misses real-time processing.
                 if self.isBuffering {
-                    if cacheCount >= 8 {
+                    if cacheCount >= self.resumeBufferFrameCount {
                         self.isBuffering = false
                         player.rate = Float(self.playbackSpeed)
                     }
