@@ -29,29 +29,33 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
     
     private let url: URL
     private let startTime: CMTime
+    private let outputSize: CGSize?
     
-    public init(url: URL, startTime: CMTime = .zero) {
+    public init(url: URL, startTime: CMTime = .zero, outputSize: CGSize? = nil) {
         self.url = url
         self.startTime = startTime
+        self.outputSize = outputSize
     }
     
     public func makeAsyncIterator() -> Iterator {
-        return Iterator(url: url, startTime: startTime)
+        return Iterator(url: url, startTime: startTime, outputSize: outputSize)
     }
     
     /// Thread-safe class-based iterator conforming to AsyncIteratorProtocol.
     public final class Iterator: AsyncIteratorProtocol, Sendable {
         private let url: URL
         private let startTime: CMTime
+        private let outputSize: CGSize?
         private let state = StateLock()
         
-        init(url: URL, startTime: CMTime) {
+        init(url: URL, startTime: CMTime, outputSize: CGSize?) {
             self.url = url
             self.startTime = startTime
+            self.outputSize = outputSize
         }
         
         public func next() async throws -> VTFrame? {
-            return try await state.next(url: url, startTime: startTime)
+            return try await state.next(url: url, startTime: startTime, outputSize: outputSize)
         }
         
         /// Actor to encapsulate state and run reader initialization on background threads.
@@ -60,7 +64,7 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
             private var trackOutput: AVAssetReaderTrackOutput?
             private var isInitialized = false
             
-            func next(url: URL, startTime: CMTime) async throws -> VTFrame? {
+            func next(url: URL, startTime: CMTime, outputSize: CGSize?) async throws -> VTFrame? {
                 if !isInitialized {
                     let asset = AVURLAsset(url: url)
                     let tracks = try await asset.loadTracks(withMediaType: .video)
@@ -82,9 +86,13 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                         }
                     }
                     
-                    let outputSettings: [String: Any] = [
+                    var outputSettings: [String: Any] = [
                         kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
                     ]
+                    if let outputSize {
+                        outputSettings[kCVPixelBufferWidthKey as String] = Int(outputSize.width)
+                        outputSettings[kCVPixelBufferHeightKey as String] = Int(outputSize.height)
+                    }
                     let trackOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: outputSettings)
                     trackOutput.alwaysCopiesSampleData = false
                     

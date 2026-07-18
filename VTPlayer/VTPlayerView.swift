@@ -1092,6 +1092,15 @@ final class VTPlayerViewModel {
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
+        let adaptiveFISize: CGSize? = {
+            guard frameInterpolationLevel > 0,
+                  videoWidth > 1280 || videoHeight > 720 else { return nil }
+            let scale = min(1280.0 / Double(videoWidth), 720.0 / Double(videoHeight))
+            return CGSize(width: floor(Double(videoWidth) * scale / 2) * 2,
+                          height: floor(Double(videoHeight) * scale / 2) * 2)
+        }()
+        let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
+        let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
 
         lockCache { clearProcessedFrameCache() }
         if let player = player {
@@ -1219,7 +1228,7 @@ final class VTPlayerViewModel {
                 if effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0) {
                     self.srInitializationError = nil
                 }
-                try await coordinator.startSession(width: videoWidth, height: videoHeight)
+                try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
             } catch {
                 guard gen == self.playbackGeneration else { return }
                 self.srInitializationError = error.localizedDescription
@@ -1257,7 +1266,7 @@ final class VTPlayerViewModel {
                 return
             }
             var iteratorStartTime = self.lastPulledTime
-            let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime)
+            let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
 
             while !Task.isCancelled {
@@ -1273,7 +1282,7 @@ final class VTPlayerViewModel {
                 // producer would keep feeding stale frames from the old position.
                 if self.lastPulledTime != iteratorStartTime {
                     iteratorStartTime = self.lastPulledTime
-                    let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime)
+                    let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
                     frameIterator = newSequence.makeAsyncIterator()
                     continue
                 }
