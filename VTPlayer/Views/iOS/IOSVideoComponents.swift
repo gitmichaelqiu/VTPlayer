@@ -120,7 +120,11 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         controller.showsPlaybackControls = true
         applyTitle(to: player.currentItem)
         controller.onControlsVisibilityChange = { visible in
-            DispatchQueue.main.async { self.showControls = visible }
+            // AVPlayerViewController reports visibility from its main-thread
+            // timer/layout callbacks. Update the binding in that same turn so
+            // the SwiftUI overlay fades with the native controls instead of
+            // lagging by an extra run-loop pass.
+            self.showControls = visible
         }
         return controller
     }
