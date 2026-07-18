@@ -1641,6 +1641,13 @@ final class VTPlayerViewModel {
         #if os(macOS)
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
         let link = window.displayLink(target: self, selector: #selector(caDisplayLinkTick))
+        // Request a cadence capable of presenting 2x FI output for 15/30 fps
+        // sources. The system clamps this to the physical display and may
+        // still reduce it under thermal or power policy, but leaving the
+        // default unconstrained lets a loaded pipeline settle at 15 Hz.
+        if #available(macOS 12.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
+        }
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
         #endif
