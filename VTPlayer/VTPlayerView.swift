@@ -1594,6 +1594,7 @@ final class VTPlayerViewModel {
                     }
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     self.lockCache { self.processedFrameCache.append(vtFrame) }
+                    self.producedFramesCount += 1
                 }
             }
 
