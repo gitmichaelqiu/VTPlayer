@@ -2840,19 +2840,31 @@ extension VTPlayerView {
             
             // Default Playback Settings Section
             Section("Default Playback Configuration") {
-                Picker("Super Resolution", selection: $defaultSRLevel) {
-                    Text("Off").tag(0)
-                    Text("2x Upscaling").tag(2)
-                    Text("4x Upscaling").tag(4)
-                }
-                
-                if viewModel.modelManager.status == .ready {
-                    Picker("Quality SR", selection: $defaultQSRLevel) {
-                        Text("Off").tag(0)
-                        Text("2x Quality SR").tag(2)
-                        Text("4x Quality SR").tag(4)
+                Picker("Super Resolution", selection: Binding(
+                    get: {
+                        defaultQSRLevel > 0 ? 10 + defaultQSRLevel : defaultSRLevel
+                    },
+                    set: { selection in
+                        switch selection {
+                        case 2, 4:
+                            defaultSRLevel = selection
+                            defaultQSRLevel = 0
+                        case 12, 14:
+                            defaultSRLevel = 0
+                            defaultQSRLevel = selection - 10
+                        default:
+                            defaultSRLevel = 0
+                            defaultQSRLevel = 0
+                        }
                     }
+                )) {
+                    Text("Off").tag(0)
+                    Text("Low Latency 2x").tag(2)
+                    Text("Low Latency 4x").tag(4)
+                    Text("Quality 2x").tag(12)
+                    Text("Quality 4x").tag(14)
                 }
+                .pickerStyle(.menu)
                 
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
