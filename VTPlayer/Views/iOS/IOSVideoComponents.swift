@@ -8,7 +8,6 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     var isPipelineActive = false
     private var lastKnownVisibility = true
     private var checkTimer: Timer?
-    private var lastControlScan = CACurrentMediaTime()
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -39,7 +38,7 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     }
 
     private func startTimer() {
-        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
             checkControlsVisibility()
             disableFullscreenButton(in: view)
@@ -52,9 +51,6 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     }
 
     private func checkControlsVisibility() {
-        let now = CACurrentMediaTime()
-        guard now - lastControlScan >= 0.2 else { return }
-        lastControlScan = now
         if let controls = findControlsView(in: view) {
             let visible = !controls.isHidden && controls.alpha > 0.1 && controls.superview != nil
             if visible != lastKnownVisibility {
