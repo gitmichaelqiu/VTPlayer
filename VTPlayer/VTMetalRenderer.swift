@@ -140,9 +140,6 @@ public final class VTMetalRenderer: MTKView {
         let drawableSize = self.drawableSize
         let destinationTexture = drawable.texture
         
-        // Keep Core Image's native VideoToolbox color handling. The macOS SR
-        // path converts enhanced frames to BGRA before they reach here, while
-        // interpolation-only frames retain the decoder's original metadata.
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
 
         // Apply optional sharpness filter
