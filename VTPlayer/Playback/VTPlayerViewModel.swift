@@ -51,7 +51,8 @@ final class VTPlayerViewModel {
                 frameInterpolationLevel > 0 || 
                 qualitySuperResolutionScaleFactor > 0 || 
                 denoiseStrength > 0 || 
-                motionBlurStrength > 0)
+                motionBlurStrength > 0 ||
+                hdrStrength > 0)
         #else
         return true
         #endif
@@ -155,10 +156,17 @@ final class VTPlayerViewModel {
         }
     }
 
-    // HDR Tone Mapping (0.0 = off, >0 applies exposure/saturation boost into EDR headroom)
+    // HDR Tone Mapping (0.0 = off, >0 maps SDR into EDR headroom)
     var hdrStrength: Double = 0.0 {
         didSet {
             renderer.hdrStrength = Float(hdrStrength)
+            // HDR-only playback must use the decoded-frame renderer; otherwise
+            // the native AVPlayer layer remains on top and no EDR content can
+            // reach the display. Rebuild only when crossing the activation
+            // boundary so ordinary slider adjustments stay immediate.
+            if (oldValue > 0) != (hdrStrength > 0), player != nil {
+                updateEnhancements()
+            }
         }
     }
 
