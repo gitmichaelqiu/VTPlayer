@@ -46,6 +46,27 @@ public actor VTFrameProcessorCoordinator {
         VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: width, frameHeight: height)
     }
 
+    /// Tests the exact LL SR session used by the pipeline. The advertised
+    /// scale-factor list is useful diagnostics, but on some OS/device
+    /// combinations it does not agree with whether a concrete processor
+    /// session can actually be started for the requested dimensions.
+    public static func isLowLatencySuperResolutionSupported(width: Int, height: Int, scale: Float) -> Bool {
+        let configuration = VTLowLatencySuperResolutionScalerConfiguration(
+            frameWidth: width,
+            frameHeight: height,
+            scaleFactor: scale
+        )
+        let processor = VTFrameProcessor()
+        do {
+            try processor.startSession(configuration: configuration)
+            processor.endSession()
+            return true
+        } catch {
+            processor.endSession()
+            return false
+        }
+    }
+
     /// Validates Quality SR at the same boundary that playback uses. The
     /// configuration initializer can succeed even when a processor session
     /// cannot be created for a particular resolution/scale on this machine.
@@ -329,17 +350,15 @@ public actor VTFrameProcessorCoordinator {
                 currentHeight *= scale
             } else {
                 // LL SR — first stage 2x
-                #if os(macOS)
-                guard VTLowLatencySuperResolutionScalerConfiguration
-                    .supportedScaleFactors(frameWidth: currentWidth, frameHeight: currentHeight)
-                    .contains(2.0) else {
+                guard Self.isLowLatencySuperResolutionSupported(
+                    width: currentWidth, height: currentHeight, scale: 2.0
+                ) else {
                     throw NSError(
                         domain: "VTFrameProcessorCoordinator",
                         code: -1,
                         userInfo: [NSLocalizedDescriptionKey: "Low Latency SR does not support \(currentWidth)x\(currentHeight) at 2x on this device"]
                     )
                 }
-                #endif
                 let config1 = VTLowLatencySuperResolutionScalerConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,

@@ -529,7 +529,9 @@ final class VTPlayerViewModel {
                 // valid. Probe the actual video dimensions on every platform;
                 // a global `isSupported` result is not sufficient because
                 // VideoToolbox can reject individual resolutions.
-                let availableSRScales: Set<Int> = scales.contains(2.0) ? [2, 4] : []
+                let ll2SessionSupported = await VTFrameProcessorCoordinator
+                    .isLowLatencySuperResolutionSupported(width: width, height: height, scale: 2.0)
+                let availableSRScales: Set<Int> = ll2SessionSupported ? [2, 4] : []
                 var availableQualityScales: Set<Int> = []
                 var readyQualityScales: Set<Int> = []
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
