@@ -181,6 +181,11 @@ final class VTPlayerViewModel {
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false
     var srSupportedScales: String = "None"
+    /// Scale choices supported for the currently loaded video's dimensions.
+    /// These are intentionally separate from the display string so menus can
+    /// keep unsupported choices visible but disabled.
+    var availableSuperResolutionScales: Set<Int> = []
+    var availableQualitySuperResolutionScales: Set<Int> = []
     var srInitializationError: String? = nil
     
     // Recents List
@@ -436,6 +441,19 @@ final class VTPlayerViewModel {
                 let supported = await VTFrameProcessorCoordinator.isSuperResolutionSupported()
                 let scales = await VTFrameProcessorCoordinator.supportedSuperResolutionScaleFactors(width: width, height: height)
                 let scalesStr = scales.isEmpty ? "None" : scales.map { String(format: "%.1fx", $0) }.joined(separator: ", ")
+                // The app's 4x LL SR mode is a two-stage 2x cascade, so a
+                // 2x-capable configuration also makes the 4x menu choice
+                // valid. A device that cannot do 2x cannot do our 4x mode.
+                let availableSRScales: Set<Int> = scales.contains(2.0) ? [2, 4] : []
+                var availableQualityScales: Set<Int> = []
+                #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+                if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
+                   VTSuperResolutionScalerConfiguration.isSupported {
+                    // Quality SR exposes its supported scale factors globally;
+                    // the session initializer still validates dimensions.
+                    availableQualityScales = Set(VTSuperResolutionScalerConfiguration.supportedScaleFactors)
+                }
+                #endif
                 
                 // AVPlayer owns audio and native fallback presentation. Enhanced
                 // video frames are decoded independently by VTFrameSequence.
@@ -462,6 +480,8 @@ final class VTPlayerViewModel {
                     self.videoFormat = formatStr
                     self.srIsSupported = supported
                     self.srSupportedScales = scalesStr
+                    self.availableSuperResolutionScales = availableSRScales
+                    self.availableQualitySuperResolutionScales = availableQualityScales
                     
                     self.player = newPlayer
 
@@ -3091,6 +3111,8 @@ extension VTPlayerView {
                     Picker(selection: Binding(
                         get: {
                             if viewModel.qualitySuperResolutionScaleFactor == 4 {
+                                4
+                            } else if viewModel.qualitySuperResolutionScaleFactor == 2 {
                                 3
                             } else if viewModel.superResolutionLevel > 0 {
                                 viewModel.superResolutionLevel == 4 ? 2 : 1
@@ -3102,7 +3124,8 @@ extension VTPlayerView {
                             switch tag {
                             case 1: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
                             case 2: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
+                            case 3: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
+                            case 4: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
                             default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
                             }
                             viewModel.updateEnhancements()
@@ -3110,10 +3133,11 @@ extension VTPlayerView {
                     )) {
                         Text("Off").tag(0)
                         Divider()
-                        Text("Low Latency 2x").tag(1)
-                        Text("Low Latency 4x").tag(2)
+                        Text("Low Latency 2x").tag(1).disabled(!viewModel.availableSuperResolutionScales.contains(2))
+                        Text("Low Latency 4x").tag(2).disabled(!viewModel.availableSuperResolutionScales.contains(4))
                         Divider()
-                        Text("Quality 4x").tag(3)
+                        Text("Quality 2x").tag(3).disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
+                        Text("Quality 4x").tag(4).disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                     } label: {
                         EmptyView()
                     }
@@ -3141,8 +3165,8 @@ extension VTPlayerView {
                         set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
                     )) {
                         Text("Off").tag(0)
-                        Text("2x").tag(2)
-                        Text("4x").tag(4)
+                        Text("2x").tag(2).disabled(!viewModel.availableSuperResolutionScales.contains(2))
+                        Text("4x").tag(4).disabled(!viewModel.availableSuperResolutionScales.contains(4))
                     } label: {
                         EmptyView()
                     }
@@ -3505,8 +3529,8 @@ struct PlaybackSettingsView: View {
                     if viewModel.modelManager.status == .ready {
                         Picker("Quality SR", selection: $viewModel.qualitySuperResolutionScaleFactor) {
                             Text("Off").tag(0)
-                            Text("2x Quality SR").tag(2)
-                            Text("4x Quality SR").tag(4)
+                            Text("2x Quality SR").tag(2).disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
+                            Text("4x Quality SR").tag(4).disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                         }
                         .onChange(of: viewModel.qualitySuperResolutionScaleFactor) { _, _ in
                             viewModel.updateEnhancements()
