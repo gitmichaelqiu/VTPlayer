@@ -842,8 +842,8 @@ final class VTPlayerViewModel {
         // at the new seek position so the screen updates in real time.
         if self.isPaused, let url = videoURL {
             Task { @MainActor in
-                if let pixelBuffer = self.readSingleFrame(from: url, at: currentTime) {
-                    self.renderer.render(pixelBuffer: pixelBuffer)
+                if let frame = await self.readSingleFrame(from: url, at: currentTime) {
+                    self.renderer.render(pixelBuffer: frame.buffer)
                 }
             }
         }
@@ -873,8 +873,8 @@ final class VTPlayerViewModel {
 
                 // Read a single frame via AVAssetReader (video track is
                 // disabled on AVPlayer, so copyPixelBuffer won't work).
-                if let pixelBuffer = self.readSingleFrame(from: url, at: time) {
-                    self.renderer.render(pixelBuffer: pixelBuffer)
+                if let frame = await self.readSingleFrame(from: url, at: time) {
+                    self.renderer.render(pixelBuffer: frame.buffer)
                 }
             }
         }
@@ -895,13 +895,19 @@ final class VTPlayerViewModel {
         // Small delay to let the seek settle
         try? await Task.sleep(nanoseconds: 10_000_000)
         guard requestGeneration == seekGeneration, self.player === player else { return }
-        if let pixelBuffer = readSingleFrame(from: url, at: time) {
-            self.renderer.render(pixelBuffer: pixelBuffer)
+        if let frame = await readSingleFrame(from: url, at: time) {
+            self.renderer.render(pixelBuffer: frame.buffer)
         }
     }
 
-    /// Reads a single decoded video frame at the given time using AVAssetReader.
-    private func readSingleFrame(from url: URL, at time: CMTime) -> CVPixelBuffer? {
+    /// Decodes a single frame away from the main actor so seeking remains responsive.
+    private func readSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
+        await Task.detached(priority: .userInitiated) {
+            Self.decodeSingleFrame(from: url, at: time)
+        }.value
+    }
+
+    nonisolated private static func decodeSingleFrame(from url: URL, at time: CMTime) -> VTFrame? {
         let asset = AVURLAsset(url: url)
         guard let track = asset.tracks(withMediaType: .video).first else { return nil }
         guard let reader = try? AVAssetReader(asset: asset) else { return nil }
@@ -915,7 +921,11 @@ final class VTPlayerViewModel {
         reader.add(output)
         guard reader.startReading() else { return nil }
         guard let sample = output.copyNextSampleBuffer() else { return nil }
-        return CMSampleBufferGetImageBuffer(sample)
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sample) else { return nil }
+        return VTFrame(
+            buffer: pixelBuffer,
+            presentationTimeStamp: CMSampleBufferGetPresentationTimeStamp(sample)
+        )
     }
     
     /// Whether the pipeline needs to be rebuilt on the next resume.
