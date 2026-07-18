@@ -239,6 +239,7 @@ final class VTPlayerViewModel {
     private(set) var player: AVPlayer?
     @ObservationIgnored private var producerTask: Task<Void, Never>?
     @ObservationIgnored private var consumerTask: Task<Void, Never>?
+    @ObservationIgnored private var qualityModelRetryTask: Task<Void, Never>?
     @ObservationIgnored private var displayLink: CADisplayLink?
     @ObservationIgnored private var presentedFramesCount = 0
     @ObservationIgnored private var diagnosticPresentedFramesCount = 0
@@ -399,6 +400,25 @@ final class VTPlayerViewModel {
 
     var audioSyncLatency: Double = 0
     private var audioSyncTask: Task<Void, Never>?
+
+    private func retryAfterQualityModelDownload(generation: UInt64) {
+        qualityModelRetryTask?.cancel()
+        qualityModelRetryTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled, let self, generation == self.playbackGeneration {
+                switch self.modelManager.status {
+                case .ready:
+                    self.qualityModelRetryTask = nil
+                    self.startPlaybackLoop()
+                    return
+                case .failed:
+                    self.qualityModelRetryTask = nil
+                    return
+                case .notChecked, .downloadRequired, .downloading:
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
+            }
+        }
+    }
     private let audioSyncLatencyThreshold: Double = 0.1
     
     let renderer: VTMetalRenderer
@@ -1429,8 +1449,10 @@ final class VTPlayerViewModel {
                     case .downloadRequired:
                         print("Quality SR model download required, starting download")
                         self.modelManager.downloadModel(for: checkConfig)
+                        self.retryAfterQualityModelDownload(generation: gen)
                         fallBackFromQualitySR()
                     case .downloading:
+                        self.retryAfterQualityModelDownload(generation: gen)
                         fallBackFromQualitySR()
                     case .failed(let message):
                         self.srInitializationError = "Quality SR model unavailable: \(message)"
@@ -3529,15 +3551,13 @@ extension VTPlayerView {
                         viewModel.qualitySuperResolutionScaleFactor = 2
                         viewModel.updateEnhancements()
                     }
-                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2) ||
-                              !viewModel.readyQualitySuperResolutionScales.contains(2))
+                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
                     Button("Quality 4x") {
                         viewModel.superResolutionLevel = 0
                         viewModel.qualitySuperResolutionScaleFactor = 4
                         viewModel.updateEnhancements()
                     }
-                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4) ||
-                              !viewModel.readyQualitySuperResolutionScales.contains(4))
+                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
@@ -3927,11 +3947,9 @@ struct PlaybackSettingsView: View {
                             case 2, 4:
                                 isSupported = viewModel.availableSuperResolutionScales.contains(selection)
                             case 12:
-                                isSupported = viewModel.availableQualitySuperResolutionScales.contains(2) &&
-                                    viewModel.readyQualitySuperResolutionScales.contains(2)
+                                isSupported = viewModel.availableQualitySuperResolutionScales.contains(2)
                             case 14:
-                                isSupported = viewModel.availableQualitySuperResolutionScales.contains(4) &&
-                                    viewModel.readyQualitySuperResolutionScales.contains(4)
+                                isSupported = viewModel.availableQualitySuperResolutionScales.contains(4)
                             default:
                                 isSupported = true
                             }
@@ -3962,11 +3980,9 @@ struct PlaybackSettingsView: View {
                         Text("Low Latency 4x").tag(4)
                             .disabled(!viewModel.availableSuperResolutionScales.contains(4))
                         Text("Quality 2x").tag(12)
-                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2) ||
-                                      !viewModel.readyQualitySuperResolutionScales.contains(2))
+                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
                         Text("Quality 4x").tag(14)
-                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4) ||
-                                      !viewModel.readyQualitySuperResolutionScales.contains(4))
+                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
                     }
                     .pickerStyle(.menu)
                     .tint(.secondary)
