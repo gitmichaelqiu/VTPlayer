@@ -2192,6 +2192,7 @@ struct VTPlayerView: View {
     @State private var showFileImporter = false
     #if canImport(PhotosUI)
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var showPhotoPicker = false
     #endif
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var showSettingsSheet = false
@@ -2258,20 +2259,18 @@ struct VTPlayerView: View {
         } message: {
             Text("Enter a new name for the video file.")
         }
+        #if os(macOS)
         .alert("Clear Playback History?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear History", role: .destructive) {
-                #if os(macOS)
                 pinnedVideos.removeAll()
                 UserDefaults.standard.set([], forKey: "VTPinnedVideos")
                 viewModel.clearRecentVideosMac()
-                #else
-                viewModel.clearRecentVideosIOS()
-                #endif
             }
         } message: {
             Text("This will clear your recent playback history. Your video files will remain safe.")
         }
+        #endif
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [.movie, .quickTimeMovie, .mpeg4Movie],
@@ -2294,6 +2293,14 @@ struct VTPlayerView: View {
                 }
             }
         }
+        #endif
+        #if os(iOS)
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItem,
+            matching: .videos,
+            photoLibrary: .shared()
+        )
         #endif
         .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
         #if os(macOS)
@@ -2588,11 +2595,9 @@ extension VTPlayerView {
                         }
                         
                         #if canImport(PhotosUI)
-                        PhotosPicker(
-                            selection: $selectedPhotoItem,
-                            matching: .videos,
-                            photoLibrary: .shared()
-                        ) {
+                        Button {
+                            showPhotoPicker = true
+                        } label: {
                             Label("Photos Library", systemImage: "photo")
                         }
                         #endif
