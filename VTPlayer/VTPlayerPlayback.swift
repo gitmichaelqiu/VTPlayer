@@ -162,6 +162,8 @@ extension VTPlayerViewModel {
         setNativeVideoEnabled(true)
         stopDisplayLinkIfNeeded()
         #endif
+        pipelineRestartTask?.cancel()
+        pipelineRestartTask = nil
         playbackGeneration += 1
         qualityModelRetryTask?.cancel()
         qualityModelRetryTask = nil
@@ -195,7 +197,38 @@ extension VTPlayerViewModel {
         lockCache { clearProcessedFrameCache() }
     }
 
+    /// Serializes enhancement restarts. VideoToolbox sessions cannot safely be
+    /// initialized while the previous producer still owns in-flight frames.
     func startPlaybackLoop() {
+        guard producerTask != nil || activeCoordinator != nil else {
+            startPlaybackLoopNow()
+            return
+        }
+
+        playbackGeneration += 1
+        let restartGeneration = playbackGeneration
+        let oldProducer = producerTask
+        let oldCoordinator = activeCoordinator
+        producerTask?.cancel()
+        producerTask = nil
+        consumerTask?.cancel()
+        consumerTask = nil
+        activeCoordinator = nil
+        pipelineRestartTask?.cancel()
+        pipelineRestartTask = Task { @MainActor [weak self] in
+            if let oldProducer {
+                await oldProducer.value
+            }
+            if let oldCoordinator {
+                await oldCoordinator.endSession()
+            }
+            guard let self, self.playbackGeneration == restartGeneration else { return }
+            self.pipelineRestartTask = nil
+            self.startPlaybackLoopNow()
+        }
+    }
+
+    private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
         #if os(macOS)
         setNativeVideoEnabled(false)
@@ -831,6 +864,8 @@ extension VTPlayerViewModel {
         setNativeVideoEnabled(false)
         stopDisplayLinkIfNeeded()
         #endif
+        pipelineRestartTask?.cancel()
+        pipelineRestartTask = nil
         playbackGeneration += 1
         seekGeneration &+= 1
         if self.currentTime > 0 {

@@ -153,6 +153,7 @@ final class VTPlayerViewModel {
     var player: AVPlayer?
     @ObservationIgnored var producerTask: Task<Void, Never>?
     @ObservationIgnored var consumerTask: Task<Void, Never>?
+    @ObservationIgnored var pipelineRestartTask: Task<Void, Never>?
     @ObservationIgnored var qualityModelRetryTask: Task<Void, Never>?
     @ObservationIgnored var displayLink: CADisplayLink?
     @ObservationIgnored var presentedFramesCount = 0
