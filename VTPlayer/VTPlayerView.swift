@@ -1437,6 +1437,14 @@ final class VTPlayerViewModel {
                     self.publishProcessingDiagnostics(
                         Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                     )
+                    let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
+                    let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
+                    if frameInterpolationLevel > 0,
+                       processingMilliseconds > sourceFrameBudgetMilliseconds {
+                        let processingText = String(format: "%.1f", processingMilliseconds)
+                        let budgetText = String(format: "%.1f", sourceFrameBudgetMilliseconds)
+                        print("PERF: FI deadline miss processing=\(processingText)ms budget=\(budgetText)ms outputs=\(outputFrames.count) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
+                    }
 
                     if outputFrames.count < 2 && self.frameInterpolationLevel > 0 {
                         print("⚠️ FI: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
@@ -1465,7 +1473,7 @@ final class VTPlayerViewModel {
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
-                    print("⚠️ Pipeline processing error: \(error)")
+                    print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     self.lockCache { self.processedFrameCache.append(vtFrame) }
                 }
             }
