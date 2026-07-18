@@ -417,6 +417,14 @@ final class VTPlayerViewModel {
     init() {
         self.renderer = VTMetalRenderer(frame: .zero, device: nil)
         #if os(macOS)
+        // Allows a reproducible headless/open-with diagnostic run without
+        // changing persisted user preferences.
+        if CommandLine.arguments.contains("--vtplayer-fi2-sr2") {
+            self.superResolutionLevel = 2
+            self.frameInterpolationLevel = 2
+        }
+        #endif
+        #if os(macOS)
         self.reloadRecentVideos()
         
         NotificationCenter.default.addObserver(
