@@ -770,7 +770,14 @@ public actor VTFrameProcessorCoordinator {
                             throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
                                 userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 fallback allocation failed"])
                         }
-                        VTPixelTransferSessionTransferImage(fallbackSession, from: currentBuffer, to: outBuf2)
+                        guard VTPixelTransferSessionTransferImage(
+                            fallbackSession,
+                            from: currentBuffer,
+                            to: outBuf2
+                        ) == kCVReturnSuccess else {
+                            throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
+                                userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 fallback scaling failed"])
+                        }
                         currentBuffer = outBuf2
                     }
                 }
