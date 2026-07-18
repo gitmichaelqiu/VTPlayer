@@ -306,6 +306,15 @@ final class VTPlayerViewModel {
     private var resumeBufferFrameCount: Int {
         min(8, max(2, bufferedFrameLimit / 2))
     }
+
+    /// FI generates frames between adjacent source timestamps. Keeping one
+    /// source interval in the presentation queue prevents a late processor
+    /// completion from collapsing the interpolated and source frames into one
+    /// display refresh.
+    private var interpolationPresentationDelay: Double {
+        guard frameInterpolationLevel > 0, sourceFrameRate > 0 else { return 0 }
+        return 1.0 / sourceFrameRate
+    }
     private var securityScopedURL: URL?
     #if os(iOS)
     private var tempLocalURL: URL?
@@ -1414,6 +1423,7 @@ final class VTPlayerViewModel {
         
         let currentTime = player.currentTime()
         let currentSecs = CMTimeGetSeconds(currentTime)
+        let presentationSecs = currentSecs - interpolationPresentationDelay
         
         var lastFrameToRender: VTFrame? = nil
         var drained = 0
@@ -1422,7 +1432,7 @@ final class VTPlayerViewModel {
             while self.processedFrameCacheStart < self.processedFrameCache.count {
                 let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
                 let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                if frameTime > currentSecs + 0.005 {
+                if frameTime > presentationSecs + 0.005 {
                     break
                 }
 
