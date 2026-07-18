@@ -2989,13 +2989,6 @@ extension VTPlayerView {
                 }
             }
             
-            Section("Image Processing") {
-                Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
-                    .help("Use high-quality chroma downsampling when scaling")
-                
-                Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
-                    .help("Force pipeline to run with higher thread priority")
-            }
         }
         .formStyle(.grouped)
     }
@@ -3592,10 +3585,6 @@ struct PlaybackSettingsView: View {
                     }
                 }
                 
-                Section("System Optimizations") {
-                    Toggle("High Quality Downsampling", isOn: $viewModel.useHighQualityDownsampling)
-                    Toggle("Real-Time Priority", isOn: $viewModel.useRealTimePriority)
-                }
             }
             .navigationTitle("Playback Settings")
             #if os(iOS)
