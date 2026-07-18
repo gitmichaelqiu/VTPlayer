@@ -46,7 +46,6 @@ public final class VTMetalRenderer: MTKView {
     /// content. This is false on displays without EDR headroom.
     public private(set) var isExtendedDynamicRangeActive = false
 
-    private let sdrColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     private let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
 
     #if os(macOS)
@@ -71,7 +70,6 @@ public final class VTMetalRenderer: MTKView {
 
         self.framebufferOnly = false
         self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
-        self.colorPixelFormat = .bgra8Unorm_srgb
         #if os(macOS)
         // Drive drawing from MTKView's display scheduler while playback is
         // active. AppKit setNeedsDisplay is coalesced and can collapse FI
@@ -113,9 +111,12 @@ public final class VTMetalRenderer: MTKView {
             metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
             metalLayer.wantsExtendedDynamicRangeContent = true
         } else {
-            colorPixelFormat = .bgra8Unorm_srgb
-            metalLayer.pixelFormat = .bgra8Unorm_srgb
-            metalLayer.colorspace = sdrColorSpace
+            // Preserve the renderer's original SDR drawable configuration.
+            // Forcing sRGB here changes Core Image's YUV conversion and can
+            // wash out unenhanced video frames.
+            colorPixelFormat = .bgra8Unorm
+            metalLayer.pixelFormat = .bgra8Unorm
+            metalLayer.colorspace = nil
             metalLayer.wantsExtendedDynamicRangeContent = false
         }
         isExtendedDynamicRangeActive = shouldUseEDR
@@ -336,7 +337,7 @@ public final class VTMetalRenderer: MTKView {
             bounds: targetRect,
             colorSpace: isExtendedDynamicRangeActive
                 ? extendedLinearDisplayP3ColorSpace
-                : sdrColorSpace
+                : CGColorSpaceCreateDeviceRGB()
         )
         
         commandBuffer.present(drawable)
@@ -344,6 +345,13 @@ public final class VTMetalRenderer: MTKView {
     }
     
     #if os(iOS)
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // The renderer is constructed before SwiftUI attaches it to a window,
+        // so the active window scene's EDR headroom is only available here.
+        configureExtendedDynamicRangePresentation()
+    }
+
     public override func layoutSubviews() {
         super.layoutSubviews()
         // Force the MTKView to trigger draw() when bounds change due to rotation,
