@@ -234,7 +234,6 @@ final class VTPlayerViewModel {
     
     // AVPlayer components
     private(set) var player: AVPlayer?
-    @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
     @ObservationIgnored private var producerTask: Task<Void, Never>?
     @ObservationIgnored private var consumerTask: Task<Void, Never>?
     @ObservationIgnored private var displayLink: CADisplayLink?
@@ -426,13 +425,9 @@ final class VTPlayerViewModel {
                 let scales = await VTFrameProcessorCoordinator.supportedSuperResolutionScaleFactors(width: width, height: height)
                 let scalesStr = scales.isEmpty ? "None" : scales.map { String(format: "%.1fx", $0) }.joined(separator: ", ")
                 
-                // Create AVPlayerItem and AVPlayerItemVideoOutput
-                let outputSettings: [String: Any] = [
-                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-                ]
-                let output = AVPlayerItemVideoOutput(pixelBufferAttributes: outputSettings)
+                // AVPlayer owns audio and native fallback presentation. Enhanced
+                // video frames are decoded independently by VTFrameSequence.
                 let item = AVPlayerItem(asset: asset)
-                item.add(output)
 
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
@@ -457,7 +452,6 @@ final class VTPlayerViewModel {
                     self.srSupportedScales = scalesStr
                     
                     self.player = newPlayer
-                    self.videoOutput = output
 
                     let timeObserver = newPlayer.addPeriodicTimeObserver(
                         forInterval: CMTime(value: 1, timescale: 30),
@@ -1538,7 +1532,6 @@ final class VTPlayerViewModel {
         rateObserver = nil
         player?.pause()
         player = nil
-        videoOutput = nil
         
         self.isPlaying = false
         self.isPaused = false
