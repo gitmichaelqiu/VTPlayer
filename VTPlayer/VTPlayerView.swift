@@ -1141,11 +1141,24 @@ final class VTPlayerViewModel {
                 }
                 if let checkConfig = qlConfig {
                     await self.modelManager.checkStatus(for: checkConfig)
-                    if case .downloadRequired = self.modelManager.status {
+                    switch self.modelManager.status {
+                    case .ready:
+                        break
+                    case .downloadRequired:
                         print("Quality SR model download required, starting download and falling back to LL SR")
                         self.modelManager.downloadModel(for: checkConfig)
-                        // Yield to allow the download Timer to fire and UI to update progress
-                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        effectiveQualitySR = 0
+                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                    case .downloading:
+                        // The model cannot be used until the existing download
+                        // completes. Keep playback responsive with LL SR.
+                        effectiveQualitySR = 0
+                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                    case .failed(let message):
+                        self.srInitializationError = "Quality SR model unavailable: \(message)"
+                        effectiveQualitySR = 0
+                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                    case .notChecked:
                         effectiveQualitySR = 0
                         effectiveSRLevel = qualitySR == 4 ? 4 : 2
                     }
