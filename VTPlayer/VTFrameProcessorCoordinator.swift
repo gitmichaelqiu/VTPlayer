@@ -685,13 +685,6 @@ public actor VTFrameProcessorCoordinator {
                 destBufs.append(b)
             }
 
-            var sourceOutputBuffer: CVPixelBuffer?
-            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &sourceOutputBuffer) == kCVReturnSuccess,
-                  let sourceOutputBuffer else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                    userInfo: [NSLocalizedDescriptionKey: "FI source output pool allocation failed"])
-            }
-
             let diff = CMTimeSubtract(sourcePTS, prevSourceFP.presentationTimeStamp)
             var phases: [Float] = []
             var interpPTSList: [CMTime] = []
@@ -707,25 +700,13 @@ public actor VTFrameProcessorCoordinator {
                     CMTimeMultiplyByFloat64(diff, multiplier: 0.5)))
             }
 
-            var destFrames = destBufs.enumerated().compactMap { (i, buf) in
+            let destFrames = destBufs.enumerated().compactMap { (i, buf) in
                 VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: interpPTSList[i])
             }
             guard destFrames.count == numInterpolated else {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
             }
-            guard let sourceDestinationFrame = VTFrameProcessorFrame(
-                buffer: sourceOutputBuffer,
-                presentationTimeStamp: sourcePTS
-            ) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create FI source output frame"])
-            }
-            // Low-latency FI writes only the frames specified here. The source
-            // output must be listed after the interpolated destinations.
-            destFrames.append(sourceDestinationFrame)
-            phases.append(1.0)
-
             let params = VTLowLatencyFrameInterpolationParameters(
                 sourceFrame: sourceFP,
                 previousFrame: prevSourceFP,
@@ -743,11 +724,9 @@ public actor VTFrameProcessorCoordinator {
             for (i, buf) in destBufs.enumerated() {
                 outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i], isInterpolated: true))
             }
-            outputFrames.append(VTFrame(
-                buffer: sourceOutputBuffer,
-                presentationTimeStamp: frame.presentationTimeStamp,
-                isInterpolated: frame.isInterpolated
-            ))
+            // Low-latency FI outputs only the requested in-between phases.
+            // The current source frame completes the 2x/4x presentation cadence.
+            outputFrames.append(frame)
 
 
             return outputFrames
