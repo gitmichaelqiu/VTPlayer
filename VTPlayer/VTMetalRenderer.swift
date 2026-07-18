@@ -27,6 +27,12 @@ public final class VTMetalRenderer: MTKView {
     /// Brightness/contrast boost strength (0.0 = off, >0 applies exposure/saturation/contrast boost)
     public var hdrStrength: Float = 0.0
 
+    #if os(macOS)
+    /// Called immediately before each MTKView draw so the owner can provide
+    /// the next video frame from its presentation queue.
+    public var onDisplayTick: (() -> Void)?
+    #endif
+
     public override init(frame frameRect: CGRect, device: MTLDevice?) {
         super.init(frame: frameRect, device: device ?? MTLCreateSystemDefaultDevice())
         setupMetal()
@@ -131,6 +137,10 @@ public final class VTMetalRenderer: MTKView {
     }
     
     public override func draw(_ rect: CGRect) {
+        #if os(macOS)
+        onDisplayTick?()
+        #endif
+
         guard let drawable = currentDrawable,
               let queue = commandQueue else {
             return

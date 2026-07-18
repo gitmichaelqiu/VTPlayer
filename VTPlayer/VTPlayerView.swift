@@ -1150,6 +1150,9 @@ final class VTPlayerViewModel {
     }
 
     private func stopDisplayLinkIfNeeded() {
+        #if os(macOS)
+        renderer.onDisplayTick = nil
+        #endif
         if let link = displayLink {
             link.invalidate()
             displayLink = nil
@@ -1648,20 +1651,19 @@ final class VTPlayerViewModel {
 
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
-        let link = window.displayLink(target: self, selector: #selector(caDisplayLinkTick))
-        // Request a cadence capable of presenting 2x FI output for 15/30 fps
-        // sources. The system clamps this to the physical display and may
-        // still reduce it under thermal or power policy, but leaving the
-        // default unconstrained lets a loaded pipeline settle at 15 Hz.
-        if #available(macOS 12.0, *) {
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
+        // Let the renderer's MTKView own the display cadence. A separate
+        // NSWindow display link can be throttled independently and then
+        // starves FI output even while the Metal view is drawing at refresh.
+        renderer.onDisplayTick = { [weak self] in
+            self?.tickDisplayLink()
         }
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
         #endif
+        #if !os(macOS)
         link.add(to: .main, forMode: .common)
         self.displayLink = link
+        #endif
     }
     #endif
 
