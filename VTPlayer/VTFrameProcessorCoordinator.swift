@@ -206,6 +206,15 @@ public actor VTFrameProcessorCoordinator {
         var currentHeight = height
         var buildError: Error?
 
+        // A configuration can be accepted by VideoToolbox and still fail
+        // when a later stage session is started. Keep partial resources
+        // reclaimable so a failed restart cannot poison the next pipeline.
+        defer {
+            if !isSessionActive {
+                completeEndSession()
+            }
+        }
+
         // Helper to build a stage
         func addStage(_ stage: PipelineStage, processor: VTFrameProcessor, pool: CVPixelBufferPool?, outW: Int, outH: Int) {
             stages[stage] = StageInstance(
@@ -952,7 +961,12 @@ public actor VTFrameProcessorCoordinator {
     }
 
     private func completeEndSession() {
-        guard isSessionActive else { return }
+        var hasResources = isSessionActive || !stages.isEmpty || secondSpatialProcessor != nil ||
+            fallbackTransferSession != nil || interpolationTransferSession != nil
+        #if os(macOS)
+        hasResources = hasResources || rendererTransferSession != nil || rendererPixelBufferPool != nil
+        #endif
+        guard hasResources else { return }
 
         for (_, instance) in stages {
             instance.processor.endSession()
