@@ -274,7 +274,14 @@ public actor VTFrameProcessorCoordinator {
         // ── 2. Spatial Stage ──────────────────────────────────────────
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel >= 2
+        #if os(macOS)
         let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
+        #else
+        // iOS uses the stable sequential spatial-then-temporal path. The
+        // combined spatial FI processor is the branch that rejects SR2+FI2
+        // while the equivalent SR4+FI2 path remains operational.
+        let inCombinedMode = false
+        #endif
         // SR2 + FI2 uses temporal-first processing at the adaptive input size,
         // then applies LL SR to every generated frame. This keeps the output
         // cadence stable without mixing upscaled and non-upscaled frames.
@@ -282,7 +289,11 @@ public actor VTFrameProcessorCoordinator {
         // the documented extra scaled-source destination conflicts with the
         // initializer's equal phase/destination validation. Use a supported
         // temporal-first pipeline and apply LL SR to every generated frame.
+        #if os(macOS)
         let useTemporalFirstForSRInterpolation = superResolutionLevel == 2 && frameInterpolationLevel > 0
+        #else
+        let useTemporalFirstForSRInterpolation = false
+        #endif
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
         let needsSpatial = hasQualitySR || (hasLLSR && (!inCombinedMode || useTemporalFirstForSRInterpolation))
@@ -652,7 +663,11 @@ public actor VTFrameProcessorCoordinator {
             prevSourceFP = dummy
         }
 
+        #if os(macOS)
         let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
+        #else
+        let isCombined = false
+        #endif
 
         if isCombined {
             // Combined 2x spatial + 2x temporal
