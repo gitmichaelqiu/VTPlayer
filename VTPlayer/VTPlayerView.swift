@@ -149,6 +149,7 @@ final class VTPlayerViewModel {
             }
             if let player = player {
                 player.rate = Float(isPaused ? 0.0 : clamped)
+                resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
             }
         }
     }
@@ -330,6 +331,47 @@ final class VTPlayerViewModel {
 
     // Audio sync monitoring (diagnostic only — never pauses player)
     private var lastRenderedPTS: CMTime = .zero
+    // AVPlayer can expose a frame-quantized currentTime for silent or low-rate
+    // assets.  Interpolated output must be paced by a monotonic clock between
+    // those observations, otherwise two generated frames are drained at once
+    // and only one is rendered.
+    @ObservationIgnored private var presentationClockAnchorPTS = 0.0
+    @ObservationIgnored private var presentationClockAnchorWall = DispatchTime.now()
+    @ObservationIgnored private var presentationClockLastPlayerPTS = -Double.infinity
+    @ObservationIgnored private var presentationClockInitialized = false
+
+    private func resetPresentationClock(at seconds: Double) {
+        guard seconds.isFinite else { return }
+        presentationClockAnchorPTS = seconds
+        presentationClockAnchorWall = .now()
+        presentationClockLastPlayerPTS = seconds
+        presentationClockInitialized = true
+    }
+
+    private func presentationClockSeconds(playerSeconds: Double) -> Double {
+        guard playerSeconds.isFinite else { return playerSeconds }
+        let now = DispatchTime.now()
+        if !presentationClockInitialized {
+            resetPresentationClock(at: playerSeconds)
+            return playerSeconds
+        }
+
+        // A discontinuity is a seek/restart.  Normal frame-quantized progress
+        // simply moves the anchor forward and is extrapolated until the next
+        // AVPlayer observation arrives.
+        let observedDelta = playerSeconds - presentationClockLastPlayerPTS
+        if observedDelta < -0.25 || observedDelta > 0.25 {
+            resetPresentationClock(at: playerSeconds)
+        } else if observedDelta > 0.0005 {
+            presentationClockAnchorPTS = playerSeconds
+            presentationClockAnchorWall = now
+            presentationClockLastPlayerPTS = playerSeconds
+        }
+
+        let elapsed = Double(now.uptimeNanoseconds - presentationClockAnchorWall.uptimeNanoseconds) / 1_000_000_000.0
+        return max(playerSeconds, presentationClockAnchorPTS + elapsed * playbackSpeed)
+    }
+
     var audioSyncLatency: Double = 0
     private var audioSyncTask: Task<Void, Never>?
     private let audioSyncLatencyThreshold: Double = 0.1
@@ -828,6 +870,7 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
+        resetPresentationClock(at: seconds)
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         Task { @MainActor in
@@ -865,6 +908,7 @@ final class VTPlayerViewModel {
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime
         self.lastRenderedPTS = currentTime
+        resetPresentationClock(at: CMTimeGetSeconds(currentTime))
         Task { @MainActor in
             await self.activeCoordinator?.clearHistory()
         }
@@ -888,6 +932,7 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
+        resetPresentationClock(at: seconds)
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
         Task { @MainActor in
@@ -1053,6 +1098,7 @@ final class VTPlayerViewModel {
     func pause() {
         guard let player = player else { return }
         player.pause()
+        resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
         self.isPaused = true
         self.isBuffering = false
         #if os(macOS)
@@ -1197,9 +1243,11 @@ final class VTPlayerViewModel {
             let adjusted = CMTimeSubtract(player.currentTime(), frameDuration)
             lastPulledTime = adjusted > .zero ? adjusted : .zero
             lastRenderedPTS = player.currentTime()
+            resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
         } else {
             lastPulledTime = .zero
             lastRenderedPTS = .zero
+            resetPresentationClock(at: 0)
         }
         audioSyncLatency = 0
 
@@ -1383,6 +1431,7 @@ final class VTPlayerViewModel {
                 let resumeTime = player.currentTime()
                 self.lastPulledTime = resumeTime
                 self.lastRenderedPTS = resumeTime
+                self.resetPresentationClock(at: CMTimeGetSeconds(resumeTime))
                 await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 let shouldResume = shouldResumePlayback && gen == self.playbackGeneration
                 self.isInitializingPipeline = false
@@ -1589,7 +1638,8 @@ final class VTPlayerViewModel {
         guard isPlaying && !isPaused, let player = self.player else { return }
         
         let currentTime = player.currentTime()
-        let currentSecs = CMTimeGetSeconds(currentTime)
+        let observedSecs = CMTimeGetSeconds(currentTime)
+        let currentSecs = presentationClockSeconds(playerSeconds: observedSecs)
         let presentationSecs = currentSecs - interpolationPresentationDelay
         
         var lastFrameToRender: VTFrame? = nil
@@ -1617,7 +1667,7 @@ final class VTPlayerViewModel {
             // additional drained frames were skipped and are counted as
             // drops below; they must not inflate the displayed FPS.
             presentedFramesCount += 1
-            self.publishCurrentTime(currentSecs)
+            self.publishCurrentTime(min(currentSecs, duration))
             if drained > 1 {
                 self.pendingDroppedFrames += drained - 1
                 self.publishProcessingDiagnostics()
