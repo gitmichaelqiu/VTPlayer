@@ -441,9 +441,20 @@ final class VTPlayerViewModel {
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
                    VTSuperResolutionScalerConfiguration.isSupported {
-                    // Quality SR exposes its supported scale factors globally;
-                    // the session initializer still validates dimensions.
-                    availableQualityScales = Set(VTSuperResolutionScalerConfiguration.supportedScaleFactors)
+                    // Check both the global scale list and this video's
+                    // dimensions. A machine can expose the processor while a
+                    // particular resolution still cannot create a session.
+                    for scale in VTSuperResolutionScalerConfiguration.supportedScaleFactors where scale == 2 || scale == 4 {
+                        if let config = VTSuperResolutionScalerConfiguration(
+                            frameWidth: width, frameHeight: height,
+                            scaleFactor: scale, inputType: .video,
+                            usePrecomputedFlow: false,
+                            qualityPrioritization: .normal,
+                            revision: .revision1
+                        ), VTSuperResolutionScalerConfiguration.isSupported {
+                            availableQualityScales.insert(scale)
+                        }
+                    }
                 }
                 #endif
                 
@@ -554,6 +565,7 @@ final class VTPlayerViewModel {
                     
                     // Restore per-video enhancement settings
                     self.loadVideoSettings(for: url)
+                    self.validateEnhancementSelections()
                     #if os(macOS)
                     self.setNativeVideoEnabled(!self.isPipelineActive)
                     #endif
@@ -951,6 +963,7 @@ final class VTPlayerViewModel {
 
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
+        validateEnhancementSelections()
         #if os(macOS)
         setNativeVideoEnabled(!isPipelineActive)
         #endif
@@ -1013,6 +1026,26 @@ final class VTPlayerViewModel {
         }
         #endif
         self.userActivityDetected()
+    }
+
+    /// Drop persisted or programmatically assigned enhancement values that
+    /// the current machine/video cannot actually run. Menu disabling is only
+    /// a UI affordance; this guard protects the pipeline from stale state.
+    private func validateEnhancementSelections() {
+        var disabledSelection = false
+        if superResolutionLevel > 0,
+           !availableSuperResolutionScales.contains(superResolutionLevel) {
+            superResolutionLevel = 0
+            disabledSelection = true
+        }
+        if qualitySuperResolutionScaleFactor > 0,
+           !availableQualitySuperResolutionScales.contains(qualitySuperResolutionScaleFactor) {
+            qualitySuperResolutionScaleFactor = 0
+            disabledSelection = true
+        }
+        if disabledSelection {
+            srInitializationError = "Selected super-resolution mode is unavailable for this video on this Mac."
+        }
     }
     
     /// Pauses player
