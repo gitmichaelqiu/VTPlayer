@@ -253,14 +253,14 @@ extension VTPlayerViewModel {
     }
 
     /// Returns the supported source-resolution tiers for the established
-    /// macOS temporal-first LL SR + FI2 path, ordered from lower-cost to
+    /// macOS temporal-first LL SR + FI path, ordered from lower-cost to
     /// native-detail. Playback starts at native resolution and only steps
     /// down after sustained deadline misses; SR must never silently begin by
     /// throwing source detail away.
     func resolveAdaptiveSRFIInputSize() -> CGSize? {
         #if os(macOS)
         guard superResolutionLevel >= 2,
-              frameInterpolationLevel == 2,
+              (frameInterpolationLevel == 2 || frameInterpolationLevel == 4),
               videoWidth > 0,
               videoHeight > 0,
               (videoWidth > 1280 || videoHeight > 720) else {
@@ -300,7 +300,7 @@ extension VTPlayerViewModel {
                   VTLowLatencyFrameInterpolationConfiguration(
                     frameWidth: width,
                     frameHeight: height,
-                    numberOfInterpolatedFrames: 1
+                    numberOfInterpolatedFrames: frameInterpolationLevel == 4 ? 2 : 1
                   ) != nil else {
                 continue
             }

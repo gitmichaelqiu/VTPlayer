@@ -321,13 +321,13 @@ public actor VTFrameProcessorCoordinator {
         // while the equivalent SR4+FI2 path remains operational.
         let inCombinedMode = false
         #endif
-        // Combined SR2 + FI2 is unreliable across VideoToolbox revisions.
-        // Run FI at source resolution and apply LL SR to every output frame.
-        // This preserves matched source/interpolated quality and, for SR4,
-        // avoids running the temporal processor on 16x-sized surfaces.
+        // The combined SR2 + FI2 processor handles its own spatial stage.
+        // Every other LL SR + FI mode runs temporal processing at source
+        // resolution and applies LL SR to each output frame. In particular,
+        // FI4 must not interpolate already-upscaled 2x surfaces.
         #if os(macOS)
-        let useTemporalFirstForSRInterpolation = superResolutionLevel > 2 && frameInterpolationLevel > 0 ||
-            (superResolutionLevel == 2 && frameInterpolationLevel > 0 && preferSequentialSRFI)
+        let useTemporalFirstForSRInterpolation = superResolutionLevel >= 2 &&
+            frameInterpolationLevel > 0 && !inCombinedMode
         #else
         let useTemporalFirstForSRInterpolation = false
         #endif
