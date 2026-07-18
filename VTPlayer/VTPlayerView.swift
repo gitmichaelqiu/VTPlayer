@@ -494,10 +494,20 @@ final class VTPlayerViewModel {
                     return
                 }
                 
-                // Get video dimensions
+                // Get the encoded pixel dimensions used by AVAssetReader and
+                // VideoToolbox. `naturalSize` is display geometry and can be
+                // altered by rotation or a clean aperture, which can make a
+                // capability probe disagree with the actual pixel buffers.
+                let descriptions = try await videoTrack.load(.formatDescriptions)
+                let encodedDimensions: CMVideoDimensions?
+                if let firstDesc = descriptions.first {
+                    encodedDimensions = CMVideoFormatDescriptionGetDimensions(firstDesc)
+                } else {
+                    encodedDimensions = nil
+                }
                 let naturalSize = try await videoTrack.load(.naturalSize)
-                let width = Int(naturalSize.width)
-                let height = Int(naturalSize.height)
+                let width = Int(encodedDimensions?.width ?? Int32(naturalSize.width))
+                let height = Int(encodedDimensions?.height ?? Int32(naturalSize.height))
                 
                 // Get framerate
                 let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
@@ -505,7 +515,6 @@ final class VTPlayerViewModel {
                 
                 // Get format description
                 var formatStr = "Unknown"
-                let descriptions = try await videoTrack.load(.formatDescriptions)
                 if let firstDesc = descriptions.first {
                     let subType = CMFormatDescriptionGetMediaSubType(firstDesc)
                     formatStr = "\(fourCharCodeString(subType))"
