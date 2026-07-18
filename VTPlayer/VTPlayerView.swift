@@ -1697,30 +1697,49 @@ final class VTPlayerViewModel {
         let now = DispatchTime.now()
         let wallElapsed = Double(now.uptimeNanoseconds - lastPresentationWall.uptimeNanoseconds) / 1_000_000_000.0
         let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.9
+        let useWallClockPacing = frameInterpolationLevel > 0 && sourceFrameRate > 0
         
         self.lockCache {
-            while self.processedFrameCacheStart < self.processedFrameCache.count {
-                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                if frameTime > presentationSecs + 0.005 {
-                    // A display callback can arrive at ~45 Hz on a 60 Hz
-                    // display. If the next queued frame is close but just
-                    // beyond the audio-derived PTS gate, waiting another
-                    // callback collapses 2x output toward the source rate.
-                    // Present it once the wall-clock output deadline is due.
-                    if canForceNextFrame, frameTime <= presentationSecs + 0.05 {
-                        lastFrameToRender = firstFrame
-                        self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                        drained += 1
-                        self.processedFrameCacheStart += 1
-                    }
-                    break
+            if useWallClockPacing {
+                // FI output has a fixed cadence independent of the display
+                // callback cadence. Present at most one queued frame per
+                // wall-clock deadline; draining every PTS-eligible frame can
+                // turn 2x output into source-rate output when callbacks are
+                // delivered at an uneven ~45 Hz cadence.
+                guard canForceNextFrame else { return }
+
+                // Discard frames that are already behind the last visible
+                // timestamp, but never consume two eligible frames in one
+                // display callback.
+                while self.processedFrameCacheStart < self.processedFrameCache.count,
+                      self.processedFrameCache[self.processedFrameCacheStart].presentationTimeStamp <= self.lastRenderedPTS {
+                    self.processedFrameCacheStart += 1
+                    drained += 1
                 }
 
+                guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
+                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
+                let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
+                // Keep audio/video bounded: a frame may lead the audio clock
+                // by at most 80 ms while the wall-clock cadence is restored.
+                guard frameTime <= presentationSecs + 0.08 else { return }
                 lastFrameToRender = firstFrame
                 self.lastRenderedPTS = firstFrame.presentationTimeStamp
                 drained += 1
                 self.processedFrameCacheStart += 1
+            } else {
+                while self.processedFrameCacheStart < self.processedFrameCache.count {
+                    let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
+                    let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
+                    if frameTime > presentationSecs + 0.005 {
+                        break
+                    }
+
+                    lastFrameToRender = firstFrame
+                    self.lastRenderedPTS = firstFrame.presentationTimeStamp
+                    drained += 1
+                    self.processedFrameCacheStart += 1
+                }
             }
             self.compactProcessedFrameCacheIfNeeded()
         }
