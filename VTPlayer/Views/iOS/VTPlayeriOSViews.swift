@@ -501,62 +501,37 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-            // Keep the controls in the same overlay as the title and back
-            // action. Using the system navigation toolbar here causes SwiftUI
-            // to update its layout on a separate transaction from the native
-            // AVPlayer controls, which can leave the two visibly out of sync.
-            VStack {
-                HStack(spacing: 16) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.body.bold())
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-
-                    Spacer()
-
-                    Text(viewModel.videoURL?.lastPathComponent ?? "Video")
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.4))
-                        .cornerRadius(8)
-
-                    Spacer()
-
-                    Button { showSettingsSheet = true } label: {
-                        Image(systemName: "gearshape")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-
-                    Button { showDiagnosticsSheet = true } label: {
-                        Image(systemName: "chart.bar")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
-
-                Spacer()
-            }
-            .opacity(viewModel.showControls ? 1.0 : 0.0)
-            .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .navigationTitle(viewModel.showControls ? (viewModel.videoURL?.lastPathComponent ?? "Video") : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        // Keep toolbar visible so the frame never collapses — collapsing
+        // causes the player overlay to jump upward abruptly.
+        .toolbar(.visible, for: .navigationBar)
+        .navigationBarBackButtonHidden(!viewModel.showControls)
+        .toolbar {
+            if viewModel.showControls {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showSettingsSheet = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .labelStyle(.iconOnly)
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showDiagnosticsSheet = true
+                    } label: {
+                        Label("Diagnostics", systemImage: "chart.bar")
+                    }
+                    .labelStyle(.iconOnly)
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
