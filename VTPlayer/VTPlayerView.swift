@@ -500,6 +500,22 @@ final class VTPlayerViewModel {
                     }
                 }
                 #endif
+
+                // Quality SR has a second availability dimension: the
+                // per-resolution configuration may exist while its neural
+                // network weights are still unavailable. Check the model for
+                // this video's first supported quality scale so the main
+                // enhancement menu cannot start a guaranteed fallback.
+                if let modelScale = availableQualityScales.sorted().first,
+                   #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
+                   let modelConfig = VTSuperResolutionScalerConfiguration(
+                       frameWidth: width, frameHeight: height,
+                       scaleFactor: modelScale, inputType: .video,
+                       usePrecomputedFlow: false, qualityPrioritization: .normal,
+                       revision: .revision1
+                   ) {
+                    self.modelManager.checkStatus(for: modelConfig)
+                }
                 
                 // AVPlayer owns audio and native fallback presentation. Enhanced
                 // video frames are decoded independently by VTFrameSequence.
@@ -3335,13 +3351,15 @@ extension VTPlayerView {
                         viewModel.qualitySuperResolutionScaleFactor = 2
                         viewModel.updateEnhancements()
                     }
-                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
+                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2) ||
+                              viewModel.modelManager.status != .ready)
                     Button("Quality 4x") {
                         viewModel.superResolutionLevel = 0
                         viewModel.qualitySuperResolutionScaleFactor = 4
                         viewModel.updateEnhancements()
                     }
-                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
+                    .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4) ||
+                              viewModel.modelManager.status != .ready)
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
