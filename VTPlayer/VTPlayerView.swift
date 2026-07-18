@@ -3592,23 +3592,48 @@ struct PlaybackSettingsView: View {
         NavigationStack {
             Form {
                 Section("Neural Engine Enhancements") {
-                    Picker("Super Resolution", selection: $viewModel.superResolutionLevel) {
-                        Text("Off").tag(0)
-                        Text("2x").tag(2)
-                        Text("4x").tag(4)
-                    }
-                    .onChange(of: viewModel.superResolutionLevel) { _, _ in
-                        viewModel.updateEnhancements()
+                    Menu {
+                        Button("Off") {
+                            viewModel.superResolutionLevel = 0
+                            viewModel.qualitySuperResolutionScaleFactor = 0
+                            viewModel.updateEnhancements()
+                        }
+                        Button("2x") {
+                            viewModel.superResolutionLevel = 2
+                            viewModel.qualitySuperResolutionScaleFactor = 0
+                            viewModel.updateEnhancements()
+                        }
+                        .disabled(!viewModel.availableSuperResolutionScales.contains(2))
+                        Button("4x") {
+                            viewModel.superResolutionLevel = 4
+                            viewModel.qualitySuperResolutionScaleFactor = 0
+                            viewModel.updateEnhancements()
+                        }
+                        .disabled(!viewModel.availableSuperResolutionScales.contains(4))
+                    } label: {
+                        LabeledContent("Super Resolution", value: viewModel.superResolutionLevel == 0 ? "Off" : "(viewModel.superResolutionLevel)x")
                     }
                     
                     if viewModel.modelManager.status == .ready {
-                        Picker("Quality SR", selection: $viewModel.qualitySuperResolutionScaleFactor) {
-                            Text("Off").tag(0)
-                            Text("2x Quality SR").tag(2).disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
-                            Text("4x Quality SR").tag(4).disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
-                        }
-                        .onChange(of: viewModel.qualitySuperResolutionScaleFactor) { _, _ in
-                            viewModel.updateEnhancements()
+                        Menu {
+                            Button("Off") {
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                                viewModel.updateEnhancements()
+                            }
+                            Button("2x Quality SR") {
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 2
+                                viewModel.updateEnhancements()
+                            }
+                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
+                            Button("4x Quality SR") {
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 4
+                                viewModel.updateEnhancements()
+                            }
+                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
+                        } label: {
+                            LabeledContent("Quality SR", value: viewModel.qualitySuperResolutionScaleFactor == 0 ? "Off" : "(viewModel.qualitySuperResolutionScaleFactor)x")
                         }
                     }
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
