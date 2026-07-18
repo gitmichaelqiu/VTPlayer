@@ -20,6 +20,9 @@ public final class VTMetalRenderer: MTKView {
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
     private var currentFrameIsInterpolated = false
+    #if os(macOS)
+    private var renderingActive = false
+    #endif
 
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
     public var sharpness: Float = 0.0
@@ -77,6 +80,9 @@ public final class VTMetalRenderer: MTKView {
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         updateDrawableSizeForBackingScale()
+        if window != nil, renderingActive {
+            isPaused = false
+        }
     }
 
     public override func viewDidChangeBackingProperties() {
@@ -122,6 +128,7 @@ public final class VTMetalRenderer: MTKView {
     /// Enables the MTKView display scheduler during playback. Keeping it
     /// paused while stopped avoids rendering the same frame unnecessarily.
     public func setRenderingActive(_ active: Bool) {
+        self.renderingActive = active
         self.isPaused = !active
     }
     #endif
