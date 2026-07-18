@@ -170,6 +170,9 @@ final class VTPlayerViewModel {
     // Debug Stats HUD
     var frameProcessingTime: Double = 0.0
     var fps: Double = 0.0
+    var displayFrameRate: Double {
+        isPipelineActive ? fps : sourceFrameRate * playbackSpeed
+    }
     var droppedFrames = 0
     var aneUsagePercent: Double = 0.0
     @ObservationIgnored private var pendingDroppedFrames = 0
@@ -2883,9 +2886,9 @@ extension VTPlayerView {
                         .monospacedDigit()
                 }
                 LabeledContent("Display Rate") {
-                    Text(String(format: "%.1f Hz", viewModel.fps))
+                    Text(String(format: "%.1f Hz", viewModel.displayFrameRate))
                         .monospacedDigit()
-                        .foregroundStyle(viewModel.fps > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                        .foregroundStyle(viewModel.displayFrameRate > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                 }
                 LabeledContent("Cached Frames") {
                     Text("\(viewModel.frameCacheCount)")
