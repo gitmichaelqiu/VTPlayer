@@ -481,7 +481,7 @@ final class VTPlayerViewModel {
                 // processor at the first-stage output size; do not advertise
                 // it merely because the source-resolution stage works.
                 let ll2SessionSupported = await VTFrameProcessorCoordinator
-                    .isLowLatencySuperResolutionSupported(width: width, height: height, scale: 2.0)
+                    .canStartLowLatencyPipeline(width: width, height: height, scale: 2)
                 let ll4SessionSupported: Bool
                 if ll2SessionSupported {
                     ll4SessionSupported = await VTFrameProcessorCoordinator

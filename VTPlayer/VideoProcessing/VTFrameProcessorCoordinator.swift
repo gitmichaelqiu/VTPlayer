@@ -67,6 +67,23 @@ public actor VTFrameProcessorCoordinator {
         }
     }
 
+    /// Validates the complete LL SR pipeline rather than only VideoToolbox's
+    /// bare processor session. Capability lists and a successful bare session
+    /// can still disagree with the pixel-buffer pools and presentation
+    /// conversion required by real playback on macOS.
+    public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Int) async -> Bool {
+        guard scale == 2 else { return false }
+        let coordinator = VTFrameProcessorCoordinator(superResolutionLevel: scale)
+        do {
+            try await coordinator.startSession(width: width, height: height)
+            await coordinator.endSession()
+            return true
+        } catch {
+            await coordinator.endSession()
+            return false
+        }
+    }
+
     /// Validates Quality SR at the same boundary that playback uses. The
     /// configuration initializer can succeed even when a processor session
     /// cannot be created for a particular resolution/scale on this machine.
@@ -648,6 +665,10 @@ public actor VTFrameProcessorCoordinator {
 
     public static func supportedSuperResolutionScaleFactors(width: Int, height: Int) -> [Float] {
         return []
+    }
+
+    public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Int) async -> Bool {
+        return false
     }
 
     public let superResolutionLevel: Int
