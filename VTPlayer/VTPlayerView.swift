@@ -162,6 +162,7 @@ final class VTPlayerViewModel {
     // Debug Stats HUD
     var frameProcessingTime: Double = 0.0
     var fps: Double = 0.0
+    var displayRate1PercentLow: Double = 0.0
     var displayFrameRate: Double {
         isPipelineActive ? fps : sourceFrameRate * playbackSpeed
     }
@@ -237,7 +238,8 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var producerTask: Task<Void, Never>?
     @ObservationIgnored private var consumerTask: Task<Void, Never>?
     @ObservationIgnored private var displayLink: CADisplayLink?
-    @ObservationIgnored private var processedFramesCount = 0
+    @ObservationIgnored private var presentedFramesCount = 0
+    @ObservationIgnored private var displayRateSamples: [Double] = []
     @ObservationIgnored private var fpsTimer = DispatchTime.now()
     @ObservationIgnored private var diagTimer = DispatchTime.now()
     @ObservationIgnored private var processedFrameCache: [VTFrame] = []
@@ -245,8 +247,8 @@ final class VTPlayerViewModel {
     @ObservationIgnored private let cacheLock = NSRecursiveLock()
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
-    private let frameCacheMemoryBudget = 192 * 1024 * 1024
-    private let maximumFrameCacheCount = 24
+    private let frameCacheMemoryBudget = 512 * 1024 * 1024
+    private let maximumFrameCacheCount = 120
     private func lockCache<T>(_ block: () -> T) -> T {
         cacheLock.lock()
         defer { cacheLock.unlock() }
@@ -1092,6 +1094,9 @@ final class VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        presentedFramesCount = 0
+        displayRateSamples.removeAll(keepingCapacity: true)
+        displayRate1PercentLow = 0
         isBuffering = false
         lockCache { clearProcessedFrameCache() }
     }
@@ -1478,7 +1483,10 @@ final class VTPlayerViewModel {
         
         if let frame = lastFrameToRender {
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
-            processedFramesCount += drained
+            // Only one frame is visible after a display-link tick. Any
+            // additional drained frames were skipped and are counted as
+            // drops below; they must not inflate the displayed FPS.
+            presentedFramesCount += 1
             self.publishCurrentTime(currentSecs)
             if drained > 1 {
                 self.pendingDroppedFrames += drained - 1
@@ -1490,8 +1498,16 @@ final class VTPlayerViewModel {
         let now = DispatchTime.now()
         let elapsedFPSTime = Double(now.uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
         if elapsedFPSTime >= 1.0 {
-            self.fps = Double(processedFramesCount) / elapsedFPSTime
-            processedFramesCount = 0
+            let measuredRate = Double(presentedFramesCount) / elapsedFPSTime
+            self.fps = measuredRate
+            displayRateSamples.append(measuredRate)
+            if displayRateSamples.count > 60 {
+                displayRateSamples.removeFirst(displayRateSamples.count - 60)
+            }
+            let sortedRates = displayRateSamples.sorted()
+            let lowIndex = max(0, Int(ceil(Double(sortedRates.count) * 0.01)) - 1)
+            self.displayRate1PercentLow = sortedRates[lowIndex]
+            presentedFramesCount = 0
             fpsTimer = now
         }
         
@@ -1585,6 +1601,9 @@ final class VTPlayerViewModel {
         self.lastPublishedCurrentTime = -Double.infinity
         self.duration = 0.0
         self.fps = 0.0
+        self.displayRate1PercentLow = 0.0
+        self.presentedFramesCount = 0
+        self.displayRateSamples.removeAll(keepingCapacity: true)
         self.frameProcessingTime = 0.0
         self.aneUsagePercent = 0.0
         self.srInitializationError = nil
@@ -2931,6 +2950,11 @@ extension VTPlayerView {
                     Text(String(format: "%.1f Hz", viewModel.displayFrameRate))
                         .monospacedDigit()
                         .foregroundStyle(viewModel.displayFrameRate > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                }
+                LabeledContent("Display 1% Low") {
+                    Text(String(format: "%.1f Hz", viewModel.displayRate1PercentLow))
+                        .monospacedDigit()
+                        .foregroundStyle(viewModel.displayRate1PercentLow > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                 }
                 LabeledContent("Cached Frames") {
                     Text("\(viewModel.frameCacheCount)")
