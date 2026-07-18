@@ -948,6 +948,11 @@ final class VTPlayerViewModel {
                 startPlaybackLoop()
             } else {
                 stopPlaybackLoopOnly()
+                if let player {
+                    player.play()
+                    player.rate = Float(playbackSpeed)
+                    self.isPaused = false
+                }
             }
         } else if isPlaying && isPaused {
             // Don't restart the pipeline while paused — the cache clear
@@ -1045,6 +1050,11 @@ final class VTPlayerViewModel {
         guard let tracks = player?.currentItem?.tracks else { return }
         for track in tracks where track.assetTrack?.mediaType == .video {
             track.isEnabled = enabled
+        }
+        // Keep audio explicitly enabled across pipeline restarts. AVPlayer
+        // owns the audio clock even while native video is hidden.
+        for track in tracks where track.assetTrack?.mediaType == .audio {
+            track.isEnabled = true
         }
     }
     #endif
@@ -1390,23 +1400,14 @@ final class VTPlayerViewModel {
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
-                let cacheCount = self.frameCacheCount
+                // Keep the audio clock independent from the processed-frame
+                // queue. Pausing AVPlayer here can deadlock playback when a
+                // restart or a slow FI/SR frame leaves fewer than two frames
+                // buffered; the display consumer already performs PTS-aware
+                // pacing and late-frame dropping.
+                self.isBuffering = false
 
-                // Keep the audio clock from outrunning the interpolated
-                // frame queue. The producer continues filling the cache
-                // while the display clock is held, avoiding burst drops when
-                // VideoToolbox briefly misses real-time processing.
-                if self.isBuffering {
-                    if cacheCount >= self.resumeBufferFrameCount {
-                        self.isBuffering = false
-                        player.rate = Float(self.playbackSpeed)
-                    }
-                } else if cacheCount <= 2 && latency > 0.05 {
-                    self.isBuffering = true
-                    player.pause()
-                }
-
-                // Log desync for diagnostics.
+                // Record desync for diagnostics without interrupting audio.
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {
