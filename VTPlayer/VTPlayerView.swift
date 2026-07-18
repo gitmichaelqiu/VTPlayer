@@ -1296,7 +1296,7 @@ final class VTPlayerViewModel {
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
         let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
         let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
-        print("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(frameInterpolationLevel)x sr=\(superResolutionLevel)x qsr=\(qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
+        NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(frameInterpolationLevel)x sr=\(superResolutionLevel)x qsr=\(qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
 
         lockCache { clearProcessedFrameCache() }
         if let player = player {
@@ -1829,9 +1829,9 @@ final class VTPlayerViewModel {
             let source = diagnosticPresentedSourceCount
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
-                print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
+                NSLog("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             } else {
-                print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
+                NSLog("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             }
             producedFramesCount = 0
             displayLinkTickCount = 0
@@ -2252,6 +2252,11 @@ struct VTPlayerView: View {
         }
         #endif
         .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
+        #if os(macOS)
+        .onOpenURL { url in
+            viewModel.openVideo(url)
+        }
+        #endif
     }
 
     @ViewBuilder
