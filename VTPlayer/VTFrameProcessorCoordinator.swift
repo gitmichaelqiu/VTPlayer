@@ -97,11 +97,6 @@ public actor VTFrameProcessorCoordinator {
     // existing combined 2x SR + 2x FI mode unchanged.
     private var temporalFirstForSRInterpolation = false
 
-    // Frame-rate conversion accepts the previous/current source pair that
-    // the producer already holds and provides a performance-prioritized
-    // temporal path on macOS and iOS.
-    private var usesFrameRateConversion = false
-
     // Second spatial stage for 4x LL SR cascading (2x → 2x)
     private var secondSpatialProcessor: VTFrameProcessor?
     private var secondSpatialPool: CVPixelBufferPool?
@@ -162,7 +157,6 @@ public actor VTFrameProcessorCoordinator {
         self.stages.removeAll()
         self.interpolationTransferSession = nil
         self.temporalFirstForSRInterpolation = false
-        self.usesFrameRateConversion = false
 
         var currentWidth = width
         var currentHeight = height
@@ -338,25 +332,11 @@ public actor VTFrameProcessorCoordinator {
                 // 1 produces the midpoint for 2x, while 2 produces the
                 // quarter, midpoint, and three-quarter frames for 4x.
                 let interpolationExponent = frameInterpolationLevel == 4 ? 2 : 1
-                let configuration: any VTFrameProcessorConfiguration
-                if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
-                   VTFrameRateConversionConfiguration.isSupported,
-                   let config = VTFrameRateConversionConfiguration(
-                       frameWidth: currentWidth,
-                       frameHeight: currentHeight,
-                       usePrecomputedFlow: false,
-                       qualityPrioritization: .normal,
-                       revision: .revision1
-                   ) {
-                    configuration = config
-                    self.usesFrameRateConversion = true
-                } else if let config = VTLowLatencyFrameInterpolationConfiguration(
+                guard let configuration = VTLowLatencyFrameInterpolationConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,
                     numberOfInterpolatedFrames: interpolationExponent
-                ) {
-                    configuration = config
-                } else {
+                ) else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -1,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create FI config"])
                 }
@@ -615,37 +595,18 @@ public actor VTFrameProcessorCoordinator {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
             }
 
-            if usesFrameRateConversion {
-                // The first source frame has no predecessor to interpolate
-                // from. Display it directly, then convert each following
-                // predecessor/current pair as a sequential submission.
-                guard historyToUse.count >= 2 else { return [frame] }
-                guard let params = VTFrameRateConversionParameters(
-                    sourceFrame: prevSourceFP,
-                    nextFrame: sourceFP,
-                    opticalFlow: nil,
-                    interpolationPhase: phases,
-                    submissionMode: .sequential,
-                    destinationFrames: destFrames
-                ) else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create frame-rate conversion params"])
-                }
-                _ = try await instance.processor.process(parameters: params)
-            } else {
-                let params = VTLowLatencyFrameInterpolationParameters(
-                    sourceFrame: sourceFP,
-                    previousFrame: prevSourceFP,
-                    interpolationPhase: phases,
-                    destinationFrames: destFrames
-                )
-                guard let params = params else {
-                    print("⚠️ VTLowLatencyFrameInterpolationParameters returned nil: fiLevel=\(frameInterpolationLevel), phases=\(phases), destCount=\(destFrames.count)")
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create FI params"])
-                }
-                _ = try await instance.processor.process(parameters: params)
+            let params = VTLowLatencyFrameInterpolationParameters(
+                sourceFrame: sourceFP,
+                previousFrame: prevSourceFP,
+                interpolationPhase: phases,
+                destinationFrames: destFrames
+            )
+            guard let params = params else {
+                print("⚠️ VTLowLatencyFrameInterpolationParameters returned nil: fiLevel=\(frameInterpolationLevel), phases=\(phases), destCount=\(destFrames.count)")
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create FI params"])
             }
+            _ = try await instance.processor.process(parameters: params)
 
             var outputFrames: [VTFrame] = []
             for (i, buf) in destBufs.enumerated() {
@@ -921,7 +882,6 @@ public actor VTFrameProcessorCoordinator {
         }
         interpolationTransferSession = nil
         temporalFirstForSRInterpolation = false
-        usesFrameRateConversion = false
 
         frameHistory.removeAll()
         outputHistory.removeAll()
