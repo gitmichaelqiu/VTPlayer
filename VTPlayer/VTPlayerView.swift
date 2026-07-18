@@ -1262,6 +1262,8 @@ final class VTPlayerViewModel {
         stopDisplayLinkIfNeeded()
         #endif
         playbackGeneration += 1
+        qualityModelRetryTask?.cancel()
+        qualityModelRetryTask = nil
         let producer = producerTask
         producerTask?.cancel()
         producerTask = nil
@@ -1299,6 +1301,8 @@ final class VTPlayerViewModel {
         #endif
         isBuffering = false
         playbackGeneration += 1
+        qualityModelRetryTask?.cancel()
+        qualityModelRetryTask = nil
         let gen = playbackGeneration
         let oldProducer = producerTask
         producerTask?.cancel()
