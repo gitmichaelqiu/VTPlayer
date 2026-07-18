@@ -137,14 +137,17 @@ public final class VTMetalRenderer: MTKView {
     }
     
     public override func draw(_ rect: CGRect) {
-        #if os(macOS)
-        onDisplayTick?()
-        #endif
-
         guard let drawable = currentDrawable,
               let queue = commandQueue else {
             return
         }
+
+        #if os(macOS)
+        // Only advance the presentation queue when this draw has a drawable;
+        // resize/occlusion callbacks must not consume a frame that cannot be
+        // presented to the screen.
+        onDisplayTick?()
+        #endif
 
         if currentPixelBuffer == nil {
             guard let commandBuffer = queue.makeCommandBuffer() else { return }
