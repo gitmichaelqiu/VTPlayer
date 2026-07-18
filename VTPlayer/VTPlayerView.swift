@@ -240,6 +240,8 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var consumerTask: Task<Void, Never>?
     @ObservationIgnored private var displayLink: CADisplayLink?
     @ObservationIgnored private var presentedFramesCount = 0
+    @ObservationIgnored private var producedFramesCount = 0
+    @ObservationIgnored private var displayLinkTickCount = 0
     @ObservationIgnored private var displayRateSamples: [Double] = []
     @ObservationIgnored private var displayRateMeasurementStart = DispatchTime.now()
     @ObservationIgnored private var fpsTimer = DispatchTime.now()
@@ -1191,6 +1193,8 @@ final class VTPlayerViewModel {
         audioSyncTask = nil
         audioSyncLatency = 0
         presentedFramesCount = 0
+        producedFramesCount = 0
+        displayLinkTickCount = 0
         displayRateSamples.removeAll(keepingCapacity: true)
         displayRate1PercentLow = 0
         displayRateMeasurementStart = .now()
@@ -1577,6 +1581,7 @@ final class VTPlayerViewModel {
                         }
                         self.compactProcessedFrameCacheIfNeeded()
                     }
+                    self.producedFramesCount += outputFrames.count
                 } catch {
                     guard gen == self.playbackGeneration else { break }
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !combinedProcessFallbackAttempted {
@@ -1659,6 +1664,7 @@ final class VTPlayerViewModel {
     @MainActor
     private func tickDisplayLink() {
         guard isPlaying && !isPaused, let player = self.player else { return }
+        displayLinkTickCount += 1
         
         let currentTime = player.currentTime()
         let observedSecs = CMTimeGetSeconds(currentTime)
@@ -1734,12 +1740,17 @@ final class VTPlayerViewModel {
                 cacheCount = max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
             }
             
+            let produced = producedFramesCount
+            let callbacks = displayLinkTickCount
+            let presented = presentedFramesCount
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
-                print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) rendered=\(curFPS)")
+                print("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) rendered=\(curFPS)")
             } else {
-                print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) rendered=\(curFPS)")
+                print("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) rendered=\(curFPS)")
             }
+            producedFramesCount = 0
+            displayLinkTickCount = 0
             diagTimer = now
         }
     }
@@ -1813,6 +1824,8 @@ final class VTPlayerViewModel {
         self.fps = 0.0
         self.displayRate1PercentLow = 0.0
         self.presentedFramesCount = 0
+        self.producedFramesCount = 0
+        self.displayLinkTickCount = 0
         self.displayRateSamples.removeAll(keepingCapacity: true)
         self.displayRateMeasurementStart = .now()
         self.frameProcessingTime = 0.0
