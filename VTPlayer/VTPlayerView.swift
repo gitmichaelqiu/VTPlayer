@@ -1235,6 +1235,23 @@ final class VTPlayerViewModel {
             var effectiveSRLevel = srLevel
             
             #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+            @MainActor func fallBackFromQualitySR() {
+                effectiveQualitySR = 0
+                let requestedFallback = qualitySR == 4 ? 4 : 2
+                if self.availableSuperResolutionScales.contains(requestedFallback) {
+                    effectiveSRLevel = requestedFallback
+                } else if self.availableSuperResolutionScales.contains(2) {
+                    effectiveSRLevel = 2
+                } else {
+                    effectiveSRLevel = 0
+                }
+
+                // Keep the controls truthful: the visible selection must
+                // match the processor that will actually run.
+                self.qualitySuperResolutionScaleFactor = 0
+                self.superResolutionLevel = effectiveSRLevel
+            }
+
             if qualitySR > 0 {
                 var qlConfig: VTSuperResolutionScalerConfiguration? = nil
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
@@ -1247,10 +1264,10 @@ final class VTPlayerViewModel {
                     )
                     if qlConfig == nil {
                         self.srInitializationError = "Quality SR unavailable for \(videoWidth)x\(videoHeight)"
-                        print("Quality SR not available for \(videoWidth)x\(videoHeight) @ \(qualitySR)x, falling back to LL SR")
+                        print("Quality SR not available for \(videoWidth)x\(videoHeight) @ \(qualitySR)x")
                     }
                 } else {
-                    print("VTSuperResolutionScaler not supported on this system, falling back to LL SR")
+                    print("VTSuperResolutionScaler not supported on this system")
                 }
                 if let checkConfig = qlConfig {
                     await self.modelManager.checkStatus(for: checkConfig)
@@ -1258,26 +1275,19 @@ final class VTPlayerViewModel {
                     case .ready:
                         break
                     case .downloadRequired:
-                        print("Quality SR model download required, starting download and falling back to LL SR")
+                        print("Quality SR model download required, starting download")
                         self.modelManager.downloadModel(for: checkConfig)
-                        effectiveQualitySR = 0
-                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                        fallBackFromQualitySR()
                     case .downloading:
-                        // The model cannot be used until the existing download
-                        // completes. Keep playback responsive with LL SR.
-                        effectiveQualitySR = 0
-                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                        fallBackFromQualitySR()
                     case .failed(let message):
                         self.srInitializationError = "Quality SR model unavailable: \(message)"
-                        effectiveQualitySR = 0
-                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                        fallBackFromQualitySR()
                     case .notChecked:
-                        effectiveQualitySR = 0
-                        effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                        fallBackFromQualitySR()
                     }
                 } else {
-                    effectiveQualitySR = 0
-                    effectiveSRLevel = qualitySR == 4 ? 4 : 2
+                    fallBackFromQualitySR()
                 }
             }
 
