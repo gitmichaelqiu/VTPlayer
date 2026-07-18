@@ -412,39 +412,49 @@ extension VTPlayerView {
                 
                 // Super Resolution Menu
                 Menu {
-                    Button("Off") {
+                    Button {
                         viewModel.superResolutionLevel = 0
                         viewModel.qualitySuperResolutionScaleFactor = 0
                         viewModel.updateEnhancements()
+                    } label: {
+                        Label("Off", systemImage: viewModel.superResolutionLevel == 0 && viewModel.qualitySuperResolutionScaleFactor == 0 ? "checkmark" : "")
                     }
                     Divider()
                     if viewModel.availableSuperResolutionScales.contains(2) {
-                        Button("Low Latency 2x") {
+                        Button {
                             viewModel.superResolutionLevel = 2
                             viewModel.qualitySuperResolutionScaleFactor = 0
                             viewModel.updateEnhancements()
+                        } label: {
+                            Label("Low Latency 2x", systemImage: viewModel.superResolutionLevel == 2 ? "checkmark" : "")
                         }
                     }
                     if viewModel.availableSuperResolutionScales.contains(4) {
-                        Button("Low Latency 4x") {
+                        Button {
                             viewModel.superResolutionLevel = 4
                             viewModel.qualitySuperResolutionScaleFactor = 0
                             viewModel.updateEnhancements()
+                        } label: {
+                            Label("Low Latency 4x", systemImage: viewModel.superResolutionLevel == 4 ? "checkmark" : "")
                         }
                     }
                     Divider()
                     if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                        Button("Quality 2x") {
+                        Button {
                             viewModel.superResolutionLevel = 0
                             viewModel.qualitySuperResolutionScaleFactor = 2
                             viewModel.updateEnhancements()
+                        } label: {
+                            Label("Quality 2x", systemImage: viewModel.qualitySuperResolutionScaleFactor == 2 ? "checkmark" : "")
                         }
                     }
                     if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                        Button("Quality 4x") {
+                        Button {
                             viewModel.superResolutionLevel = 0
                             viewModel.qualitySuperResolutionScaleFactor = 4
                             viewModel.updateEnhancements()
+                        } label: {
+                            Label("Quality 4x", systemImage: viewModel.qualitySuperResolutionScaleFactor == 4 ? "checkmark" : "")
                         }
                     }
                 } label: {
