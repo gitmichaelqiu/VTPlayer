@@ -1160,25 +1160,31 @@ final class VTPlayerViewModel {
             // possible, feed it a smaller source so the processor has enough
             // headroom to produce every output phase on time. Keep the normal
             // FI cap for pure interpolation.
-            let maxWidth = superResolutionLevel == 2 && frameInterpolationLevel == 2 ? 960.0 : 1280.0
-            let maxHeight = superResolutionLevel == 2 && frameInterpolationLevel == 2 ? 540.0 : 720.0
-            let scale = min(maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
+            if combinedMode {
+                // Try progressively smaller decode sizes. Support is
+                // resolution-specific, so a fixed 960×540 target can itself
+                // be unavailable even though 640×360 works.
+                for (maxWidth, maxHeight) in [(960.0, 540.0), (640.0, 360.0), (480.0, 270.0)] {
+                    let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
+                    let candidateWidth = Int(floor(Double(videoWidth) * scale / 2) * 2)
+                    let candidateHeight = Int(floor(Double(videoHeight) * scale / 2) * 2)
+                    guard candidateWidth > 0, candidateHeight > 0 else { continue }
+                    if VTLowLatencySuperResolutionScalerConfiguration
+                        .supportedScaleFactors(frameWidth: candidateWidth, frameHeight: candidateHeight)
+                        .contains(2.0),
+                       VTLowLatencyFrameInterpolationConfiguration(
+                           frameWidth: candidateWidth,
+                           frameHeight: candidateHeight,
+                           spatialScaleFactor: 2
+                       ) != nil {
+                        return CGSize(width: candidateWidth, height: candidateHeight)
+                    }
+                }
+                return nil
+            }
+            let scale = min(1280.0 / Double(videoWidth), 720.0 / Double(videoHeight))
             let candidate = CGSize(width: floor(Double(videoWidth) * scale / 2) * 2,
                                    height: floor(Double(videoHeight) * scale / 2) * 2)
-            if combinedMode {
-                let candidateWidth = Int(candidate.width)
-                let candidateHeight = Int(candidate.height)
-                guard VTLowLatencySuperResolutionScalerConfiguration
-                    .supportedScaleFactors(frameWidth: candidateWidth, frameHeight: candidateHeight)
-                    .contains(2.0),
-                    VTLowLatencyFrameInterpolationConfiguration(
-                        frameWidth: candidateWidth,
-                        frameHeight: candidateHeight,
-                        spatialScaleFactor: 2
-                    ) != nil else {
-                    return nil
-                }
-            }
             return candidate
         }()
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
