@@ -1523,7 +1523,9 @@ final class VTPlayerViewModel {
                 // Do not drop frames if the cache is completely empty (e.g. after seek or startup),
                 // to avoid getting stuck in a dropping loop before the rendering loop recovers.
                 if let player = self.player, !self.isPaused, player.rate > 0 {
-                    let currentSecs = CMTimeGetSeconds(player.currentTime())
+                    let currentSecs = self.presentationClockSeconds(
+                        playerSeconds: CMTimeGetSeconds(player.currentTime())
+                    )
                     let frameSecs = CMTimeGetSeconds(vtFrame.presentationTimeStamp)
                     // If the frame is late by more than 100ms, skip processing it
                     let isEmpty = self.lockCache {
