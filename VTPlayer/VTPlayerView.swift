@@ -3900,50 +3900,47 @@ struct PlaybackSettingsView: View {
         NavigationStack {
             Form {
                 Section("Neural Engine Enhancements") {
-                    Menu {
-                        Button("Off") {
-                            viewModel.superResolutionLevel = 0
-                            viewModel.qualitySuperResolutionScaleFactor = 0
-                            viewModel.updateEnhancements()
-                        }
-                        Button("2x") {
-                            viewModel.superResolutionLevel = 2
-                            viewModel.qualitySuperResolutionScaleFactor = 0
-                            viewModel.updateEnhancements()
-                        }
-                        .disabled(!viewModel.availableSuperResolutionScales.contains(2))
-                        Button("4x") {
-                            viewModel.superResolutionLevel = 4
-                            viewModel.qualitySuperResolutionScaleFactor = 0
-                            viewModel.updateEnhancements()
-                        }
-                        .disabled(!viewModel.availableSuperResolutionScales.contains(4))
-                    } label: {
-                        LabeledContent("Super Resolution", value: viewModel.superResolutionLevel == 0 ? "Off" : "\(viewModel.superResolutionLevel)x")
-                    }
-                    
-                    if viewModel.modelManager.status == .ready {
-                        Menu {
-                            Button("Off") {
-                                viewModel.qualitySuperResolutionScaleFactor = 0
-                                viewModel.updateEnhancements()
+                    Picker("Super Resolution", selection: Binding(
+                        get: {
+                            if viewModel.qualitySuperResolutionScaleFactor > 0 {
+                                return 10 + viewModel.qualitySuperResolutionScaleFactor
                             }
-                            Button("2x Quality SR") {
+                            return viewModel.superResolutionLevel
+                        },
+                        set: { selection in
+                            switch selection {
+                            case 2:
+                                viewModel.superResolutionLevel = 2
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 4:
+                                viewModel.superResolutionLevel = 4
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 12:
                                 viewModel.superResolutionLevel = 0
                                 viewModel.qualitySuperResolutionScaleFactor = 2
-                                viewModel.updateEnhancements()
-                            }
-                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2))
-                            Button("4x Quality SR") {
+                            case 14:
                                 viewModel.superResolutionLevel = 0
                                 viewModel.qualitySuperResolutionScaleFactor = 4
-                                viewModel.updateEnhancements()
+                            default:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 0
                             }
-                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4))
-                        } label: {
-                            LabeledContent("Quality SR", value: viewModel.qualitySuperResolutionScaleFactor == 0 ? "Off" : "\(viewModel.qualitySuperResolutionScaleFactor)x")
+                            viewModel.updateEnhancements()
                         }
+                    )) {
+                        Text("Off").tag(0)
+                        Text("Low Latency 2x").tag(2)
+                            .disabled(!viewModel.availableSuperResolutionScales.contains(2))
+                        Text("Low Latency 4x").tag(4)
+                            .disabled(!viewModel.availableSuperResolutionScales.contains(4))
+                        Text("Quality 2x").tag(12)
+                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(2) ||
+                                      viewModel.modelManager.status != .ready)
+                        Text("Quality 4x").tag(14)
+                            .disabled(!viewModel.availableQualitySuperResolutionScales.contains(4) ||
+                                      viewModel.modelManager.status != .ready)
                     }
+                    .pickerStyle(.menu)
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
                         Text("Off").tag(0)
                         Text("2x").tag(2)
