@@ -122,18 +122,10 @@ final class VTPlayerViewModel {
     var showLeftSidebar = true
     
     // Quality Control Parameters
-    var useHighQualityDownsampling: Bool = true {
-        didSet {
-            UserDefaults.standard.set(useHighQualityDownsampling, forKey: "VTUseHighQualityDownsampling")
-            updateEnhancements()
-        }
-    }
-    var useRealTimePriority: Bool = true {
-        didSet {
-            UserDefaults.standard.set(useRealTimePriority, forKey: "VTUseRealTimePriority")
-            updateEnhancements()
-        }
-    }
+    // Fixed policy for general users. These are intentionally not exposed as
+    // settings: stable output takes priority over manual trade-off tuning.
+    private let useHighQualityDownsampling = true
+    private let useRealTimePriority = true
     
     // Playback Progress & Stats
     var isPipelineActive: Bool {
@@ -390,8 +382,6 @@ final class VTPlayerViewModel {
         loadRecentVideosIOS()
         self.showSidebar = false
         #endif
-        self.useHighQualityDownsampling = UserDefaults.standard.object(forKey: "VTUseHighQualityDownsampling") as? Bool ?? true
-        self.useRealTimePriority = UserDefaults.standard.object(forKey: "VTUseRealTimePriority") as? Bool ?? true
     }
     
     deinit {
