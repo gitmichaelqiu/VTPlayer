@@ -2865,12 +2865,14 @@ extension VTPlayerView {
                     Text("Quality 4x").tag(14)
                 }
                 .pickerStyle(.menu)
+                .tint(.secondary)
                 
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
                     Text("2x Interpolation").tag(2)
                     Text("4x Interpolation").tag(4)
                 }
+                .tint(.secondary)
                 
                 HStack {
                     Text("Motion Blur")
@@ -3550,6 +3552,7 @@ extension VTPlayerView {
                         .cornerRadius(6)
                 }
                 .menuStyle(.borderlessButton)
+                .tint(.secondary)
                 .fixedSize()
                 .help("Super Resolution — increases spatial resolution using neural upscaling")
                 
@@ -3920,6 +3923,20 @@ struct PlaybackSettingsView: View {
                             return viewModel.superResolutionLevel
                         },
                         set: { selection in
+                            let isSupported: Bool
+                            switch selection {
+                            case 2, 4:
+                                isSupported = viewModel.availableSuperResolutionScales.contains(selection)
+                            case 12:
+                                isSupported = viewModel.availableQualitySuperResolutionScales.contains(2) &&
+                                    viewModel.modelManager.status == .ready
+                            case 14:
+                                isSupported = viewModel.availableQualitySuperResolutionScales.contains(4) &&
+                                    viewModel.modelManager.status == .ready
+                            default:
+                                isSupported = true
+                            }
+                            guard isSupported else { return }
                             switch selection {
                             case 2:
                                 viewModel.superResolutionLevel = 2
@@ -3953,6 +3970,7 @@ struct PlaybackSettingsView: View {
                                       viewModel.modelManager.status != .ready)
                     }
                     .pickerStyle(.menu)
+                    .tint(.secondary)
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
                         Text("Off").tag(0)
                         Text("2x").tag(2)
@@ -3961,6 +3979,7 @@ struct PlaybackSettingsView: View {
                     .onChange(of: viewModel.frameInterpolationLevel) { _, _ in
                         viewModel.updateEnhancements()
                     }
+                    .tint(.secondary)
                     
                     Picker("Motion Blur", selection: $viewModel.motionBlurStrength) {
                         Text("Off").tag(0)
