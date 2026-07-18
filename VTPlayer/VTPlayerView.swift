@@ -515,17 +515,10 @@ final class VTPlayerViewModel {
                 let scalesStr = scales.isEmpty ? "None" : scales.map { String(format: "%.1fx", $0) }.joined(separator: ", ")
                 // The app's 4x LL SR mode is a two-stage 2x cascade, so a
                 // 2x-capable configuration also makes the 4x menu choice
-                // valid. A device that cannot do 2x cannot do our 4x mode.
-                #if os(macOS)
+                // valid. Probe the actual video dimensions on every platform;
+                // a global `isSupported` result is not sufficient because
+                // VideoToolbox can reject individual resolutions.
                 let availableSRScales: Set<Int> = scales.contains(2.0) ? [2, 4] : []
-                #else
-                // iOS previously relied on the configuration/session
-                // boundary rather than this macOS resolution probe. Keep SR
-                // choices available when the processor is globally present;
-                // the coordinator will report a real session error if it
-                // cannot initialize the requested dimensions.
-                let availableSRScales: Set<Int> = supported ? [2, 4] : []
-                #endif
                 var availableQualityScales: Set<Int> = []
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
