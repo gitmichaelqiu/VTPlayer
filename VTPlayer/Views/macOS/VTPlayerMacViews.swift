@@ -292,13 +292,30 @@ extension VTPlayerView {
         VStack(spacing: 0) {
             ZStack {
                 if viewModel.videoURL != nil {
-                    if viewModel.isPipelineActive && viewModel.pipelinePresentationReady {
+                    if viewModel.isPipelineActive {
+                        #if os(macOS)
+                        if !viewModel.pipelinePresentationReady,
+                           let player = viewModel.player {
+                            MacNativeVideoPlayer(player: player)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .cornerRadius(viewModel.isFullScreen ? 0 : 8)
+                                .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
+                                .padding(.top, viewModel.isFullScreen ? 0 : 16)
+                                .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
+                                .ignoresSafeArea(viewModel.isFullScreen ? .all : SafeAreaRegions())
+                        }
+                        #endif
+
                         VTMetalRendererView(renderer: viewModel.renderer)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .cornerRadius(viewModel.isFullScreen ? 0 : 8)
                             .padding(.horizontal, viewModel.isFullScreen ? 0 : 16)
                             .padding(.top, viewModel.isFullScreen ? 0 : 16)
                             .padding(.bottom, viewModel.isFullScreen ? 0 : 90)
+                            // Keep MTKView attached so its display scheduler
+                            // can drain the first processed frame; opacity
+                            // lets AVPlayer remain visible during handoff.
+                            .opacity(viewModel.pipelinePresentationReady ? 1 : 0)
                             .ignoresSafeArea(viewModel.isFullScreen ? .all : SafeAreaRegions())
                     } else {
                         #if os(macOS)
