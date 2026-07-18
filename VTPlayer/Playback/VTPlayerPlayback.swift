@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import VideoToolbox
 import CoreVideo
+import MetalKit
 
 extension VTPlayerViewModel {
     /// Updates coordinator when features are toggled without changing playback state.
