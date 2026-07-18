@@ -712,6 +712,7 @@ public actor VTFrameProcessorCoordinator {
             // Low-latency FI writes only the frames specified here. The source
             // output must be listed after the interpolated destinations.
             destFrames.append(sourceDestinationFrame)
+            phases.append(1.0)
 
             let params = VTLowLatencyFrameInterpolationParameters(
                 sourceFrame: sourceFP,
