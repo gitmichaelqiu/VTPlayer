@@ -1251,10 +1251,20 @@ final class VTPlayerViewModel {
                 // FI+spatial initializer may accept 480×270 while the pure
                 // FI configuration used by the stable sequential path
                 // rejects it at processing time on this Mac.
+                func alignedDimension(_ value: Double, maximum: Int) -> Int {
+                    // VideoToolbox's SR/FI implementations commonly require
+                    // macroblock-friendly heights. Flooring 266.7 to 266
+                    // made the 960x400 path fail, while the equivalent 272
+                    // pixel input is supported. Round up within the probe
+                    // bound so we preserve aspect ratio without selecting a
+                    // known-invalid odd-size surface.
+                    let rounded = Int(ceil(value / 16.0) * 16.0)
+                    return min(maximum, max(2, rounded & ~1))
+                }
                 for (maxWidth, maxHeight) in [(640.0, 360.0), (960.0, 540.0)] {
                     let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
-                    let candidateWidth = Int(floor(Double(videoWidth) * scale / 2) * 2)
-                    let candidateHeight = Int(floor(Double(videoHeight) * scale / 2) * 2)
+                    let candidateWidth = alignedDimension(Double(videoWidth) * scale, maximum: Int(maxWidth))
+                    let candidateHeight = alignedDimension(Double(videoHeight) * scale, maximum: Int(maxHeight))
                     guard candidateWidth > 0, candidateHeight > 0 else { continue }
                     if VTLowLatencySuperResolutionScalerConfiguration
                         .supportedScaleFactors(frameWidth: candidateWidth, frameHeight: candidateHeight)
@@ -1270,8 +1280,8 @@ final class VTPlayerViewModel {
                 return nil
             }
             let scale = min(1280.0 / Double(videoWidth), 720.0 / Double(videoHeight))
-            let candidate = CGSize(width: floor(Double(videoWidth) * scale / 2) * 2,
-                                   height: floor(Double(videoHeight) * scale / 2) * 2)
+            let candidate = CGSize(width: ceil(Double(videoWidth) * scale / 16) * 16,
+                                   height: ceil(Double(videoHeight) * scale / 16) * 16)
             return candidate
         }()
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
