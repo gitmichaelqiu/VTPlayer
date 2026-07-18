@@ -458,6 +458,11 @@ final class VTPlayerViewModel {
 
     
     private func setupPlayer(with url: URL) {
+        // Capability probing is asynchronous. Clear the previous video's
+        // scale set immediately so its enabled menu items cannot leak into
+        // the new video's loading window.
+        availableSuperResolutionScales.removeAll()
+        availableQualitySuperResolutionScales.removeAll()
         let asset = AVAsset(url: url)
         let setupGeneration = playbackGeneration
         
