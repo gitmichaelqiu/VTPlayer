@@ -136,7 +136,10 @@ public actor VTFrameProcessorCoordinator {
             dict[kCVPixelBufferIOSurfacePropertiesKey] = [:] as [String: Any]
         }
         var pool: CVPixelBufferPool?
-        let poolAttributes = [kCVPixelBufferPoolMinimumBufferCountKey as String: 15] as CFDictionary
+        // Processing is sequential. Six buffers cover 4x FI's four output
+        // destinations plus in-flight renderer/processor ownership without
+        // retaining fifteen large surfaces per pipeline stage.
+        let poolAttributes = [kCVPixelBufferPoolMinimumBufferCountKey as String: 6] as CFDictionary
         let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, poolAttributes, dict as CFDictionary, &pool)
         return status == kCVReturnSuccess ? pool : nil
     }
