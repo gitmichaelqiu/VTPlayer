@@ -575,6 +575,13 @@ public actor VTFrameProcessorCoordinator {
                 destBufs.append(b)
             }
 
+            var sourceOutputBuffer: CVPixelBuffer?
+            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &sourceOutputBuffer) == kCVReturnSuccess,
+                  let sourceOutputBuffer else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                    userInfo: [NSLocalizedDescriptionKey: "FI source output pool allocation failed"])
+            }
+
             let diff = CMTimeSubtract(sourcePTS, prevSourceFP.presentationTimeStamp)
             var phases: [Float] = []
             var interpPTSList: [CMTime] = []
@@ -590,13 +597,23 @@ public actor VTFrameProcessorCoordinator {
                     CMTimeMultiplyByFloat64(diff, multiplier: 0.5)))
             }
 
-            let destFrames = destBufs.enumerated().compactMap { (i, buf) in
+            var destFrames = destBufs.enumerated().compactMap { (i, buf) in
                 VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: interpPTSList[i])
             }
             guard destFrames.count == numInterpolated else {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
             }
+            guard let sourceDestinationFrame = VTFrameProcessorFrame(
+                buffer: sourceOutputBuffer,
+                presentationTimeStamp: sourcePTS
+            ) else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create FI source output frame"])
+            }
+            // Low-latency FI writes only the frames specified here. The source
+            // output must be listed after the interpolated destinations.
+            destFrames.append(sourceDestinationFrame)
 
             let params = VTLowLatencyFrameInterpolationParameters(
                 sourceFrame: sourceFP,
@@ -615,8 +632,11 @@ public actor VTFrameProcessorCoordinator {
             for (i, buf) in destBufs.enumerated() {
                 outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i], isInterpolated: true))
             }
-            // Include the source frame as the final output
-            outputFrames.append(VTFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp, isInterpolated: frame.isInterpolated))
+            outputFrames.append(VTFrame(
+                buffer: sourceOutputBuffer,
+                presentationTimeStamp: frame.presentationTimeStamp,
+                isInterpolated: frame.isInterpolated
+            ))
 
 
             return outputFrames
