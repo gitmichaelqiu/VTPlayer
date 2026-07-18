@@ -364,17 +364,10 @@ extension VTFrameProcessorCoordinator {
                         )
                         _ = try await proc2.process(parameters: params2)
                         currentBuffer = outBuf2
-                    } else if let fallbackSession = fallbackTransferSession {
+                    } else if let fallbackSession = fallbackTransferSession,
+                              let fallbackPool = secondSpatialPool {
                         var buf2: CVPixelBuffer?
-                        let outW = CVPixelBufferGetWidth(currentBuffer) * 2
-                        let outH = CVPixelBufferGetHeight(currentBuffer) * 2
-                        let attrs: [String: Any] = [
-                            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-                            kCVPixelBufferWidthKey as String: outW,
-                            kCVPixelBufferHeightKey as String: outH,
-                            kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any]
-                        ]
-                        guard CVPixelBufferCreate(kCFAllocatorDefault, outW, outH, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, attrs as CFDictionary, &buf2) == kCVReturnSuccess,
+                        guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, fallbackPool, &buf2) == kCVReturnSuccess,
                               let outBuf2 = buf2 else {
                             throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
                                 userInfo: [NSLocalizedDescriptionKey: "Spatial stage 2 fallback allocation failed"])

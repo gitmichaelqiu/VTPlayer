@@ -85,6 +85,17 @@ final class VTPlayerViewModel {
     var aneUsagePercent: Double = 0.0
     @ObservationIgnored var pendingDroppedFrames = 0
     @ObservationIgnored var lastDiagnosticsPublish = DispatchTime.now()
+
+    // Internal, cadence-first control loop for the macOS SR2 + FI path.
+    // These deliberately stay out of persisted settings: a tier describes
+    // transient device/video headroom, not a user quality preference.
+    @ObservationIgnored var adaptiveSRFITiers: [CGSize] = []
+    @ObservationIgnored var adaptiveSRFITierIndex = 0
+    @ObservationIgnored var adaptiveSRFIDeadlineMisses = 0
+    @ObservationIgnored var adaptiveSRFIHeadroomFrames = 0
+    @ObservationIgnored var adaptiveSRFICacheStarvations = 0
+    @ObservationIgnored var adaptiveSRFIHasPresentedFrame = false
+    @ObservationIgnored var adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
     
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false

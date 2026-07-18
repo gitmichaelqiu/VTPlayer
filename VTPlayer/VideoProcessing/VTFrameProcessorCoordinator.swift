@@ -409,7 +409,24 @@ public actor VTFrameProcessorCoordinator {
                         let status = VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &fallbackSession)
                         if status == kCVReturnSuccess, let session = fallbackSession {
                             configureTransferSession(session)
+                            // Keep this allocation in the same pool discipline as
+                            // the processor-backed second stage. Allocating a new
+                            // 4x surface for every frame is especially costly on
+                            // macOS when the scaler's second session is unsupported.
+                            guard let pool = makePool(
+                                width: currentWidth * 2,
+                                height: currentHeight * 2,
+                                from: [
+                                    kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                                    kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]
+                                ]
+                            ) else {
+                                VTPixelTransferSessionInvalidate(session)
+                                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
+                                    userInfo: [NSLocalizedDescriptionKey: "Failed to create fallback SR pool"])
+                            }
                             self.fallbackTransferSession = session
+                            self.secondSpatialPool = pool
                         } else {
                             throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
                                 userInfo: [NSLocalizedDescriptionKey: "Failed to create fallback session"])
@@ -475,6 +492,22 @@ public actor VTFrameProcessorCoordinator {
 
         if useTemporalFirstForSRInterpolation {
             try configureSpatialStages()
+
+            // In this macOS-only path, FI runs at source resolution. Preserve
+            // LL SR for source frames, but scale FI-generated frames with the
+            // VideoToolbox transfer engine. Running the neural SR processor on
+            // every generated frame otherwise doubles (or quadruples) the
+            // expensive spatial work without changing output dimensions.
+            var transferSession: VTPixelTransferSession?
+            guard VTPixelTransferSessionCreate(
+                allocator: kCFAllocatorDefault,
+                pixelTransferSessionOut: &transferSession
+            ) == kCVReturnSuccess, let transferSession else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create interpolated-frame transfer session"])
+            }
+            configureTransferSession(transferSession)
+            self.interpolationTransferSession = transferSession
         }
 
         // ── 4. Motion Blur Stage ──────────────────────────────────────

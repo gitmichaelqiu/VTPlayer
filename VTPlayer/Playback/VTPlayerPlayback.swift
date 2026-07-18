@@ -228,6 +228,127 @@ extension VTPlayerViewModel {
         }
     }
 
+    /// Returns the supported source-resolution tiers for the established
+    /// macOS temporal-first SR2 + FI2 path, ordered from cadence-safe to
+    /// higher-detail. The processor is restarted only between source frames
+    /// when this selection changes.
+    func resolveAdaptiveSRFIInputSize() -> CGSize? {
+        #if os(macOS)
+        guard superResolutionLevel == 2,
+              frameInterpolationLevel == 2,
+              videoWidth > 0,
+              videoHeight > 0,
+              (videoWidth > 1280 || videoHeight > 720) else {
+            adaptiveSRFITiers.removeAll(keepingCapacity: true)
+            adaptiveSRFITierIndex = 0
+            return nil
+        }
+
+        func alignedDimension(_ value: Double, maximum: Int) -> Int {
+            let rounded = Int(ceil(value / 16.0) * 16.0)
+            return min(maximum, max(2, rounded & ~1))
+        }
+
+        var tiers: [CGSize] = []
+        for (maxWidth, maxHeight) in [(640.0, 360.0), (960.0, 540.0)] {
+            let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
+            let width = alignedDimension(Double(videoWidth) * scale, maximum: Int(maxWidth))
+            let height = alignedDimension(Double(videoHeight) * scale, maximum: Int(maxHeight))
+            guard width > 0, height > 0,
+                  VTLowLatencySuperResolutionScalerConfiguration
+                    .supportedScaleFactors(frameWidth: width, frameHeight: height)
+                    .contains(2.0),
+                  VTLowLatencyFrameInterpolationConfiguration(
+                    frameWidth: width,
+                    frameHeight: height,
+                    numberOfInterpolatedFrames: 1
+                  ) != nil else {
+                continue
+            }
+            let tier = CGSize(width: width, height: height)
+            if !tiers.contains(tier) {
+                tiers.append(tier)
+            }
+        }
+
+        if tiers != adaptiveSRFITiers {
+            adaptiveSRFITiers = tiers
+            adaptiveSRFITierIndex = 0
+            adaptiveSRFIDeadlineMisses = 0
+            adaptiveSRFIHeadroomFrames = 0
+            adaptiveSRFICacheStarvations = 0
+            adaptiveSRFIHasPresentedFrame = false
+        }
+        guard !tiers.isEmpty else { return nil }
+        adaptiveSRFITierIndex = min(adaptiveSRFITierIndex, tiers.count - 1)
+        return tiers[adaptiveSRFITierIndex]
+        #else
+        return nil
+        #endif
+    }
+
+    /// Updates the adaptive controller after a complete source-frame process.
+    /// Returning a reason asks the caller to serialize a normal pipeline
+    /// restart; no coordinator is changed while it owns a frame.
+    func recordAdaptiveSRFIProcessing(
+        processingMilliseconds: Double,
+        sourceFrameBudgetMilliseconds: Double
+    ) -> String? {
+        #if os(macOS)
+        guard adaptiveSRFITiers.count > 1,
+              sourceFrameBudgetMilliseconds > 0 else { return nil }
+
+        let now = DispatchTime.now()
+        let elapsed = Double(now.uptimeNanoseconds - adaptiveSRFILastTransition.uptimeNanoseconds) / 1_000_000_000.0
+        guard elapsed >= 8.0 else { return nil }
+
+        let cacheDepth = lockCache {
+            max(0, processedFrameCache.count - processedFrameCacheStart)
+        }
+        if processingMilliseconds > sourceFrameBudgetMilliseconds * 0.90 {
+            adaptiveSRFIDeadlineMisses += 1
+        } else {
+            adaptiveSRFIDeadlineMisses = 0
+        }
+        if processingMilliseconds < sourceFrameBudgetMilliseconds * 0.55, cacheDepth >= 2 {
+            adaptiveSRFIHeadroomFrames += 1
+        } else {
+            adaptiveSRFIHeadroomFrames = 0
+        }
+
+        let shouldDemote = adaptiveSRFITierIndex > 0 &&
+            (adaptiveSRFIDeadlineMisses >= 8 || adaptiveSRFICacheStarvations >= 6)
+        if shouldDemote {
+            adaptiveSRFITierIndex -= 1
+            let reason = adaptiveSRFIDeadlineMisses >= 8 ? "deadline misses" : "cache starvation"
+            adaptiveSRFIDeadlineMisses = 0
+            adaptiveSRFIHeadroomFrames = 0
+            adaptiveSRFICacheStarvations = 0
+            adaptiveSRFIHasPresentedFrame = false
+            adaptiveSRFILastTransition = now
+            return "demoting to \(Int(adaptiveSRFITiers[adaptiveSRFITierIndex].width))x\(Int(adaptiveSRFITiers[adaptiveSRFITierIndex].height)) after \(reason)"
+        }
+        if adaptiveSRFITierIndex + 1 < adaptiveSRFITiers.count,
+           adaptiveSRFIHeadroomFrames >= 180 {
+            adaptiveSRFITierIndex += 1
+            adaptiveSRFIDeadlineMisses = 0
+            adaptiveSRFIHeadroomFrames = 0
+            adaptiveSRFICacheStarvations = 0
+            adaptiveSRFIHasPresentedFrame = false
+            adaptiveSRFILastTransition = now
+            return "promoting to \(Int(adaptiveSRFITiers[adaptiveSRFITierIndex].width))x\(Int(adaptiveSRFITiers[adaptiveSRFITierIndex].height)) after sustained headroom"
+        }
+        #endif
+        return nil
+    }
+
+    func recordAdaptiveSRFICacheStarvation() {
+        #if os(macOS)
+        guard adaptiveSRFIHasPresentedFrame, adaptiveSRFITierIndex > 0 else { return }
+        adaptiveSRFICacheStarvations += 1
+        #endif
+    }
+
     private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
         #if os(macOS)
@@ -247,7 +368,7 @@ extension VTPlayerViewModel {
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
-        let adaptiveFISize: CGSize? = {
+        let adaptiveFISize: CGSize? = resolveAdaptiveSRFIInputSize() ?? {
             guard frameInterpolationLevel > 0 else { return nil }
             let combinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
             guard combinedMode || videoWidth > 1280 || videoHeight > 720 else { return nil }
@@ -630,6 +751,20 @@ extension VTPlayerViewModel {
                         self.compactProcessedFrameCacheIfNeeded()
                     }
                     self.producedFramesCount += outputFrames.count
+
+                    // A completed source frame is the only safe point to
+                    // retier: startPlaybackLoop() serializes teardown with
+                    // this producer before creating the replacement session.
+                    if let transition = self.recordAdaptiveSRFIProcessing(
+                        processingMilliseconds: processingMilliseconds,
+                        sourceFrameBudgetMilliseconds: sourceFrameBudgetMilliseconds
+                    ) {
+                        let processingText = String(format: "%.1f", processingMilliseconds)
+                        let budgetText = String(format: "%.1f", sourceFrameBudgetMilliseconds)
+                        NSLog("PIPELINE ADAPTIVE SR/FI: \(transition); cache=\(self.frameCacheCount) processing=\(processingText)ms budget=\(budgetText)ms")
+                        self.startPlaybackLoop()
+                        break
+                    }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !combinedProcessFallbackAttempted {
@@ -778,6 +913,9 @@ extension VTPlayerViewModel {
         
         if let frame = lastFrameToRender {
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
+            #if os(macOS)
+            self.adaptiveSRFIHasPresentedFrame = true
+            #endif
             lastPresentationWall = now
             // Only one frame is visible after a display-link tick. Any
             // additional drained frames were skipped and are counted as
@@ -794,6 +932,11 @@ extension VTPlayerViewModel {
                 self.pendingDroppedFrames += drained - 1
                 self.publishProcessingDiagnostics()
             }
+        } else {
+            // Do not restart from the display callback. The counter is
+            // consumed after the next completed source frame so coordinator
+            // teardown remains serialized with the producer.
+            self.recordAdaptiveSRFICacheStarvation()
         }
         
         // Stats calculations
