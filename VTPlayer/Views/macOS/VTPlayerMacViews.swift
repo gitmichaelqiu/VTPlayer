@@ -292,7 +292,7 @@ extension VTPlayerView {
         VStack(spacing: 0) {
             ZStack {
                 if viewModel.videoURL != nil {
-                    if viewModel.isPipelineActive {
+                    if viewModel.isPipelineActive && viewModel.pipelinePresentationReady {
                         VTMetalRendererView(renderer: viewModel.renderer)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .cornerRadius(viewModel.isFullScreen ? 0 : 8)

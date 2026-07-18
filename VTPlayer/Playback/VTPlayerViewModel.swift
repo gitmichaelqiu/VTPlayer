@@ -22,6 +22,9 @@ final class VTPlayerViewModel {
     
     var lastPublishedCurrentTime = -Double.infinity
     @ObservationIgnored var isBuffering = false
+    /// macOS keeps native presentation visible until the replacement
+    /// VideoToolbox pipeline has produced a frame.
+    var pipelinePresentationReady = false
 
     // Feature Levels (0 = Off, 2 = 2x, 4 = 4x)
     var superResolutionLevel: Int = 0

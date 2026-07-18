@@ -8,7 +8,11 @@ extension VTPlayerViewModel {
     func updateEnhancements() {
         validateEnhancementSelections()
         #if os(macOS)
-        setNativeVideoEnabled(!isPipelineActive)
+        // A new pipeline has no frame yet. Keep native presentation alive
+        // until the replacement produces one instead of exposing a black
+        // Metal drawable during coordinator startup.
+        pipelinePresentationReady = false
+        setNativeVideoEnabled(true)
         #endif
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
@@ -158,6 +162,7 @@ extension VTPlayerViewModel {
 
     func stopPlaybackLoopOnly() {
         #if os(macOS)
+        pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(true)
         stopDisplayLinkIfNeeded()
@@ -196,6 +201,25 @@ extension VTPlayerViewModel {
         isBuffering = false
         lockCache { clearProcessedFrameCache() }
     }
+
+    #if os(macOS)
+    /// Leaves playback on AVPlayer's native video output if an enhancement
+    /// session cannot be started. Settings stay intact so the user can adjust
+    /// them and retry without the player going dark or losing audio.
+    func restoreNativePresentationAfterPipelineFailure() {
+        isInitializingPipeline = false
+        pipelinePresentationReady = false
+        renderer.setRenderingActive(false)
+        stopDisplayLinkIfNeeded()
+        setNativeVideoEnabled(true)
+        if let player {
+            player.play()
+            player.rate = Float(playbackSpeed)
+            isPlaying = true
+            isPaused = false
+        }
+    }
+    #endif
 
     /// Serializes enhancement restarts. VideoToolbox sessions cannot safely be
     /// initialized while the previous producer still owns in-flight frames.
@@ -367,7 +391,8 @@ extension VTPlayerViewModel {
     private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
         #if os(macOS)
-        setNativeVideoEnabled(false)
+        pipelinePresentationReady = false
+        setNativeVideoEnabled(true)
         #endif
         isBuffering = false
         playbackGeneration += 1
@@ -615,14 +640,22 @@ extension VTPlayerViewModel {
                         print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
                         self.activeCoordinator = nil
                         await coordinator.endSession()
+                        #if os(macOS)
+                        self.restoreNativePresentationAfterPipelineFailure()
+                        #else
                         self.stop()
+                        #endif
                         return
                     }
                 } else {
                     self.srInitializationError = error.localizedDescription
                     print("Failed to initialize coordinator session: \(error.localizedDescription)")
                     self.activeCoordinator = nil
+                    #if os(macOS)
+                    self.restoreNativePresentationAfterPipelineFailure()
+                    #else
                     self.stop()
+                    #endif
                     return
                 }
             }
@@ -928,6 +961,12 @@ extension VTPlayerViewModel {
         }
         
         if let frame = lastFrameToRender {
+            #if os(macOS)
+            if !self.pipelinePresentationReady {
+                self.pipelinePresentationReady = true
+                self.setNativeVideoEnabled(false)
+            }
+            #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
@@ -1019,6 +1058,7 @@ extension VTPlayerViewModel {
     /// Pauses/stops playback entirely.
     func stop() {
         #if os(macOS)
+        pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(false)
         stopDisplayLinkIfNeeded()
