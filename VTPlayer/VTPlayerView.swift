@@ -319,6 +319,16 @@ final class VTPlayerViewModel {
         guard frameInterpolationLevel > 0, sourceFrameRate > 0 else { return 0 }
         return 1.0 / sourceFrameRate
     }
+    private var outputPresentationInterval: Double {
+        guard sourceFrameRate > 0 else { return 1.0 / 30.0 }
+        let multiplier: Double
+        switch frameInterpolationLevel {
+        case 4: multiplier = 4.0
+        case 2: multiplier = 2.0
+        default: multiplier = 1.0
+        }
+        return 1.0 / (sourceFrameRate * multiplier)
+    }
     private var securityScopedURL: URL?
     #if os(iOS)
     private var tempLocalURL: URL?
@@ -342,6 +352,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored private var presentationClockAnchorWall = DispatchTime.now()
     @ObservationIgnored private var presentationClockLastPlayerPTS = -Double.infinity
     @ObservationIgnored private var presentationClockInitialized = false
+    @ObservationIgnored private var lastPresentationWall = DispatchTime.now()
 
     private func resetPresentationClock(at seconds: Double) {
         guard seconds.isFinite else { return }
@@ -349,6 +360,7 @@ final class VTPlayerViewModel {
         presentationClockAnchorWall = .now()
         presentationClockLastPlayerPTS = seconds
         presentationClockInitialized = true
+        lastPresentationWall = .now()
     }
 
     private func presentationClockSeconds(playerSeconds: Double) -> Double {
@@ -1682,12 +1694,26 @@ final class VTPlayerViewModel {
         
         var lastFrameToRender: VTFrame? = nil
         var drained = 0
+        let now = DispatchTime.now()
+        let wallElapsed = Double(now.uptimeNanoseconds - lastPresentationWall.uptimeNanoseconds) / 1_000_000_000.0
+        let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.9
         
         self.lockCache {
             while self.processedFrameCacheStart < self.processedFrameCache.count {
                 let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
                 let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
                 if frameTime > presentationSecs + 0.005 {
+                    // A display callback can arrive at ~45 Hz on a 60 Hz
+                    // display. If the next queued frame is close but just
+                    // beyond the audio-derived PTS gate, waiting another
+                    // callback collapses 2x output toward the source rate.
+                    // Present it once the wall-clock output deadline is due.
+                    if canForceNextFrame, frameTime <= presentationSecs + 0.05 {
+                        lastFrameToRender = firstFrame
+                        self.lastRenderedPTS = firstFrame.presentationTimeStamp
+                        drained += 1
+                        self.processedFrameCacheStart += 1
+                    }
                     break
                 }
 
@@ -1701,6 +1727,7 @@ final class VTPlayerViewModel {
         
         if let frame = lastFrameToRender {
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
+            lastPresentationWall = now
             // Only one frame is visible after a display-link tick. Any
             // additional drained frames were skipped and are counted as
             // drops below; they must not inflate the displayed FPS.
@@ -1714,12 +1741,12 @@ final class VTPlayerViewModel {
         }
         
         // Stats calculations
-        let now = DispatchTime.now()
-        let elapsedFPSTime = Double(now.uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
+        let statsNow = DispatchTime.now()
+        let elapsedFPSTime = Double(statsNow.uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
         if elapsedFPSTime >= 1.0 {
             let measuredRate = Double(presentedFramesCount) / elapsedFPSTime
             self.fps = measuredRate
-            let measurementAge = Double(now.uptimeNanoseconds - displayRateMeasurementStart.uptimeNanoseconds) / 1_000_000_000.0
+            let measurementAge = Double(statsNow.uptimeNanoseconds - displayRateMeasurementStart.uptimeNanoseconds) / 1_000_000_000.0
             // Ignore startup/reconfiguration warm-up, then retain a short
             // rolling window so the metric reflects recent playback quality.
             if measurementAge >= 2.0 {
@@ -1734,7 +1761,7 @@ final class VTPlayerViewModel {
                 self.displayRate1PercentLow = measuredRate
             }
             presentedFramesCount = 0
-            fpsTimer = now
+            fpsTimer = statsNow
         }
         
         let diagElapsed = Double(now.uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
