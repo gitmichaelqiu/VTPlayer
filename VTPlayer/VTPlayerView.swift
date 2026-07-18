@@ -1327,7 +1327,8 @@ final class VTPlayerViewModel {
             self.player?.pause()
 
             do {
-                if effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0) {
+                if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
+                   self.srInitializationError == nil {
                     self.srInitializationError = nil
                 }
                 try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
@@ -1518,7 +1519,7 @@ final class VTPlayerViewModel {
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true
                         self.superResolutionLevel = 0
-                        self.srInitializationError = "Combined 2x SR + 2x FI failed during processing; using FI-only."
+                        self.srInitializationError = "Combined 2x SR + 2x FI failed during processing (\(error.localizedDescription)); using FI-only."
                         print("⚠️ Combined SR/FI processing failed: \(error.localizedDescription). Restarting as FI-only.")
                         self.startPlaybackLoop()
                         break

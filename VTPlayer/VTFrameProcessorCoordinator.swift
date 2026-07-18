@@ -237,31 +237,20 @@ public actor VTFrameProcessorCoordinator {
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel >= 2
         let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
-        // Keep spatial processing ahead of temporal interpolation. Running
-        // FI at source resolution and scaling its output afterward is faster,
-        // but it substitutes ordinary scaled frames for most SR frames and
-        // makes text visibly pulse between soft and sharp.
-        let useTemporalFirstForSRInterpolation = false
+        // SR2 + FI2 uses temporal-first processing at the adaptive input size,
+        // then applies LL SR to every generated frame. This keeps the output
+        // cadence stable without mixing upscaled and non-upscaled frames.
+        // Combined SR2 + FI2 is unreliable across VideoToolbox revisions:
+        // the documented extra scaled-source destination conflicts with the
+        // initializer's equal phase/destination validation. Use a supported
+        // temporal-first pipeline and apply LL SR to every generated frame.
+        let useTemporalFirstForSRInterpolation = superResolutionLevel == 2 && frameInterpolationLevel == 2
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
-        let needsSpatial = hasQualitySR || (hasLLSR && !inCombinedMode)
+        let needsSpatial = hasQualitySR || (hasLLSR && (!inCombinedMode || useTemporalFirstForSRInterpolation))
 
         func configureSpatialStages() throws {
             guard needsSpatial else { return }
-
-            if useTemporalFirstForSRInterpolation {
-                var transferSession: VTPixelTransferSession?
-                let status = VTPixelTransferSessionCreate(
-                    allocator: kCFAllocatorDefault,
-                    pixelTransferSessionOut: &transferSession
-                )
-                guard status == kCVReturnSuccess, let session = transferSession else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to create interpolation transfer session"])
-                }
-                configureTransferSession(session)
-                self.interpolationTransferSession = session
-            }
 
             if hasQualitySR {
                 // Quality SR — single stage at requested scale
@@ -366,7 +355,7 @@ public actor VTFrameProcessorCoordinator {
 
         // ── 3. Temporal Stage ─────────────────────────────────────────
         if frameInterpolationLevel > 0 {
-            if inCombinedMode {
+            if inCombinedMode && !useTemporalFirstForSRInterpolation {
                 // Combined 2x spatial + 2x temporal
                 let scale: Int = 2
                 guard let config = VTLowLatencyFrameInterpolationConfiguration(
@@ -621,7 +610,7 @@ public actor VTFrameProcessorCoordinator {
             prevSourceFP = dummy
         }
 
-        let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2
+        let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
 
         if isCombined {
             // Combined 2x spatial + 2x temporal
@@ -645,7 +634,12 @@ public actor VTFrameProcessorCoordinator {
             guard let params = VTLowLatencyFrameInterpolationParameters(
                 sourceFrame: sourceFP,
                 previousFrame: prevSourceFP,
-                interpolationPhase: [0.5] as [Float],
+                // Spatial mode returns both the interpolated frame and the
+                // spatially-upscaled source frame.  VideoToolbox requires
+                // one phase entry per destination even though the second
+                // destination is the source-frame output; both entries use
+                // the only supported spatial interpolation phase.
+                interpolationPhase: [0.5, 0.5] as [Float],
                 destinationFrames: [destFrame1, destFrame2]
             ) else {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
