@@ -9,6 +9,13 @@ import Foundation
 import MetalKit
 import CoreVideo
 import CoreImage
+import QuartzCore
+
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 /// A high-performance Metal-backed view for rendering CVPixelBuffer frames.
 @MainActor
@@ -26,8 +33,21 @@ public final class VTMetalRenderer: MTKView {
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
     public var sharpness: Float = 0.0
 
-    /// Brightness/contrast boost strength (0.0 = off, >0 applies exposure/saturation/contrast boost)
-    public var hdrStrength: Float = 0.0
+    /// SDR-to-HDR mapping strength. Enabling it opts the drawable into EDR when
+    /// the current display has available headroom.
+    public var hdrStrength: Float = 0.0 {
+        didSet {
+            configureExtendedDynamicRangePresentation()
+            requestRedrawForImageAdjustment()
+        }
+    }
+
+    /// Whether the current drawable is configured to present extended-range
+    /// content. This is false on displays without EDR headroom.
+    public private(set) var isExtendedDynamicRangeActive = false
+
+    private let sdrColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    private let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
 
     #if os(macOS)
     /// Called immediately before each MTKView draw so the owner can provide
@@ -51,6 +71,7 @@ public final class VTMetalRenderer: MTKView {
 
         self.framebufferOnly = false
         self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
+        self.colorPixelFormat = .bgra8Unorm_srgb
         #if os(macOS)
         // Drive drawing from MTKView's display scheduler while playback is
         // active. AppKit setNeedsDisplay is coalesced and can collapse FI
@@ -73,12 +94,74 @@ public final class VTMetalRenderer: MTKView {
                 .useSoftwareRenderer: false
             ])
         }
+        configureExtendedDynamicRangePresentation()
+    }
+
+    /// Configures the CAMetalLayer for genuine extended dynamic range output.
+    /// An EDR layer must use a floating-point pixel format and an extended
+    /// linear color space; merely raising CI exposure in an SDR drawable is
+    /// clipped before it reaches an XDR display.
+    private func configureExtendedDynamicRangePresentation() {
+        guard let metalLayer = layer as? CAMetalLayer else { return }
+
+        // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
+        // remain at 1.0 until an EDR layer is already visible.
+        let shouldUseEDR = hdrStrength > 0 && potentialEDRHeadroom > 1.0
+        if shouldUseEDR {
+            colorPixelFormat = .rgba16Float
+            metalLayer.pixelFormat = .rgba16Float
+            metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
+            metalLayer.wantsExtendedDynamicRangeContent = true
+        } else {
+            colorPixelFormat = .bgra8Unorm_srgb
+            metalLayer.pixelFormat = .bgra8Unorm_srgb
+            metalLayer.colorspace = sdrColorSpace
+            metalLayer.wantsExtendedDynamicRangeContent = false
+        }
+        isExtendedDynamicRangeActive = shouldUseEDR
+    }
+
+    /// The usable headroom can change with the selected display, brightness,
+    /// power state, and system HDR settings, so it is queried at presentation.
+    private var currentEDRHeadroom: Float {
+        #if os(macOS)
+        guard let screen = window?.screen else { return 1.0 }
+        return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
+        #elseif os(iOS)
+        guard let screen = window?.windowScene?.screen else { return 1.0 }
+        return Float(screen.currentEDRHeadroom)
+        #else
+        return 1.0
+        #endif
+    }
+
+    private var potentialEDRHeadroom: Float {
+        #if os(macOS)
+        guard let screen = window?.screen else { return 1.0 }
+        return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
+        #elseif os(iOS)
+        guard let screen = window?.windowScene?.screen else { return 1.0 }
+        return Float(screen.potentialEDRHeadroom)
+        #else
+        return 1.0
+        #endif
+    }
+
+    private func requestRedrawForImageAdjustment() {
+        #if os(macOS)
+        if isPaused {
+            draw()
+        }
+        #else
+        draw()
+        #endif
     }
 
     #if os(macOS)
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         updateDrawableSizeForBackingScale()
+        configureExtendedDynamicRangePresentation()
         if window != nil, renderingActive {
             isPaused = false
         }
@@ -87,6 +170,7 @@ public final class VTMetalRenderer: MTKView {
     public override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         updateDrawableSizeForBackingScale()
+        configureExtendedDynamicRangePresentation()
     }
 
     public override func layout() {
@@ -190,12 +274,17 @@ public final class VTMetalRenderer: MTKView {
             sharpenedImage = ciImage
         }
 
-        // Apply optional brightness/contrast boost (exposure + saturation + contrast)
+        // Map SDR into the display's available EDR headroom. SDR white remains
+        // the reference white at strength zero; increasing strength raises the
+        // image into extended range, capped by the screen's live headroom.
         let hdrImage: CIImage
-        if hdrStrength > 0 {
+        if isExtendedDynamicRangeActive {
+            let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
+            let targetHeadroom = 1 + (currentEDRHeadroom - 1) * normalizedStrength
+            let exposureEV = log2(targetHeadroom)
             hdrImage = sharpenedImage
                 .applyingFilter("CIExposureAdjust", parameters: [
-                    kCIInputEVKey: hdrStrength * 0.75
+                    kCIInputEVKey: exposureEV
                 ])
                 .applyingFilter("CIColorControls", parameters: [
                     kCIInputSaturationKey: 1.0 + hdrStrength * 0.15,
@@ -245,7 +334,9 @@ public final class VTMetalRenderer: MTKView {
             to: destinationTexture,
             commandBuffer: commandBuffer,
             bounds: targetRect,
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: isExtendedDynamicRangeActive
+                ? extendedLinearDisplayP3ColorSpace
+                : sdrColorSpace
         )
         
         commandBuffer.present(drawable)
