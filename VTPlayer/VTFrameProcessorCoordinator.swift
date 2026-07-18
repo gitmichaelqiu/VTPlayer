@@ -324,6 +324,7 @@ public actor VTFrameProcessorCoordinator {
                 currentHeight *= scale
             } else {
                 // LL SR — first stage 2x
+                #if os(macOS)
                 guard VTLowLatencySuperResolutionScalerConfiguration
                     .supportedScaleFactors(frameWidth: currentWidth, frameHeight: currentHeight)
                     .contains(2.0) else {
@@ -333,6 +334,7 @@ public actor VTFrameProcessorCoordinator {
                         userInfo: [NSLocalizedDescriptionKey: "Low Latency SR does not support \(currentWidth)x\(currentHeight) at 2x on this device"]
                     )
                 }
+                #endif
                 let config1 = VTLowLatencySuperResolutionScalerConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,

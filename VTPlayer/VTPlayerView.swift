@@ -385,7 +385,14 @@ final class VTPlayerViewModel {
             presentationClockLastPlayerPTS = playerSeconds
         }
 
-        let elapsed = Double(now.uptimeNanoseconds - presentationClockAnchorWall.uptimeNanoseconds) / 1_000_000_000.0
+        // The anchor can be reset after `now` is sampled (for example during
+        // a seek). Never subtract UInt64 timestamps without checking their
+        // order: an inverted pair traps with Swift's arithmetic-overflow
+        // runtime failure on iOS.
+        let elapsedNanoseconds = now.uptimeNanoseconds >= presentationClockAnchorWall.uptimeNanoseconds
+            ? now.uptimeNanoseconds - presentationClockAnchorWall.uptimeNanoseconds
+            : 0
+        let elapsed = Double(elapsedNanoseconds) / 1_000_000_000.0
         return max(playerSeconds, presentationClockAnchorPTS + elapsed * playbackSpeed)
     }
 
@@ -509,7 +516,16 @@ final class VTPlayerViewModel {
                 // The app's 4x LL SR mode is a two-stage 2x cascade, so a
                 // 2x-capable configuration also makes the 4x menu choice
                 // valid. A device that cannot do 2x cannot do our 4x mode.
+                #if os(macOS)
                 let availableSRScales: Set<Int> = scales.contains(2.0) ? [2, 4] : []
+                #else
+                // iOS previously relied on the configuration/session
+                // boundary rather than this macOS resolution probe. Keep SR
+                // choices available when the processor is globally present;
+                // the coordinator will report a real session error if it
+                // cannot initialize the requested dimensions.
+                let availableSRScales: Set<Int> = supported ? [2, 4] : []
+                #endif
                 var availableQualityScales: Set<Int> = []
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
@@ -1415,15 +1431,17 @@ final class VTPlayerViewModel {
                 }
             }
 
+            #if os(macOS)
             if effectiveSRLevel > 0 {
                 let supportedScales = VTLowLatencySuperResolutionScalerConfiguration
                     .supportedScaleFactors(frameWidth: videoWidth, frameHeight: videoHeight)
                 if !supportedScales.contains(2.0) {
-                    self.srInitializationError = "Low Latency SR does not support \(videoWidth)x\(videoHeight) on this Mac; enhancement disabled."
+                    self.srInitializationError = "Low Latency SR does not support \(videoWidth)x\(videoHeight) on this device; enhancement disabled."
                     effectiveSRLevel = 0
                     print("Low Latency SR unavailable for \(videoWidth)x\(videoHeight): \(supportedScales)")
                 }
             }
+            #endif
             #endif
             var coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: effectiveSRLevel,
