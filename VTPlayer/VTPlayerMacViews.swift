@@ -26,6 +26,9 @@ extension VTPlayerView {
             return viewModel.recentVideos.sorted {
                 (dates[$0.path] ?? 0) > (dates[$1.path] ?? 0)
             }
+        case .dateOpened:
+            let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
+            return viewModel.recentVideos.sorted { (dates[$0.path] ?? 0) > (dates[$1.path] ?? 0) }
         }
     }
 
@@ -181,6 +184,8 @@ extension VTPlayerView {
         Picker(selection: $sortBy) {
             Text("Date Added")
                 .tag(SortOption.dateAdded)
+            Text("Date Opened")
+                .tag(SortOption.dateOpened)
             Text("Name")
                 .tag(SortOption.name)
         } label: {

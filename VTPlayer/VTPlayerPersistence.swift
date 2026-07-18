@@ -154,8 +154,13 @@ extension VTPlayerViewModel {
         // Save the date added timestamp
         let datesKey = "VTRecentVideosDates"
         var dates = UserDefaults.standard.dictionary(forKey: datesKey) as? [String: Double] ?? [:]
-        dates[standardURL.lastPathComponent] = Date().timeIntervalSince1970
+        if dates[standardURL.lastPathComponent] == nil {
+            dates[standardURL.lastPathComponent] = Date().timeIntervalSince1970
+        }
         UserDefaults.standard.set(dates, forKey: datesKey)
+        var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDates") as? [String: Double] ?? [:]
+        openedDates[standardURL.lastPathComponent] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(openedDates, forKey: "VTRecentVideosOpenedDates")
         
         if list.count > 15 {
             // Delete temp files of items falling off the list
@@ -180,6 +185,7 @@ extension VTPlayerViewModel {
         }
         self.recentVideos.remove(atOffsets: indexSet)
         saveRecentVideosIOS()
+        removeRecentDateEntries(for: removedURLs)
 
         if let selectedURL = videoURL,
            removedURLs.contains(where: { $0 == selectedURL }) {
@@ -194,10 +200,21 @@ extension VTPlayerViewModel {
         }
         self.recentVideos.removeAll()
         saveRecentVideosIOS()
+        UserDefaults.standard.removeObject(forKey: "VTRecentVideosDates")
+        UserDefaults.standard.removeObject(forKey: "VTRecentVideosOpenedDates")
 
         if videoURL != nil {
             stop()
             videoURL = nil
+        }
+    }
+
+    private func removeRecentDateEntries(for urls: [URL]) {
+        let names = Set(urls.map { $0.lastPathComponent })
+        for key in ["VTRecentVideosDates", "VTRecentVideosOpenedDates"] {
+            var dates = UserDefaults.standard.dictionary(forKey: key) as? [String: Double] ?? [:]
+            names.forEach { dates.removeValue(forKey: $0) }
+            UserDefaults.standard.set(dates, forKey: key)
         }
     }
     #endif

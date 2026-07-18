@@ -114,6 +114,7 @@ struct VTPlayerView: View {
     
     enum SortOption: String, CaseIterable, Identifiable {
         case dateAdded = "Date Added"
+        case dateOpened = "Date Opened"
         case name = "Name"
         var id: Self { self }
     }
@@ -409,6 +410,13 @@ struct VTPlayerView: View {
                 dates[newURL.lastPathComponent] = dateVal
                 dates.removeValue(forKey: url.lastPathComponent)
                 UserDefaults.standard.set(dates, forKey: datesKey)
+            }
+            let openedKey = "VTRecentVideosOpenedDates"
+            var openedDates = UserDefaults.standard.dictionary(forKey: openedKey) as? [String: Double] ?? [:]
+            if let dateVal = openedDates[url.lastPathComponent] {
+                openedDates[newURL.lastPathComponent] = dateVal
+                openedDates.removeValue(forKey: url.lastPathComponent)
+                UserDefaults.standard.set(openedDates, forKey: openedKey)
             }
             
             // Move Pin state if pinned

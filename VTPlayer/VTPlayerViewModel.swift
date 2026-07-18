@@ -663,10 +663,14 @@ final class VTPlayerViewModel {
     }
 
     func recordRecentDateIfNeeded(for url: URL) {
-        var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
-        guard dates[url.path] == nil else { return }
-        dates[url.path] = Date().timeIntervalSince1970
-        UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
+        var addedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
+        if addedDates[url.path] == nil {
+            addedDates[url.path] = Date().timeIntervalSince1970
+            UserDefaults.standard.set(addedDates, forKey: "VTRecentVideosDatesMac")
+        }
+        var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
+        openedDates[url.path] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(openedDates, forKey: "VTRecentVideosOpenedDatesMac")
     }
 
     func addRecentVideoMac(_ url: URL) {
@@ -693,6 +697,9 @@ final class VTPlayerViewModel {
         var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
         dates.removeValue(forKey: url.path)
         UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
+        var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
+        openedDates.removeValue(forKey: url.path)
+        UserDefaults.standard.set(openedDates, forKey: "VTRecentVideosOpenedDatesMac")
 
         var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
         if !removed.contains(url.path) {
@@ -712,6 +719,7 @@ final class VTPlayerViewModel {
         NSDocumentController.shared.clearRecentDocuments(nil)
         UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
         UserDefaults.standard.removeObject(forKey: "VTRecentVideosDatesMac")
+        UserDefaults.standard.removeObject(forKey: "VTRecentVideosOpenedDatesMac")
         reloadRecentVideos()
 
         if hadSelectedVideo {

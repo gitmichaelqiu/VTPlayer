@@ -51,6 +51,7 @@ extension VTPlayerView {
                                 }
                             )) {
                                 Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
+                                Label("Date Opened", systemImage: "clock.arrow.circlepath").tag(SortOption.dateOpened)
                                 Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
                             }
                         } label: {
@@ -112,6 +113,9 @@ extension VTPlayerView {
                             let t1 = dates[u1.lastPathComponent] ?? 0
                             let t2 = dates[u2.lastPathComponent] ?? 0
                             return t1 > t2
+                        case .dateOpened:
+                            let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDates") as? [String: Double] ?? [:]
+                            return (dates[u1.lastPathComponent] ?? 0) > (dates[u2.lastPathComponent] ?? 0)
                         }
                     }
                     
