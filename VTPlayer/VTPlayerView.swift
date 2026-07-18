@@ -1407,7 +1407,7 @@ final class VTPlayerViewModel {
             var effectiveSRLevel = srLevel
             
             #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-            @MainActor func fallBackFromQualitySR() {
+            @MainActor func fallBackFromQualitySR(preserveSelection: Bool = false) {
                 effectiveQualitySR = 0
                 let requestedFallback = qualitySR == 4 ? 4 : 2
                 if self.availableSuperResolutionScales.contains(requestedFallback) {
@@ -1420,7 +1420,9 @@ final class VTPlayerViewModel {
 
                 // Keep the controls truthful: the visible selection must
                 // match the processor that will actually run.
-                self.qualitySuperResolutionScaleFactor = 0
+                if !preserveSelection {
+                    self.qualitySuperResolutionScaleFactor = 0
+                }
                 self.superResolutionLevel = effectiveSRLevel
             }
 
@@ -1450,10 +1452,10 @@ final class VTPlayerViewModel {
                         print("Quality SR model download required, starting download")
                         self.modelManager.downloadModel(for: checkConfig)
                         self.retryAfterQualityModelDownload(generation: gen)
-                        fallBackFromQualitySR()
+                        fallBackFromQualitySR(preserveSelection: true)
                     case .downloading:
                         self.retryAfterQualityModelDownload(generation: gen)
-                        fallBackFromQualitySR()
+                        fallBackFromQualitySR(preserveSelection: true)
                     case .failed(let message):
                         self.srInitializationError = "Quality SR model unavailable: \(message)"
                         fallBackFromQualitySR()
