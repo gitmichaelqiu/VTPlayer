@@ -96,6 +96,8 @@ final class VTPlayerViewModel {
     @ObservationIgnored var adaptiveSRFICacheStarvations = 0
     @ObservationIgnored var adaptiveSRFIHasPresentedFrame = false
     @ObservationIgnored var adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
+    /// Set only after the combined LL2 SR/FI processor rejects this video.
+    @ObservationIgnored var useSequentialSRFIFallback = false
     
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false
@@ -426,6 +428,7 @@ final class VTPlayerViewModel {
         availableSuperResolutionScales.removeAll()
         availableQualitySuperResolutionScales.removeAll()
         readyQualitySuperResolutionScales.removeAll()
+        useSequentialSRFIFallback = false
         let asset = AVAsset(url: url)
         let setupGeneration = playbackGeneration
         

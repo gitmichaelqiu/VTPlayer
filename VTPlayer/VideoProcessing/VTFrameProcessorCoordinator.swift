@@ -103,6 +103,9 @@ public actor VTFrameProcessorCoordinator {
     public let frameInterpolationLevel: Int    // 0, 2, 4 (LL FI)
     public let useHighQualityDownsampling: Bool
     public let useRealTimePriority: Bool
+    /// Uses the separate temporal-then-spatial implementation only after the
+    /// combined LL2 SR/FI processor rejects this device or resolution.
+    public let preferSequentialSRFI: Bool
 
     // New: Quality SR (alternative to LL SR)
     public let qualitySuperResolutionScaleFactor: Int  // 0=off, 2, 4
@@ -161,6 +164,7 @@ public actor VTFrameProcessorCoordinator {
         frameInterpolationLevel: Int = 0,
         useHighQualityDownsampling: Bool = true,
         useRealTimePriority: Bool = true,
+        preferSequentialSRFI: Bool = false,
         qualitySuperResolutionScaleFactor: Int = 0,
         motionBlurStrength: Int = 0,
         denoiseStrength: Double = 0.0,
@@ -170,6 +174,7 @@ public actor VTFrameProcessorCoordinator {
         self.frameInterpolationLevel = frameInterpolationLevel
         self.useHighQualityDownsampling = useHighQualityDownsampling
         self.useRealTimePriority = useRealTimePriority
+        self.preferSequentialSRFI = preferSequentialSRFI
         self.qualitySuperResolutionScaleFactor = qualitySuperResolutionScaleFactor
         self.motionBlurStrength = motionBlurStrength
         self.denoiseStrength = denoiseStrength
@@ -292,7 +297,7 @@ public actor VTFrameProcessorCoordinator {
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel >= 2
         #if os(macOS)
-        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
+        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !preferSequentialSRFI
         #else
         // iOS uses the stable sequential spatial-then-temporal path. The
         // combined spatial FI processor is the branch that rejects SR2+FI2
@@ -304,7 +309,8 @@ public actor VTFrameProcessorCoordinator {
         // This preserves matched source/interpolated quality and, for SR4,
         // avoids running the temporal processor on 16x-sized surfaces.
         #if os(macOS)
-        let useTemporalFirstForSRInterpolation = superResolutionLevel >= 2 && frameInterpolationLevel > 0
+        let useTemporalFirstForSRInterpolation = superResolutionLevel > 2 && frameInterpolationLevel > 0 ||
+            (superResolutionLevel == 2 && frameInterpolationLevel > 0 && preferSequentialSRFI)
         #else
         let useTemporalFirstForSRInterpolation = false
         #endif
@@ -658,6 +664,7 @@ public actor VTFrameProcessorCoordinator {
         frameInterpolationLevel: Int,
         useHighQualityDownsampling: Bool = true,
         useRealTimePriority: Bool = true,
+        preferSequentialSRFI: Bool = false,
         qualitySuperResolutionScaleFactor: Int = 0,
         motionBlurStrength: Int = 0,
         denoiseStrength: Double = 0.0,
@@ -667,6 +674,7 @@ public actor VTFrameProcessorCoordinator {
         self.frameInterpolationLevel = frameInterpolationLevel
         self.useHighQualityDownsampling = useHighQualityDownsampling
         self.useRealTimePriority = useRealTimePriority
+        self.preferSequentialSRFI = preferSequentialSRFI
         self.qualitySuperResolutionScaleFactor = qualitySuperResolutionScaleFactor
         self.motionBlurStrength = motionBlurStrength
         self.denoiseStrength = denoiseStrength

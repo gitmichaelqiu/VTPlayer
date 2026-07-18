@@ -460,6 +460,7 @@ extension VTPlayerViewModel {
         let fiLevel = self.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
         let realTime = self.useRealTimePriority
+        let sequentialSRFIFallback = self.useSequentialSRFIFallback
         let qualitySR = self.qualitySuperResolutionScaleFactor
         let mbStrength = self.motionBlurStrength
         let dnStrength = self.denoiseStrength
@@ -558,6 +559,7 @@ extension VTPlayerViewModel {
                 frameInterpolationLevel: fiLevel,
                 useHighQualityDownsampling: highQuality,
                 useRealTimePriority: realTime,
+                preferSequentialSRFI: sequentialSRFIFallback,
                 qualitySuperResolutionScaleFactor: effectiveQualitySR,
                 motionBlurStrength: mbStrength,
                 denoiseStrength: dnStrength,
@@ -584,25 +586,23 @@ extension VTPlayerViewModel {
                 guard gen == self.playbackGeneration else { return }
                 await coordinator.endSession()
 
-                // The combined VideoToolbox processor is capability- and
-                // resolution-dependent.  Its configuration initializer can
-                // succeed while session creation still rejects the actual
-                // pixel-buffer requirements.  Do not reset playback to time
-                // zero in that case: retry as FI-only at the same adaptive
-                // input size and make the fallback visible in diagnostics.
-                if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 {
-                    let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using FI-only."
+                // The combined processor is capability- and
+                // resolution-dependent. Keep SR enabled when it rejects the
+                // exact pixel-buffer requirements by retrying the established
+                // sequential temporal-first LL SR path.
+                if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !sequentialSRFIFallback {
+                    let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using sequential SR + FI."
                     self.srInitializationError = message
-                    print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying FI-only.")
+                    print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying sequential SR + FI.")
+                    self.useSequentialSRFIFallback = true
 
-                    effectiveSRLevel = 0
-                    self.superResolutionLevel = 0
                     coordinator = VTFrameProcessorCoordinator(
-                        superResolutionLevel: 0,
+                        superResolutionLevel: effectiveSRLevel,
                         frameInterpolationLevel: fiLevel,
                         useHighQualityDownsampling: highQuality,
                         useRealTimePriority: realTime,
-                        qualitySuperResolutionScaleFactor: 0,
+                        preferSequentialSRFI: true,
+                        qualitySuperResolutionScaleFactor: effectiveQualitySR,
                         motionBlurStrength: mbStrength,
                         denoiseStrength: dnStrength,
                         qualityPrioritization: qualPrior
@@ -611,8 +611,8 @@ extension VTPlayerViewModel {
                     do {
                         try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
                     } catch {
-                        self.srInitializationError = "FI fallback unavailable: \(error.localizedDescription)"
-                        print("Failed to initialize FI fallback session: \(error.localizedDescription)")
+                        self.srInitializationError = "Sequential SR + FI fallback unavailable: \(error.localizedDescription)"
+                        print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
                         self.activeCoordinator = nil
                         await coordinator.endSession()
                         self.stop()
@@ -782,11 +782,12 @@ extension VTPlayerViewModel {
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
-                    if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !combinedProcessFallbackAttempted {
+                    if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 &&
+                        !self.useSequentialSRFIFallback && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true
-                        self.superResolutionLevel = 0
-                        self.srInitializationError = "Combined 2x SR + 2x FI failed during processing (\(error.localizedDescription)); using FI-only."
-                        print("⚠️ Combined SR/FI processing failed: \(error.localizedDescription). Restarting as FI-only.")
+                        self.useSequentialSRFIFallback = true
+                        self.srInitializationError = "Combined 2x SR + 2x FI failed during processing (\(error.localizedDescription)); using sequential SR + FI."
+                        print("⚠️ Combined SR/FI processing failed: \(error.localizedDescription). Restarting with sequential SR + FI.")
                         self.startPlaybackLoop()
                         break
                     }
