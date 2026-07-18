@@ -43,8 +43,16 @@ public final class VTMetalRenderer: MTKView {
 
         self.framebufferOnly = false
         self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
+        #if os(macOS)
+        // Drive drawing from MTKView's display scheduler while playback is
+        // active. AppKit setNeedsDisplay is coalesced and can collapse FI
+        // frames when two updates arrive between run-loop redraws.
+        self.enableSetNeedsDisplay = false
+        self.isPaused = true
+        #else
         self.enableSetNeedsDisplay = true
         self.isPaused = true // We manually trigger drawing when a new frame is received
+        #endif
         #if os(iOS)
         self.contentMode = .redraw
         #endif
@@ -95,18 +103,28 @@ public final class VTMetalRenderer: MTKView {
         self.currentPixelBuffer = pixelBuffer
         self.currentFrameIsInterpolated = isInterpolated
         #if os(macOS)
-        self.setNeedsDisplay(self.bounds)
+        if self.isPaused {
+            self.draw()
+        }
         #else
         self.draw()
         #endif
     }
+
+    #if os(macOS)
+    /// Enables the MTKView display scheduler during playback. Keeping it
+    /// paused while stopped avoids rendering the same frame unnecessarily.
+    public func setRenderingActive(_ active: Bool) {
+        self.isPaused = !active
+    }
+    #endif
 
     /// Removes the currently displayed frame and redraws the view as black.
     public func clear() {
         self.currentPixelBuffer = nil
         self.currentFrameIsInterpolated = false
         #if os(macOS)
-        self.setNeedsDisplay(self.bounds)
+        self.draw()
         #else
         self.draw()
         #endif

@@ -1065,6 +1065,10 @@ final class VTPlayerViewModel {
         self.isPlaying = true
         self.isPaused = false
 
+        #if os(macOS)
+        renderer.setRenderingActive(true)
+        #endif
+
         player.rate = Float(self.playbackSpeed)
 
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
@@ -1116,6 +1120,7 @@ final class VTPlayerViewModel {
         self.isPaused = true
         self.isBuffering = false
         #if os(macOS)
+        renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
         #else
         if let link = displayLink {
@@ -1761,6 +1766,7 @@ final class VTPlayerViewModel {
     /// Pauses/stops playback entirely.
     func stop() {
         #if os(macOS)
+        renderer.setRenderingActive(false)
         setNativeVideoEnabled(false)
         stopDisplayLinkIfNeeded()
         #endif
