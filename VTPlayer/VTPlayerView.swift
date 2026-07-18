@@ -1162,13 +1162,11 @@ final class VTPlayerViewModel {
             // headroom to produce every output phase on time. Keep the normal
             // FI cap for pure interpolation.
             if combinedMode {
-                // Try progressively smaller decode sizes. Support is
-                // resolution-specific, so a fixed 960×540 target can itself
-                // be unavailable even though 640×360 works.
-                // Prefer the smallest supported input. Combined mode's
-                // destination is 2x larger, so 480×270 -> 960×540 is a much
-                // more reliable real-time target than 640×360 -> 1280×720.
-                for (maxWidth, maxHeight) in [(480.0, 270.0), (640.0, 360.0), (960.0, 540.0)] {
+                // Probe the actual temporal-first configuration. A combined
+                // FI+spatial initializer may accept 480×270 while the pure
+                // FI configuration used by the stable sequential path
+                // rejects it at processing time on this Mac.
+                for (maxWidth, maxHeight) in [(640.0, 360.0), (960.0, 540.0)] {
                     let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
                     let candidateWidth = Int(floor(Double(videoWidth) * scale / 2) * 2)
                     let candidateHeight = Int(floor(Double(videoHeight) * scale / 2) * 2)
@@ -1179,7 +1177,7 @@ final class VTPlayerViewModel {
                        VTLowLatencyFrameInterpolationConfiguration(
                            frameWidth: candidateWidth,
                            frameHeight: candidateHeight,
-                           spatialScaleFactor: 2
+                           numberOfInterpolatedFrames: 1
                        ) != nil {
                         return CGSize(width: candidateWidth, height: candidateHeight)
                     }
