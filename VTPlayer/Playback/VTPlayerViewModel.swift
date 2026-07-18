@@ -476,14 +476,26 @@ final class VTPlayerViewModel {
                 let supported = await VTFrameProcessorCoordinator.isSuperResolutionSupported()
                 let scales = await VTFrameProcessorCoordinator.supportedSuperResolutionScaleFactors(width: width, height: height)
                 let scalesStr = scales.isEmpty ? "None" : scales.map { String(format: "%.1fx", $0) }.joined(separator: ", ")
-                // The app's 4x LL SR mode is a two-stage 2x cascade, so a
-                // 2x-capable configuration also makes the 4x menu choice
-                // valid. Probe the actual video dimensions on every platform;
-                // a global `isSupported` result is not sufficient because
-                // VideoToolbox can reject individual resolutions.
+                // Probe each selectable LL SR mode at the dimensions it will
+                // actually process. A 4x cascade needs a second supported 2x
+                // processor at the first-stage output size; do not advertise
+                // it merely because the source-resolution stage works.
                 let ll2SessionSupported = await VTFrameProcessorCoordinator
                     .isLowLatencySuperResolutionSupported(width: width, height: height, scale: 2.0)
-                let availableSRScales: Set<Int> = ll2SessionSupported ? [2, 4] : []
+                let ll4SessionSupported: Bool
+                if ll2SessionSupported {
+                    ll4SessionSupported = await VTFrameProcessorCoordinator
+                        .isLowLatencySuperResolutionSupported(width: width * 2, height: height * 2, scale: 2.0)
+                } else {
+                    ll4SessionSupported = false
+                }
+                var availableSRScales: Set<Int> = []
+                if ll2SessionSupported {
+                    availableSRScales.insert(2)
+                }
+                if ll4SessionSupported {
+                    availableSRScales.insert(4)
+                }
                 var availableQualityScales: Set<Int> = []
                 var readyQualityScales: Set<Int> = []
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
