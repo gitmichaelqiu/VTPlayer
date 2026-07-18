@@ -1305,7 +1305,7 @@ final class VTPlayerViewModel {
                 }
             }
             #endif
-            let coordinator = VTFrameProcessorCoordinator(
+            var coordinator = VTFrameProcessorCoordinator(
                 superResolutionLevel: effectiveSRLevel,
                 frameInterpolationLevel: fiLevel,
                 useHighQualityDownsampling: highQuality,
@@ -1333,14 +1333,49 @@ final class VTPlayerViewModel {
                 try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
             } catch {
                 guard gen == self.playbackGeneration else { return }
-                self.srInitializationError = error.localizedDescription
-                print("Failed to initialize coordinator session: \(error.localizedDescription)")
-                // Stop playback entirely so the consumer and audio sync don't hang
-                // forever with an empty frame cache.
-                self.activeCoordinator = nil
                 await coordinator.endSession()
-                self.stop()
-                return
+
+                // The combined VideoToolbox processor is capability- and
+                // resolution-dependent.  Its configuration initializer can
+                // succeed while session creation still rejects the actual
+                // pixel-buffer requirements.  Do not reset playback to time
+                // zero in that case: retry as FI-only at the same adaptive
+                // input size and make the fallback visible in diagnostics.
+                if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 {
+                    let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using FI-only."
+                    self.srInitializationError = message
+                    print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying FI-only.")
+
+                    effectiveSRLevel = 0
+                    self.superResolutionLevel = 0
+                    coordinator = VTFrameProcessorCoordinator(
+                        superResolutionLevel: 0,
+                        frameInterpolationLevel: fiLevel,
+                        useHighQualityDownsampling: highQuality,
+                        useRealTimePriority: realTime,
+                        qualitySuperResolutionScaleFactor: 0,
+                        motionBlurStrength: mbStrength,
+                        denoiseStrength: dnStrength,
+                        qualityPrioritization: qualPrior
+                    )
+                    self.activeCoordinator = coordinator
+                    do {
+                        try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
+                    } catch {
+                        self.srInitializationError = "FI fallback unavailable: \(error.localizedDescription)"
+                        print("Failed to initialize FI fallback session: \(error.localizedDescription)")
+                        self.activeCoordinator = nil
+                        await coordinator.endSession()
+                        self.stop()
+                        return
+                    }
+                } else {
+                    self.srInitializationError = error.localizedDescription
+                    print("Failed to initialize coordinator session: \(error.localizedDescription)")
+                    self.activeCoordinator = nil
+                    self.stop()
+                    return
+                }
             }
 
             // Re-sync lastPulledTime after potentially slow coordinator setup
@@ -1372,6 +1407,7 @@ final class VTPlayerViewModel {
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
+            var combinedProcessFallbackAttempted = false
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
@@ -1479,6 +1515,14 @@ final class VTPlayerViewModel {
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
+                    if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !combinedProcessFallbackAttempted {
+                        combinedProcessFallbackAttempted = true
+                        self.superResolutionLevel = 0
+                        self.srInitializationError = "Combined 2x SR + 2x FI failed during processing; using FI-only."
+                        print("⚠️ Combined SR/FI processing failed: \(error.localizedDescription). Restarting as FI-only.")
+                        self.startPlaybackLoop()
+                        break
+                    }
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     self.lockCache { self.processedFrameCache.append(vtFrame) }
                 }
