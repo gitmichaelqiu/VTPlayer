@@ -20,8 +20,8 @@ final class VTPlayerViewModel {
     var isPlaying = false
     var isPaused = false
     
-    private var lastPublishedCurrentTime = -Double.infinity
-    @ObservationIgnored private var isBuffering = false
+    var lastPublishedCurrentTime = -Double.infinity
+    @ObservationIgnored var isBuffering = false
 
     // Feature Levels (0 = Off, 2 = 2x, 4 = 4x)
     var superResolutionLevel: Int = 0
@@ -38,8 +38,8 @@ final class VTPlayerViewModel {
     // Quality Control Parameters
     // Fixed policy for general users. These are intentionally not exposed as
     // settings: stable output takes priority over manual trade-off tuning.
-    private let useHighQualityDownsampling = true
-    private let useRealTimePriority = true
+    let useHighQualityDownsampling = true
+    let useRealTimePriority = true
     
     // Playback Progress & Stats
     var isPipelineActive: Bool {
@@ -83,8 +83,8 @@ final class VTPlayerViewModel {
     }
     var droppedFrames = 0
     var aneUsagePercent: Double = 0.0
-    @ObservationIgnored private var pendingDroppedFrames = 0
-    @ObservationIgnored private var lastDiagnosticsPublish = DispatchTime.now()
+    @ObservationIgnored var pendingDroppedFrames = 0
+    @ObservationIgnored var lastDiagnosticsPublish = DispatchTime.now()
     
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false
@@ -146,51 +146,51 @@ final class VTPlayerViewModel {
         }
     }
 
-    @ObservationIgnored nonisolated(unsafe) private var cursorHidden = false
-    private var inactivityTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) var cursorHidden = false
+    var inactivityTask: Task<Void, Never>?
     
     // AVPlayer components
-    private(set) var player: AVPlayer?
-    @ObservationIgnored private var producerTask: Task<Void, Never>?
-    @ObservationIgnored private var consumerTask: Task<Void, Never>?
-    @ObservationIgnored private var qualityModelRetryTask: Task<Void, Never>?
-    @ObservationIgnored private var displayLink: CADisplayLink?
-    @ObservationIgnored private var presentedFramesCount = 0
-    @ObservationIgnored private var diagnosticPresentedFramesCount = 0
-    @ObservationIgnored private var diagnosticPresentedInterpolatedCount = 0
-    @ObservationIgnored private var diagnosticPresentedSourceCount = 0
-    @ObservationIgnored private var producedFramesCount = 0
-    @ObservationIgnored private var displayLinkTickCount = 0
-    @ObservationIgnored private var displayRateSamples: [Double] = []
-    @ObservationIgnored private var displayRateMeasurementStart = DispatchTime.now()
-    @ObservationIgnored private var fpsTimer = DispatchTime.now()
-    @ObservationIgnored private var diagTimer = DispatchTime.now()
-    @ObservationIgnored private var processedFrameCache: [VTFrame] = []
-    @ObservationIgnored private var processedFrameCacheStart = 0
-    @ObservationIgnored private let cacheLock = NSRecursiveLock()
+    var player: AVPlayer?
+    @ObservationIgnored var producerTask: Task<Void, Never>?
+    @ObservationIgnored var consumerTask: Task<Void, Never>?
+    @ObservationIgnored var qualityModelRetryTask: Task<Void, Never>?
+    @ObservationIgnored var displayLink: CADisplayLink?
+    @ObservationIgnored var presentedFramesCount = 0
+    @ObservationIgnored var diagnosticPresentedFramesCount = 0
+    @ObservationIgnored var diagnosticPresentedInterpolatedCount = 0
+    @ObservationIgnored var diagnosticPresentedSourceCount = 0
+    @ObservationIgnored var producedFramesCount = 0
+    @ObservationIgnored var displayLinkTickCount = 0
+    @ObservationIgnored var displayRateSamples: [Double] = []
+    @ObservationIgnored var displayRateMeasurementStart = DispatchTime.now()
+    @ObservationIgnored var fpsTimer = DispatchTime.now()
+    @ObservationIgnored var diagTimer = DispatchTime.now()
+    @ObservationIgnored var processedFrameCache: [VTFrame] = []
+    @ObservationIgnored var processedFrameCacheStart = 0
+    @ObservationIgnored let cacheLock = NSRecursiveLock()
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
-    private let frameCacheMemoryBudget = 512 * 1024 * 1024
-    private let maximumFrameCacheCount = 120
-    private func lockCache<T>(_ block: () -> T) -> T {
+    let frameCacheMemoryBudget = 512 * 1024 * 1024
+    let maximumFrameCacheCount = 120
+    func lockCache<T>(_ block: () -> T) -> T {
         cacheLock.lock()
         defer { cacheLock.unlock() }
         return block()
     }
 
-    private func clearProcessedFrameCache() {
+    func clearProcessedFrameCache() {
         processedFrameCache.removeAll(keepingCapacity: true)
         processedFrameCacheStart = 0
     }
 
-    private func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
+    func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
         guard seconds.isFinite else { return }
         guard immediately || abs(seconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
         lastPublishedCurrentTime = seconds
         currentTime = seconds
     }
 
-    private func publishProcessingDiagnostics(_ processingTime: Double? = nil) {
+    func publishProcessingDiagnostics(_ processingTime: Double? = nil) {
         let now = DispatchTime.now()
         let elapsed = Double(now.uptimeNanoseconds - lastDiagnosticsPublish.uptimeNanoseconds) / 1_000_000_000.0
         guard elapsed >= 0.1 else { return }
@@ -204,7 +204,7 @@ final class VTPlayerViewModel {
         lastDiagnosticsPublish = now
     }
 
-    private func compactProcessedFrameCacheIfNeeded() {
+    func compactProcessedFrameCacheIfNeeded() {
         guard processedFrameCacheStart > 0 else { return }
         let totalCount = processedFrameCache.count
         if processedFrameCacheStart >= 64 || processedFrameCacheStart * 2 >= totalCount {
@@ -213,7 +213,7 @@ final class VTPlayerViewModel {
         }
     }
 
-    private var bufferedFrameLimit: Int {
+    var bufferedFrameLimit: Int {
         let scale = max(1, max(superResolutionLevel, qualitySuperResolutionScaleFactor))
         let outputPixels = Double(videoWidth) * Double(videoHeight) * Double(scale * scale)
         guard outputPixels > 0 else { return maximumFrameCacheCount }
@@ -225,7 +225,7 @@ final class VTPlayerViewModel {
         return min(maximumFrameCacheCount, max(2, budgetedFrames))
     }
 
-    private var resumeBufferFrameCount: Int {
+    var resumeBufferFrameCount: Int {
         min(8, max(2, bufferedFrameLimit / 2))
     }
 
@@ -233,11 +233,11 @@ final class VTPlayerViewModel {
     /// source interval in the presentation queue prevents a late processor
     /// completion from collapsing the interpolated and source frames into one
     /// display refresh.
-    private var interpolationPresentationDelay: Double {
+    var interpolationPresentationDelay: Double {
         guard frameInterpolationLevel > 0, sourceFrameRate > 0 else { return 0 }
         return 1.0 / sourceFrameRate
     }
-    private var outputPresentationInterval: Double {
+    var outputPresentationInterval: Double {
         guard sourceFrameRate > 0 else { return 1.0 / 30.0 }
         let multiplier: Double
         switch frameInterpolationLevel {
@@ -247,32 +247,32 @@ final class VTPlayerViewModel {
         }
         return 1.0 / (sourceFrameRate * multiplier)
     }
-    private var securityScopedURL: URL?
+    var securityScopedURL: URL?
     #if os(iOS)
-    private var tempLocalURL: URL?
+    var tempLocalURL: URL?
     #endif
-    private var lastPulledTime: CMTime = .zero
-    private var playerItemObserver: Any?
-    private var timeJumpedObserver: Any?
-    private var rateObserver: NSKeyValueObservation?
-    private var timeObserverToken: Any?
-    private var playbackGeneration: UInt64 = 0
-    private var seekGeneration: UInt64 = 0
-    private var isInitializingPipeline = false
+    var lastPulledTime: CMTime = .zero
+    var playerItemObserver: Any?
+    var timeJumpedObserver: Any?
+    var rateObserver: NSKeyValueObservation?
+    var timeObserverToken: Any?
+    var playbackGeneration: UInt64 = 0
+    var seekGeneration: UInt64 = 0
+    var isInitializingPipeline = false
 
     // Audio sync monitoring (diagnostic only — never pauses player)
-    private var lastRenderedPTS: CMTime = .zero
+    var lastRenderedPTS: CMTime = .zero
     // AVPlayer can expose a frame-quantized currentTime for silent or low-rate
     // assets.  Interpolated output must be paced by a monotonic clock between
     // those observations, otherwise two generated frames are drained at once
     // and only one is rendered.
-    @ObservationIgnored private var presentationClockAnchorPTS = 0.0
-    @ObservationIgnored private var presentationClockAnchorWall = DispatchTime.now()
-    @ObservationIgnored private var presentationClockLastPlayerPTS = -Double.infinity
-    @ObservationIgnored private var presentationClockInitialized = false
-    @ObservationIgnored private var lastPresentationWall = DispatchTime.now()
+    @ObservationIgnored var presentationClockAnchorPTS = 0.0
+    @ObservationIgnored var presentationClockAnchorWall = DispatchTime.now()
+    @ObservationIgnored var presentationClockLastPlayerPTS = -Double.infinity
+    @ObservationIgnored var presentationClockInitialized = false
+    @ObservationIgnored var lastPresentationWall = DispatchTime.now()
 
-    private func resetPresentationClock(at seconds: Double) {
+    func resetPresentationClock(at seconds: Double) {
         guard seconds.isFinite else { return }
         presentationClockAnchorPTS = seconds
         presentationClockAnchorWall = .now()
@@ -281,7 +281,7 @@ final class VTPlayerViewModel {
         lastPresentationWall = .now()
     }
 
-    private func presentationClockSeconds(playerSeconds: Double) -> Double {
+    func presentationClockSeconds(playerSeconds: Double) -> Double {
         guard playerSeconds.isFinite else { return playerSeconds }
         let now = DispatchTime.now()
         if !presentationClockInitialized {
@@ -313,9 +313,9 @@ final class VTPlayerViewModel {
     }
 
     var audioSyncLatency: Double = 0
-    private var audioSyncTask: Task<Void, Never>?
+    var audioSyncTask: Task<Void, Never>?
 
-    private func retryAfterQualityModelDownload(generation: UInt64) {
+    func retryAfterQualityModelDownload(generation: UInt64) {
         qualityModelRetryTask?.cancel()
         qualityModelRetryTask = Task { @MainActor [weak self] in
             while !Task.isCancelled, let self, generation == self.playbackGeneration {
@@ -333,11 +333,11 @@ final class VTPlayerViewModel {
             }
         }
     }
-    private let audioSyncLatencyThreshold: Double = 0.1
+    let audioSyncLatencyThreshold: Double = 0.1
     
     let renderer: VTMetalRenderer
     let modelManager = VTModelManager()
-    private var activeCoordinator: VTFrameProcessorCoordinator?
+    var activeCoordinator: VTFrameProcessorCoordinator?
 
     var appIcon: Image? {
         #if os(iOS)
@@ -407,7 +407,7 @@ final class VTPlayerViewModel {
     
 
     
-    private func setupPlayer(with url: URL) {
+    func setupPlayer(with url: URL) {
         // Capability probing is asynchronous. Clear the previous video's
         // scale set immediately so its enabled menu items cannot leak into
         // the new video's loading window.
@@ -661,14 +661,14 @@ final class VTPlayerViewModel {
         self.recentVideos = urls
     }
 
-    private func recordRecentDateIfNeeded(for url: URL) {
+    func recordRecentDateIfNeeded(for url: URL) {
         var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
         guard dates[url.path] == nil else { return }
         dates[url.path] = Date().timeIntervalSince1970
         UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
     }
 
-    private func addRecentVideoMac(_ url: URL) {
+    func addRecentVideoMac(_ url: URL) {
         var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
         removed.removeAll { $0 == url.path }
         if removed.isEmpty {
@@ -791,7 +791,7 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS)
-    @objc private func windowDidEnterFullScreen() {
+    @objc func windowDidEnterFullScreen() {
         self.isFullScreen = true
         self.userActivityDetected()
         
@@ -800,7 +800,7 @@ final class VTPlayerViewModel {
         }
     }
     
-    @objc private func windowDidExitFullScreen() {
+    @objc func windowDidExitFullScreen() {
         self.isFullScreen = false
         self.showControls = true
         if self.cursorHidden {
@@ -850,7 +850,7 @@ final class VTPlayerViewModel {
         }
     }
     
-    private func startInactivityTimer() {
+    func startInactivityTimer() {
         inactivityTask?.cancel()
         inactivityTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
@@ -911,7 +911,7 @@ final class VTPlayerViewModel {
         }
     }
 
-    private func handleTimeJump() {
+    func handleTimeJump() {
         guard let player = player else { return }
         let currentTime = player.currentTime()
         
@@ -972,7 +972,7 @@ final class VTPlayerViewModel {
         seek(to: target)
     }
 
-    private func triggerSingleFrameUpdate(
+    func triggerSingleFrameUpdate(
         at time: CMTime,
         for player: AVPlayer,
         requestGeneration: UInt64
@@ -987,13 +987,13 @@ final class VTPlayerViewModel {
     }
 
     /// Decodes a single frame away from the main actor so seeking remains responsive.
-    private func readSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
+    func readSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
         await Task.detached(priority: .userInitiated) {
             Self.decodeSingleFrame(from: url, at: time)
         }.value
     }
 
-    nonisolated private static func decodeSingleFrame(from url: URL, at time: CMTime) -> VTFrame? {
+    nonisolated static func decodeSingleFrame(from url: URL, at time: CMTime) -> VTFrame? {
         let asset = AVURLAsset(url: url)
         guard let track = asset.tracks(withMediaType: .video).first else { return nil }
         guard let reader = try? AVAssetReader(asset: asset) else { return nil }
@@ -1015,908 +1015,6 @@ final class VTPlayerViewModel {
     }
     
     /// Whether the pipeline needs to be rebuilt on the next resume.
-    private var enhancementsPendingRestart = false
-
-    /// Updates coordinator when features are toggled without changing playback state.
-    func updateEnhancements() {
-        validateEnhancementSelections()
-        #if os(macOS)
-        setNativeVideoEnabled(!isPipelineActive)
-        #endif
-        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-        if isPlaying && !isPaused {
-            if isPipelineActive {
-                startPlaybackLoop()
-            } else {
-                stopPlaybackLoopOnly()
-                if let player {
-                    player.play()
-                    player.rate = Float(playbackSpeed)
-                    self.isPaused = false
-                }
-            }
-        } else if isPlaying && isPaused {
-            // Don't restart the pipeline while paused — the cache clear
-            // would cause a visible freeze on resume.  Flag it so play()
-            // rebuilds the pipeline when the user unpauses.
-            enhancementsPendingRestart = true
-        }
-        #endif
-    }
-    
-    /// Toggles play and pause state.
-    func togglePlayPause() {
-        guard player != nil else { return }
-        if isPaused || !isPlaying {
-            play()
-        } else {
-            pause()
-        }
-    }
-    
-    /// Starts playback and the VideoToolbox processing loop.
-    func play() {
-        guard let player = player else { return }
-
-        self.isPlaying = true
-        self.isPaused = false
-
-        #if os(macOS)
-        renderer.setRenderingActive(true)
-        #endif
-
-        player.rate = Float(self.playbackSpeed)
-
-        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-        // Rebuild the pipeline if enhancements were changed while paused,
-        // or if the loop has not yet been initialized. Otherwise, the existing
-        // active loop will automatically resume processing when isPaused is false.
-        if isPipelineActive {
-            if enhancementsPendingRestart || producerTask == nil {
-                enhancementsPendingRestart = false
-                startPlaybackLoop()
-            } else {
-                startDisplayLinkIfNeeded()
-            }
-        } else {
-            #if os(macOS)
-            setNativeVideoEnabled(true)
-            #endif
-            stopPlaybackLoopOnly()
-        }
-        #endif
-        self.userActivityDetected()
-    }
-
-    /// Drop persisted or programmatically assigned enhancement values that
-    /// the current machine/video cannot actually run. Menu disabling is only
-    /// a UI affordance; this guard protects the pipeline from stale state.
-    private func validateEnhancementSelections() {
-        var disabledSelection = false
-        if superResolutionLevel > 0,
-           !availableSuperResolutionScales.contains(superResolutionLevel) {
-            superResolutionLevel = 0
-            disabledSelection = true
-        }
-        if qualitySuperResolutionScaleFactor > 0,
-           !availableQualitySuperResolutionScales.contains(qualitySuperResolutionScaleFactor) {
-            qualitySuperResolutionScaleFactor = 0
-            disabledSelection = true
-        }
-        if disabledSelection {
-            srInitializationError = "Selected super-resolution mode is unavailable for this video on this device."
-        }
-    }
-    
-    /// Pauses player
-    func pause() {
-        guard let player = player else { return }
-        player.pause()
-        resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
-        self.isPaused = true
-        self.isBuffering = false
-        #if os(macOS)
-        renderer.setRenderingActive(false)
-        stopDisplayLinkIfNeeded()
-        #else
-        if let link = displayLink {
-            link.invalidate()
-            self.displayLink = nil
-        }
-        #endif
-        self.saveProgress()
-        self.saveVideoSettings()
-        self.userActivityDetected()
-    }
-    
-    #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-    private func endActiveCoordinator(after producer: Task<Void, Never>? = nil) {
-        let coordinator = activeCoordinator
-        activeCoordinator = nil
-        guard let coordinator else { return }
-
-        let producer = producer ?? producerTask
-        producer?.cancel()
-        Task {
-            if let producer {
-                await producer.value
-            }
-            await coordinator.endSession()
-        }
-    }
-
-    private func stopDisplayLinkIfNeeded() {
-        #if os(macOS)
-        renderer.onDisplayTick = nil
-        #endif
-        if let link = displayLink {
-            link.invalidate()
-            displayLink = nil
-        }
-    }
-
-    #if os(macOS)
-    private func setNativeVideoEnabled(_ enabled: Bool) {
-        guard let tracks = player?.currentItem?.tracks else { return }
-        for track in tracks where track.assetTrack?.mediaType == .video {
-            track.isEnabled = enabled
-        }
-        // Keep audio explicitly enabled across pipeline restarts. AVPlayer
-        // owns the audio clock even while native video is hidden.
-        for track in tracks where track.assetTrack?.mediaType == .audio {
-            track.isEnabled = true
-        }
-    }
-    #endif
-
-    private func stopPlaybackLoopOnly() {
-        #if os(macOS)
-        renderer.setRenderingActive(false)
-        setNativeVideoEnabled(true)
-        stopDisplayLinkIfNeeded()
-        #endif
-        playbackGeneration += 1
-        qualityModelRetryTask?.cancel()
-        qualityModelRetryTask = nil
-        let producer = producerTask
-        producerTask?.cancel()
-        producerTask = nil
-        consumerTask?.cancel()
-        consumerTask = nil
-        endActiveCoordinator(after: producer)
-
-        #if !os(macOS)
-        if let link = displayLink {
-            link.invalidate()
-            self.displayLink = nil
-        }
-        #endif
-        
-        audioSyncTask?.cancel()
-        audioSyncTask = nil
-        audioSyncLatency = 0
-        presentedFramesCount = 0
-        diagnosticPresentedFramesCount = 0
-        diagnosticPresentedInterpolatedCount = 0
-        diagnosticPresentedSourceCount = 0
-        producedFramesCount = 0
-        displayLinkTickCount = 0
-        displayRateSamples.removeAll(keepingCapacity: true)
-        displayRate1PercentLow = 0
-        displayRateMeasurementStart = .now()
-        isBuffering = false
-        lockCache { clearProcessedFrameCache() }
-    }
-
-    private func startPlaybackLoop() {
-        let shouldResumePlayback = isPlaying && !isPaused
-        #if os(macOS)
-        setNativeVideoEnabled(false)
-        #endif
-        isBuffering = false
-        playbackGeneration += 1
-        qualityModelRetryTask?.cancel()
-        qualityModelRetryTask = nil
-        let gen = playbackGeneration
-        let oldProducer = producerTask
-        producerTask?.cancel()
-        producerTask = nil
-        consumerTask?.cancel()
-        consumerTask = nil
-        endActiveCoordinator(after: oldProducer)
-
-        let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
-        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
-        let adaptiveFISize: CGSize? = {
-            guard frameInterpolationLevel > 0 else { return nil }
-            let combinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
-            guard combinedMode || videoWidth > 1280 || videoHeight > 720 else { return nil }
-            // Combined 2x SR + 2x FI is the heaviest real-time mode. When
-            // possible, feed it a smaller source so the processor has enough
-            // headroom to produce every output phase on time. Keep the normal
-            // FI cap for pure interpolation.
-            if combinedMode {
-                // Probe the actual temporal-first configuration. A combined
-                // FI+spatial initializer may accept 480×270 while the pure
-                // FI configuration used by the stable sequential path
-                // rejects it at processing time on this Mac.
-                func alignedDimension(_ value: Double, maximum: Int) -> Int {
-                    // VideoToolbox's SR/FI implementations commonly require
-                    // macroblock-friendly heights. Flooring 266.7 to 266
-                    // made the 960x400 path fail, while the equivalent 272
-                    // pixel input is supported. Round up within the probe
-                    // bound so we preserve aspect ratio without selecting a
-                    // known-invalid odd-size surface.
-                    let rounded = Int(ceil(value / 16.0) * 16.0)
-                    return min(maximum, max(2, rounded & ~1))
-                }
-                for (maxWidth, maxHeight) in [(640.0, 360.0), (960.0, 540.0)] {
-                    let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
-                    let candidateWidth = alignedDimension(Double(videoWidth) * scale, maximum: Int(maxWidth))
-                    let candidateHeight = alignedDimension(Double(videoHeight) * scale, maximum: Int(maxHeight))
-                    guard candidateWidth > 0, candidateHeight > 0 else { continue }
-                    if VTLowLatencySuperResolutionScalerConfiguration
-                        .supportedScaleFactors(frameWidth: candidateWidth, frameHeight: candidateHeight)
-                        .contains(2.0),
-                       VTLowLatencyFrameInterpolationConfiguration(
-                           frameWidth: candidateWidth,
-                           frameHeight: candidateHeight,
-                           numberOfInterpolatedFrames: 1
-                       ) != nil {
-                        return CGSize(width: candidateWidth, height: candidateHeight)
-                    }
-                }
-                return nil
-            }
-            let scale = min(1280.0 / Double(videoWidth), 720.0 / Double(videoHeight))
-            let candidate = CGSize(width: ceil(Double(videoWidth) * scale / 16) * 16,
-                                   height: ceil(Double(videoHeight) * scale / 16) * 16)
-            return candidate
-        }()
-        let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
-        let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
-        let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
-        NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(frameInterpolationLevel)x sr=\(superResolutionLevel)x qsr=\(qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
-
-        lockCache { clearProcessedFrameCache() }
-        if let player = player {
-            let adjusted = CMTimeSubtract(player.currentTime(), frameDuration)
-            lastPulledTime = adjusted > .zero ? adjusted : .zero
-            lastRenderedPTS = player.currentTime()
-            resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
-        } else {
-            lastPulledTime = .zero
-            lastRenderedPTS = .zero
-            resetPresentationClock(at: 0)
-        }
-        audioSyncLatency = 0
-
-        // Re-assert player rate so audio keeps playing after a pipeline
-        // restart triggered by updateEnhancements().  Without this, a
-        // rate that dropped to 0 (AVPlayer internal stall) stays silent
-        // because the old audioSyncTask was already cancelled and the new
-        // one won't check for 200 ms.
-        if let player = player, !isPaused {
-            player.rate = Float(playbackSpeed)
-        }
-
-        let srLevel = self.superResolutionLevel
-        let fiLevel = self.frameInterpolationLevel
-        let highQuality = self.useHighQualityDownsampling
-        let realTime = self.useRealTimePriority
-        let qualitySR = self.qualitySuperResolutionScaleFactor
-        let mbStrength = self.motionBlurStrength
-        let dnStrength = self.denoiseStrength
-        let qualPrior = self.qualityPrioritization
-
-        producerTask = Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            
-            defer {
-                // A replacement loop has a newer generation. Never let a
-                // cancelled predecessor erase its producer handle.
-                if self.playbackGeneration == gen {
-                    self.producerTask = nil
-                }
-            }
-
-            // Check Quality SR model availability before starting (macOS only)
-            var effectiveQualitySR = qualitySR
-            var effectiveSRLevel = srLevel
-            
-            #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-            @MainActor func fallBackFromQualitySR(preserveSelection: Bool = false) {
-                effectiveQualitySR = 0
-                let requestedFallback = qualitySR == 4 ? 4 : 2
-                if self.availableSuperResolutionScales.contains(requestedFallback) {
-                    effectiveSRLevel = requestedFallback
-                } else if self.availableSuperResolutionScales.contains(2) {
-                    effectiveSRLevel = 2
-                } else {
-                    effectiveSRLevel = 0
-                }
-
-                // Keep the controls truthful: the visible selection must
-                // match the processor that will actually run.
-                if !preserveSelection {
-                    self.qualitySuperResolutionScaleFactor = 0
-                }
-                self.superResolutionLevel = effectiveSRLevel
-            }
-
-            if qualitySR > 0 {
-                var qlConfig: VTSuperResolutionScalerConfiguration? = nil
-                if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
-                   VTSuperResolutionScalerConfiguration.isSupported {
-                    qlConfig = VTSuperResolutionScalerConfiguration(
-                        frameWidth: videoWidth, frameHeight: videoHeight,
-                        scaleFactor: qualitySR, inputType: .video,
-                        usePrecomputedFlow: false, qualityPrioritization: .normal,
-                        revision: .revision1
-                    )
-                    if qlConfig == nil {
-                        self.srInitializationError = "Quality SR unavailable for \(videoWidth)x\(videoHeight)"
-                        print("Quality SR not available for \(videoWidth)x\(videoHeight) @ \(qualitySR)x")
-                    }
-                } else {
-                    print("VTSuperResolutionScaler not supported on this system")
-                }
-                if let checkConfig = qlConfig {
-                    await self.modelManager.checkStatus(for: checkConfig)
-                    switch self.modelManager.status {
-                    case .ready:
-                        break
-                    case .downloadRequired:
-                        print("Quality SR model download required, starting download")
-                        self.modelManager.downloadModel(for: checkConfig)
-                        self.retryAfterQualityModelDownload(generation: gen)
-                        fallBackFromQualitySR(preserveSelection: true)
-                    case .downloading:
-                        self.retryAfterQualityModelDownload(generation: gen)
-                        fallBackFromQualitySR(preserveSelection: true)
-                    case .failed(let message):
-                        self.srInitializationError = "Quality SR model unavailable: \(message)"
-                        fallBackFromQualitySR()
-                    case .notChecked:
-                        fallBackFromQualitySR()
-                    }
-                } else {
-                    fallBackFromQualitySR()
-                }
-            }
-
-            #if os(macOS)
-            if effectiveSRLevel > 0 {
-                let supportedScales = VTLowLatencySuperResolutionScalerConfiguration
-                    .supportedScaleFactors(frameWidth: videoWidth, frameHeight: videoHeight)
-                if !supportedScales.contains(2.0) {
-                    self.srInitializationError = "Low Latency SR does not support \(videoWidth)x\(videoHeight) on this device; enhancement disabled."
-                    effectiveSRLevel = 0
-                    print("Low Latency SR unavailable for \(videoWidth)x\(videoHeight): \(supportedScales)")
-                }
-            }
-            #endif
-            #endif
-            var coordinator = VTFrameProcessorCoordinator(
-                superResolutionLevel: effectiveSRLevel,
-                frameInterpolationLevel: fiLevel,
-                useHighQualityDownsampling: highQuality,
-                useRealTimePriority: realTime,
-                qualitySuperResolutionScaleFactor: effectiveQualitySR,
-                motionBlurStrength: mbStrength,
-                denoiseStrength: dnStrength,
-                qualityPrioritization: qualPrior
-            )
-            guard !Task.isCancelled, gen == self.playbackGeneration else { return }
-            self.activeCoordinator = coordinator
-
-            // Pause the player during coordinator init so the audio clock
-            // doesn't advance while the cache is empty.  Without this, the
-            // consumer stalls (empty cache) while audio keeps running,
-            // creating an audible gap followed by a video jump.
-            self.isInitializingPipeline = true
-            let wasRate = self.player?.rate ?? 0
-            self.player?.pause()
-
-            do {
-                if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
-                   self.srInitializationError == nil {
-                    self.srInitializationError = nil
-                }
-                try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
-            } catch {
-                guard gen == self.playbackGeneration else { return }
-                await coordinator.endSession()
-
-                // The combined VideoToolbox processor is capability- and
-                // resolution-dependent.  Its configuration initializer can
-                // succeed while session creation still rejects the actual
-                // pixel-buffer requirements.  Do not reset playback to time
-                // zero in that case: retry as FI-only at the same adaptive
-                // input size and make the fallback visible in diagnostics.
-                if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 {
-                    let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using FI-only."
-                    self.srInitializationError = message
-                    print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying FI-only.")
-
-                    effectiveSRLevel = 0
-                    self.superResolutionLevel = 0
-                    coordinator = VTFrameProcessorCoordinator(
-                        superResolutionLevel: 0,
-                        frameInterpolationLevel: fiLevel,
-                        useHighQualityDownsampling: highQuality,
-                        useRealTimePriority: realTime,
-                        qualitySuperResolutionScaleFactor: 0,
-                        motionBlurStrength: mbStrength,
-                        denoiseStrength: dnStrength,
-                        qualityPrioritization: qualPrior
-                    )
-                    self.activeCoordinator = coordinator
-                    do {
-                        try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
-                    } catch {
-                        self.srInitializationError = "FI fallback unavailable: \(error.localizedDescription)"
-                        print("Failed to initialize FI fallback session: \(error.localizedDescription)")
-                        self.activeCoordinator = nil
-                        await coordinator.endSession()
-                        self.stop()
-                        return
-                    }
-                } else {
-                    self.srInitializationError = error.localizedDescription
-                    print("Failed to initialize coordinator session: \(error.localizedDescription)")
-                    self.activeCoordinator = nil
-                    self.stop()
-                    return
-                }
-            }
-
-            // Re-sync lastPulledTime after potentially slow coordinator setup
-            // and resume the player from the same position.
-            if let player = self.player {
-                let resumeTime = player.currentTime()
-                self.lastPulledTime = resumeTime
-                self.lastRenderedPTS = resumeTime
-                self.resetPresentationClock(at: CMTimeGetSeconds(resumeTime))
-                await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                let shouldResume = shouldResumePlayback && gen == self.playbackGeneration
-                self.isInitializingPipeline = false
-                if shouldResume {
-                    self.isPlaying = true
-                    self.isPaused = false
-                    player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
-                } else {
-                    player.pause()
-                }
-            } else {
-                self.isInitializingPipeline = false
-            }
-
-            // Create VTFrameSequence to decode frames faster-than-real-time
-            guard let videoURL = self.videoURL else {
-                self.activeCoordinator = nil
-                await coordinator.endSession()
-                return
-            }
-            var iteratorStartTime = self.lastPulledTime
-            let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
-            var frameIterator = frameSequence.makeAsyncIterator()
-            var combinedProcessFallbackAttempted = false
-
-            while !Task.isCancelled {
-                guard gen == self.playbackGeneration else { break }
-
-                if self.isPaused && !self.isBuffering {
-                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-                    continue
-                }
-
-                // Detect seek: if lastPulledTime was changed by seekRelative,
-                // recreate the iterator at the new position. Without this, the
-                // producer would keep feeding stale frames from the old position.
-                if self.lastPulledTime != iteratorStartTime {
-                    iteratorStartTime = self.lastPulledTime
-                    let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
-                    frameIterator = newSequence.makeAsyncIterator()
-                    continue
-                }
-
-                // Keep a modest look-ahead so the consumer can absorb brief
-                // processor spikes without retaining an unnecessarily large
-                // decoded frame backlog on macOS.
-                let count = self.lockCache {
-                    max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
-                }
-                if count >= self.bufferedFrameLimit {
-                    try? await Task.sleep(nanoseconds: 10_000_000)
-                    continue
-                }
-
-                // Read next decoded frame (hardware decoder, ~1ms per frame)
-                let vtFrame: VTFrame
-                do {
-                    guard let next = try await frameIterator.next() else {
-                        break  // EOF
-                    }
-                    vtFrame = next
-                } catch {
-                    print("VTFrameSequence error: \(error.localizedDescription)")
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                    continue
-                }
-
-                // Drop late frames to maintain real-time audio-video synchronization.
-                // Do not drop frames if the cache is completely empty (e.g. after seek or startup),
-                // to avoid getting stuck in a dropping loop before the rendering loop recovers.
-                if let player = self.player, !self.isPaused, player.rate > 0 {
-                    let currentSecs = self.presentationClockSeconds(
-                        playerSeconds: CMTimeGetSeconds(player.currentTime())
-                    )
-                    let frameSecs = CMTimeGetSeconds(vtFrame.presentationTimeStamp)
-                    // If the frame is late by more than 100ms, skip processing it
-                    let isEmpty = self.lockCache {
-                        self.processedFrameCacheStart >= self.processedFrameCache.count
-                    }
-                    if !isEmpty && frameSecs < currentSecs - 0.10 {
-                        self.pendingDroppedFrames += 1
-                        self.publishProcessingDiagnostics()
-                        continue
-                    }
-                }
-
-                // Process through the VideoToolbox pipeline
-                let processStart = DispatchTime.now()
-                do {
-                    let outputFrames = try await coordinator.processFrame(vtFrame)
-                    let processEnd = DispatchTime.now()
-
-                    guard gen == self.playbackGeneration else { break }
-
-                    self.publishProcessingDiagnostics(
-                        Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-                    )
-                    let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-                    let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
-                    if frameInterpolationLevel > 0,
-                       processingMilliseconds > sourceFrameBudgetMilliseconds {
-                        let processingText = String(format: "%.1f", processingMilliseconds)
-                        let budgetText = String(format: "%.1f", sourceFrameBudgetMilliseconds)
-                        print("PERF: FI deadline miss processing=\(processingText)ms budget=\(budgetText)ms outputs=\(outputFrames.count) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
-                    }
-
-                    if outputFrames.count < 2 && self.frameInterpolationLevel > 0 {
-                        print("⚠️ FI: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
-                    }
-
-                    // Insert output frames in PTS-sorted order using binary
-                    // search.  The cache is already sorted and output frames
-                    // arrive roughly in order, so this is O(log n) per frame
-                    // instead of re-sorting the entire array every time.
-                    self.lockCache {
-                        for outFrame in outputFrames {
-                            let pts = outFrame.presentationTimeStamp
-                            var lo = self.processedFrameCacheStart
-                            var hi = self.processedFrameCache.count
-                            while lo < hi {
-                                let mid = (lo + hi) / 2
-                                if self.processedFrameCache[mid].presentationTimeStamp < pts {
-                                    lo = mid + 1
-                                } else {
-                                    hi = mid
-                                }
-                            }
-                            self.processedFrameCache.insert(outFrame, at: lo)
-                        }
-                        self.compactProcessedFrameCacheIfNeeded()
-                    }
-                    self.producedFramesCount += outputFrames.count
-                } catch {
-                    guard gen == self.playbackGeneration else { break }
-                    if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !combinedProcessFallbackAttempted {
-                        combinedProcessFallbackAttempted = true
-                        self.superResolutionLevel = 0
-                        self.srInitializationError = "Combined 2x SR + 2x FI failed during processing (\(error.localizedDescription)); using FI-only."
-                        print("⚠️ Combined SR/FI processing failed: \(error.localizedDescription). Restarting as FI-only.")
-                        self.startPlaybackLoop()
-                        break
-                    }
-                    print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
-                    self.lockCache { self.processedFrameCache.append(vtFrame) }
-                    self.producedFramesCount += 1
-                }
-            }
-
-            await coordinator.endSession()
-            if self.playbackGeneration == gen {
-                self.activeCoordinator = nil
-            }
-        }
-        
-        startDisplayLinkIfNeeded()
-
-        audioSyncTask?.cancel()
-        audioSyncTask = Task {
-            let myGen = gen
-            while !Task.isCancelled {
-                guard myGen == self.playbackGeneration else { break }
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                guard !self.isPaused, let player = self.player else { continue }
-                let currentSecs = CMTimeGetSeconds(player.currentTime())
-                let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
-                let latency = currentSecs - lastSecs
-                // Keep the audio clock independent from the processed-frame
-                // queue. Pausing AVPlayer here can deadlock playback when a
-                // restart or a slow FI/SR frame leaves fewer than two frames
-                // buffered; the display consumer already performs PTS-aware
-                // pacing and late-frame dropping.
-                self.isBuffering = false
-
-                // Record desync for diagnostics without interrupting audio.
-                if latency > self.audioSyncLatencyThreshold {
-                    self.audioSyncLatency = latency
-                } else {
-                    self.audioSyncLatency = 0
-                }
-
-                // AVPlayer may stop playback (rate → 0) if its audio decoder fails
-                // on certain file formats. Periodically re-assert the desired rate
-                // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline {
-                    player.rate = Float(self.playbackSpeed)
-                }
-            }
-        }
-    }
-
-    private func startDisplayLinkIfNeeded() {
-        guard displayLink == nil else { return }
-
-        // Use the same display-link scheduler on both platforms.
-        #if os(macOS)
-        // Let the renderer's MTKView own the display cadence. A separate
-        // NSWindow display link can be throttled independently and then
-        // starves FI output even while the Metal view is drawing at refresh.
-        renderer.onDisplayTick = { [weak self] in
-            self?.tickDisplayLink()
-        }
-        #else
-        let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
-        #endif
-        #if !os(macOS)
-        link.add(to: .main, forMode: .common)
-        self.displayLink = link
-        #endif
-    }
-    #endif
-
-    @MainActor
-    private func tickDisplayLink() {
-        guard isPlaying && !isPaused, let player = self.player else { return }
-        displayLinkTickCount += 1
-        
-        let currentTime = player.currentTime()
-        let observedSecs = CMTimeGetSeconds(currentTime)
-        let currentSecs = presentationClockSeconds(playerSeconds: observedSecs)
-        let presentationSecs = currentSecs - interpolationPresentationDelay
-        
-        var lastFrameToRender: VTFrame? = nil
-        var drained = 0
-        let now = DispatchTime.now()
-        let wallElapsed = Double(now.uptimeNanoseconds - lastPresentationWall.uptimeNanoseconds) / 1_000_000_000.0
-        // MTKView callbacks may arrive around 48 Hz on a 60 Hz display.
-        // Requiring 90% of the 33 ms FI2 interval then presents every other
-        // callback (~24 Hz). A bounded 60% threshold lets the scheduler
-        // alternate one- and two-callback gaps, converging on the requested
-        // 30 Hz without allowing an unbounded burst.
-        let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.6
-        let useWallClockPacing = frameInterpolationLevel > 0 && sourceFrameRate > 0
-        
-        self.lockCache {
-            if useWallClockPacing {
-                // FI output has a fixed cadence independent of the display
-                // callback cadence. Present at most one queued frame per
-                // wall-clock deadline; draining every PTS-eligible frame can
-                // turn 2x output into source-rate output when callbacks are
-                // delivered at an uneven ~45 Hz cadence.
-                guard canForceNextFrame else { return }
-
-                // Discard frames that are already behind the last visible
-                // timestamp, but never consume two eligible frames in one
-                // display callback.
-                while self.processedFrameCacheStart < self.processedFrameCache.count,
-                      self.processedFrameCache[self.processedFrameCacheStart].presentationTimeStamp <= self.lastRenderedPTS {
-                    self.processedFrameCacheStart += 1
-                    drained += 1
-                }
-
-                guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
-                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                // Keep audio/video bounded: a frame may lead the audio clock
-                // by at most 80 ms while the wall-clock cadence is restored.
-                guard frameTime <= presentationSecs + 0.08 else { return }
-                lastFrameToRender = firstFrame
-                self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                drained += 1
-                self.processedFrameCacheStart += 1
-            } else {
-                while self.processedFrameCacheStart < self.processedFrameCache.count {
-                    let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                    let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                    if frameTime > presentationSecs + 0.005 {
-                        break
-                    }
-
-                    lastFrameToRender = firstFrame
-                    self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                    drained += 1
-                    self.processedFrameCacheStart += 1
-                }
-            }
-            self.compactProcessedFrameCacheIfNeeded()
-        }
-        
-        if let frame = lastFrameToRender {
-            self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
-            lastPresentationWall = now
-            // Only one frame is visible after a display-link tick. Any
-            // additional drained frames were skipped and are counted as
-            // drops below; they must not inflate the displayed FPS.
-            presentedFramesCount += 1
-            diagnosticPresentedFramesCount += 1
-            if frame.isInterpolated {
-                diagnosticPresentedInterpolatedCount += 1
-            } else {
-                diagnosticPresentedSourceCount += 1
-            }
-            self.publishCurrentTime(min(currentSecs, duration))
-            if drained > 1 {
-                self.pendingDroppedFrames += drained - 1
-                self.publishProcessingDiagnostics()
-            }
-        }
-        
-        // Stats calculations
-        let statsNow = DispatchTime.now()
-        let elapsedFPSTime = Double(statsNow.uptimeNanoseconds - fpsTimer.uptimeNanoseconds) / 1_000_000_000.0
-        if elapsedFPSTime >= 1.0 {
-            let measuredRate = Double(presentedFramesCount) / elapsedFPSTime
-            self.fps = measuredRate
-            let measurementAge = Double(statsNow.uptimeNanoseconds - displayRateMeasurementStart.uptimeNanoseconds) / 1_000_000_000.0
-            // Ignore startup/reconfiguration warm-up, then retain a short
-            // rolling window so the metric reflects recent playback quality.
-            if measurementAge >= 2.0 {
-                displayRateSamples.append(measuredRate)
-                if displayRateSamples.count > 5 {
-                    displayRateSamples.removeFirst(displayRateSamples.count - 5)
-                }
-                let sortedRates = displayRateSamples.sorted()
-                let lowIndex = max(0, Int(ceil(Double(sortedRates.count) * 0.01)) - 1)
-                self.displayRate1PercentLow = sortedRates[lowIndex]
-            } else {
-                self.displayRate1PercentLow = measuredRate
-            }
-            presentedFramesCount = 0
-            fpsTimer = statsNow
-        }
-        
-        let diagElapsed = Double(now.uptimeNanoseconds - diagTimer.uptimeNanoseconds) / 1_000_000_000.0
-        if diagElapsed >= 5.0 {
-            let curRate = player.rate
-            let curFPS = self.fps
-            var firstFrame: VTFrame? = nil
-            var cacheCount = 0
-            self.lockCache {
-                if self.processedFrameCacheStart < self.processedFrameCache.count {
-                    firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                }
-                cacheCount = max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
-            }
-            
-            let produced = producedFramesCount
-            let callbacks = displayLinkTickCount
-            let presented = diagnosticPresentedFramesCount
-            let interpolated = diagnosticPresentedInterpolatedCount
-            let source = diagnosticPresentedSourceCount
-            if let first = firstFrame {
-                let ft = CMTimeGetSeconds(first.presentationTimeStamp)
-                NSLog("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
-            } else {
-                NSLog("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
-            }
-            producedFramesCount = 0
-            displayLinkTickCount = 0
-            diagnosticPresentedFramesCount = 0
-            diagnosticPresentedInterpolatedCount = 0
-            diagnosticPresentedSourceCount = 0
-            diagTimer = now
-        }
-    }
-
-    @objc private func caDisplayLinkTick() {
-        self.tickDisplayLink()
-    }
-
-    /// Pauses/stops playback entirely.
-    func stop() {
-        #if os(macOS)
-        renderer.setRenderingActive(false)
-        setNativeVideoEnabled(false)
-        stopDisplayLinkIfNeeded()
-        #endif
-        playbackGeneration += 1
-        seekGeneration &+= 1
-        if self.currentTime > 0 {
-            self.saveProgress()
-        }
-        saveVideoSettings()
-        if let token = timeObserverToken, let player {
-            player.removeTimeObserver(token)
-        }
-        timeObserverToken = nil
-        let producer = producerTask
-        producerTask?.cancel()
-        producerTask = nil
-        consumerTask?.cancel()
-        consumerTask = nil
-        endActiveCoordinator(after: producer)
-        #if os(macOS)
-        stopDisplayLinkIfNeeded()
-        #else
-        if let link = displayLink {
-            link.invalidate()
-            self.displayLink = nil
-        }
-        #endif
-        #if os(iOS)
-        self.tempLocalURL = nil
-        #endif
-        if let scoped = securityScopedURL {
-            scoped.stopAccessingSecurityScopedResource()
-            self.securityScopedURL = nil
-        }
-        audioSyncTask?.cancel()
-        audioSyncTask = nil
-        audioSyncLatency = 0
-        lastRenderedPTS = .zero
-        lockCache { clearProcessedFrameCache() }
-        
-        if let observer = playerItemObserver {
-            NotificationCenter.default.removeObserver(observer)
-            playerItemObserver = nil
-        }
-        if let observer = timeJumpedObserver {
-            NotificationCenter.default.removeObserver(observer)
-            timeJumpedObserver = nil
-        }
-        rateObserver?.invalidate()
-        rateObserver = nil
-        player?.pause()
-        player = nil
-        
-        self.isPlaying = false
-        self.isPaused = false
-        self.isBuffering = false
-        self.currentTime = 0.0
-        self.lastPublishedCurrentTime = -Double.infinity
-        self.duration = 0.0
-        self.fps = 0.0
-        self.displayRate1PercentLow = 0.0
-        self.presentedFramesCount = 0
-        self.diagnosticPresentedFramesCount = 0
-        self.diagnosticPresentedInterpolatedCount = 0
-        self.diagnosticPresentedSourceCount = 0
-        self.producedFramesCount = 0
-        self.displayLinkTickCount = 0
-        self.displayRateSamples.removeAll(keepingCapacity: true)
-        self.displayRateMeasurementStart = .now()
-        self.frameProcessingTime = 0.0
-        self.aneUsagePercent = 0.0
-        self.srInitializationError = nil
-        self.isInitializingPipeline = false
-        self.enhancementsPendingRestart = false
-        self.renderer.clear()
-        self.userActivityDetected()
-    }
+    var enhancementsPendingRestart = false
 
 }
