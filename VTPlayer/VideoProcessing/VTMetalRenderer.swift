@@ -283,13 +283,13 @@ public final class VTMetalRenderer: MTKView {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
             let targetHeadroom = 1 + (currentEDRHeadroom - 1) * normalizedStrength
             let exposureEV = log2(targetHeadroom)
+            // Exposure scales RGB uniformly, preserving the source hue and
+            // chroma relationships. Do not add saturation or contrast here:
+            // EDR describes luminance headroom, and SDR footage contains no
+            // HDR color information for us to reconstruct safely.
             hdrImage = sharpenedImage
                 .applyingFilter("CIExposureAdjust", parameters: [
                     kCIInputEVKey: exposureEV
-                ])
-                .applyingFilter("CIColorControls", parameters: [
-                    kCIInputSaturationKey: 1.0 + hdrStrength * 0.15,
-                    kCIInputContrastKey: 1.0 + hdrStrength * 0.1
                 ])
         } else {
             hdrImage = sharpenedImage
