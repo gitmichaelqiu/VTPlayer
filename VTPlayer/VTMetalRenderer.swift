@@ -55,6 +55,7 @@ public final class VTMetalRenderer: MTKView {
         // frames when two updates arrive between run-loop redraws.
         self.enableSetNeedsDisplay = false
         self.isPaused = true
+        self.preferredFramesPerSecond = 60
         #else
         self.enableSetNeedsDisplay = true
         self.isPaused = true // We manually trigger drawing when a new frame is received
