@@ -115,15 +115,9 @@ final class VTPlayerViewModel {
 
     // New API Feature Levels
     var qualitySuperResolutionScaleFactor: Int = 0  // 0=off, 2, 4 (Quality SR)
-    var motionBlurStrength: Int = 0 {  // 0=off, 1-100
-        didSet { updateEnhancements() }
-    }
-    var denoiseStrength: Double = 0.0 {  // 0.0=off, 0.0-1.0
-        didSet { updateEnhancements() }
-    }
-    var qualityPrioritization: Int = 1 {  // 1=normal, 2=quality
-        didSet { updateEnhancements() }
-    }
+    var motionBlurStrength: Int = 0  // 0=off, 1-100
+    var denoiseStrength: Double = 0.0  // 0.0=off, 0.0-1.0
+    var qualityPrioritization: Int = 1  // 1=normal, 2=quality
     var showSidebar = false
     var showLeftSidebar = true
     
