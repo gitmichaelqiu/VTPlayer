@@ -137,7 +137,7 @@ extension VTPlayerView {
                         }
                     }
                     
-                    Section {
+                    Section(isExpanded: $isRecentsExpanded) {
                         ForEach(unpinnedList, id: \.self) { url in
                             videoRow(for: url)
                                 .id("\(url.path)-unpinned")

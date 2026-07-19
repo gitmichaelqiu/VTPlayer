@@ -57,7 +57,7 @@ extension VTPlayerView {
                         }
                     }
                 } header: {
-                    Text("Recents")
+                    Text("Videos")
                 }
             }
             .listStyle(.sidebar)
