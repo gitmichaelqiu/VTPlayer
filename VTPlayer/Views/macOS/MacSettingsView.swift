@@ -296,7 +296,7 @@ struct EnhancementsSettingsTab: View {
 
                 SettingsSection("Postprocessing") {
                     SliderSettingsRow(
-                        "Motion Blur Strength",
+                        "Motion Blur",
                         helperText: "Apply a simulated motion blur filter (capped at 30 to prevent extreme darkening).",
                         value: Binding(
                             get: { Double(defaultMBLevel) },
@@ -311,7 +311,7 @@ struct EnhancementsSettingsTab: View {
                     Divider()
 
                     SliderSettingsRow(
-                        "Denoise Strength",
+                        "Denoise",
                         helperText: "Filter out noise dynamically using temporal reference frames.",
                         value: $defaultDNLevel,
                         range: 0.0...1.0,

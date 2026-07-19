@@ -336,7 +336,7 @@ extension VTPlayerView {
                 }
                 
                 HStack {
-                    Text("Denoise Strength")
+                    Text("Denoise")
                     Spacer()
                     Slider(value: $defaultDNLevel, in: 0.0...1.0, step: 0.05)
                     .frame(width: 140)
@@ -360,7 +360,14 @@ extension VTPlayerView {
                 HStack {
                     Text("HDR Boost")
                     Spacer()
-                    Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.1)
+                    Slider(value: Binding(
+                        get: { defaultHDRBoost },
+                        set: { newValue in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                defaultHDRBoost = newValue
+                            }
+                        }
+                    ), in: 0.0...2.0, step: 0.1)
                     .frame(width: 140)
                     Text(String(format: "%.1f", defaultHDRBoost))
                         .font(.caption.monospacedDigit())
