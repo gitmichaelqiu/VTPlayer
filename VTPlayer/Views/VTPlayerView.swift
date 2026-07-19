@@ -235,6 +235,25 @@ struct VTPlayerView: View {
         )
         #endif
         .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
+        .onReceive(NotificationCenter.default.publisher(for: .openVideoFileTriggered)) { _ in
+            showFileImporter = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleLeftSidebarTriggered)) { _ in
+            withAnimation {
+                if columnVisibility == .detailOnly {
+                    columnVisibility = .doubleColumn
+                } else {
+                    columnVisibility = .detailOnly
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleRightSidebarTriggered)) { _ in
+            if viewModel.videoURL != nil {
+                withAnimation {
+                    viewModel.showSidebar.toggle()
+                }
+            }
+        }
         #if os(macOS)
         .onOpenURL { url in
             viewModel.openVideo(url)
