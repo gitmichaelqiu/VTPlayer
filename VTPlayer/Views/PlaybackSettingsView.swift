@@ -74,19 +74,31 @@ struct PlaybackSettingsView: View {
                     }
                     .tint(.secondary)
 
-                    Picker("Motion Blur", selection: $viewModel.motionBlurStrength) {
-                        Text("Off").tag(0)
-                        Text("5").tag(5)
-                        Text("10").tag(10)
-                        Text("20").tag(20)
-                        Text("30").tag(30)
-                    }
-                    .onChange(of: viewModel.motionBlurStrength) { _, _ in
-                        viewModel.updateEnhancements()
+                    HStack {
+                        Text("Motion Blur")
+                        Spacer()
+                        Slider(
+                            value: Binding(
+                                get: { Double(viewModel.motionBlurStrength) },
+                                set: { viewModel.motionBlurStrength = Int($0) }
+                            ),
+                            in: 0...30,
+                            step: 1,
+                            onEditingChanged: { editing in
+                                if !editing {
+                                    viewModel.updateEnhancements()
+                                }
+                            }
+                        )
+                        .frame(width: 150)
+                        Text(viewModel.motionBlurStrength == 0 ? "Off" : "\(viewModel.motionBlurStrength)")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
                     }
 
                     HStack {
-                        Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
+                        Text("Denoise")
                         Spacer()
                         Slider(
                             value: $viewModel.denoiseStrength,
@@ -99,6 +111,10 @@ struct PlaybackSettingsView: View {
                             }
                         )
                         .frame(width: 150)
+                        Text(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
                     }
                 }
 

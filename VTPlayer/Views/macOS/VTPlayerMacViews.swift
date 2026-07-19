@@ -377,7 +377,6 @@ extension VTPlayerView {
                         viewModel.seek(to: scrubTime)
                     }
                 })
-                .tint(.cyan)
                 .labelsHidden()
                 .onChange(of: viewModel.currentTime) { _, newValue in
                     if !isScrubbing {
@@ -465,7 +464,7 @@ extension VTPlayerView {
                     )
                 }
                 .menuStyle(.borderlessButton)
-                .tint(.secondary)
+                .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Super Resolution — increases spatial resolution using neural upscaling")
                 
@@ -490,24 +489,13 @@ extension VTPlayerView {
                     )
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Frame Interpolation — increases video frame rate for fluid movement")
                 
-                // Motion Blur Menu
-                Menu {
-                    Picker(selection: Binding(
-                        get: { viewModel.motionBlurStrength },
-                        set: { viewModel.motionBlurStrength = $0; viewModel.updateEnhancements() }
-                    )) {
-                        Text("Off").tag(0)
-                        Text("5").tag(5)
-                        Text("10").tag(10)
-                        Text("20").tag(20)
-                        Text("30").tag(30)
-                    } label: {
-                        EmptyView()
-                    }
-                    .pickerStyle(.inline)
+                // Motion Blur Popover
+                Button {
+                    showMotionBlurPopover.toggle()
                 } label: {
                     let isActive = viewModel.motionBlurStrength > 0
                     enhancementControlLabel(
@@ -515,9 +503,30 @@ extension VTPlayerView {
                         isActive: isActive
                     )
                 }
-                .menuStyle(.borderlessButton)
+                .buttonStyle(.plain)
                 .fixedSize()
                 .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
+                .popover(isPresented: $showMotionBlurPopover, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")")
+                            .font(.headline)
+                        Slider(
+                            value: Binding(
+                                get: { Double(viewModel.motionBlurStrength) },
+                                set: { viewModel.motionBlurStrength = Int($0) }
+                            ),
+                            in: 0...30,
+                            step: 1,
+                            onEditingChanged: { editing in
+                                if !editing {
+                                    viewModel.updateEnhancements()
+                                }
+                            }
+                        )
+                    }
+                    .padding(16)
+                    .frame(width: 220)
+                }
                 
                 // Denoise Popover
                 Button {
@@ -640,7 +649,6 @@ extension VTPlayerView {
             .foregroundStyle(viewModel.sharpness > 0 ? .cyan : .secondary)
             .frame(width: hoverSH ? 90 : 22, alignment: .leading)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                .tint(.cyan)
                 .labelsHidden()
                 .frame(width: 60)
                 .opacity(hoverSH ? 1 : 0)
@@ -665,7 +673,6 @@ extension VTPlayerView {
                 Text("Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))")
                     .font(.headline)
                 Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
-                    .tint(.cyan)
             }
             .padding(16)
             .frame(width: 220)
