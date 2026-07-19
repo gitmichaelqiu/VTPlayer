@@ -391,7 +391,7 @@ extension VTPlayerView {
                 }
                 
                 HStack {
-                    Text("SDR-to-HDR Boost")
+                    Text("HDR Boost")
                     Spacer()
                     Slider(value: $defaultHDRBoost, in: 0.0...2.0, step: 0.1)
                     .frame(width: 140)

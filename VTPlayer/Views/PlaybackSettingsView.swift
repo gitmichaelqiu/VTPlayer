@@ -131,7 +131,7 @@ struct PlaybackSettingsView: View {
                     }
 
                     HStack {
-                        Text("SDR-to-HDR Boost")
+                        Text("HDR Boost")
                         Spacer()
                         Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
                             .frame(width: 150)
