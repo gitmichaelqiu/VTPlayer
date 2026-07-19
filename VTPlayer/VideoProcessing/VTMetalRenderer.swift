@@ -28,6 +28,7 @@ public final class VTMetalRenderer: MTKView {
     private var currentPixelBuffer: CVPixelBuffer?
     #if os(macOS)
     private var renderingActive = false
+    private var pausedLayoutRedrawPending = false
     #endif
 
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
@@ -195,19 +196,38 @@ public final class VTMetalRenderer: MTKView {
 
     public override func layout() {
         super.layout()
-        updateDrawableSizeForBackingScale()
+        if updateDrawableSizeForBackingScale(), isPaused {
+            requestPausedLayoutRedraw()
+        }
     }
 
     /// SwiftUI supplies an NSView's bounds in points. Keep the Metal drawable
     /// in backing pixels so enabling the processing pipeline does not render
     /// at half resolution on a Retina display.
-    private func updateDrawableSizeForBackingScale() {
-        guard let window else { return }
+    @discardableResult
+    private func updateDrawableSizeForBackingScale() -> Bool {
+        guard let window else { return false }
         let scale = window.backingScaleFactor
         layer?.contentsScale = scale
         let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
-        guard size.width > 0, size.height > 0, drawableSize != size else { return }
+        guard size.width > 0, size.height > 0, drawableSize != size else { return false }
         drawableSize = size
+        return true
+    }
+
+    /// MTKView's display scheduler is intentionally paused with playback.
+    /// A sidebar resize can otherwise leave its previous drawable stretched by
+    /// AppKit until another video frame arrives. Schedule one coalesced draw
+    /// after layout, when the resized drawable is available.
+    private func requestPausedLayoutRedraw() {
+        guard !pausedLayoutRedrawPending else { return }
+        pausedLayoutRedrawPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pausedLayoutRedrawPending = false
+            guard self.isPaused else { return }
+            self.draw()
+        }
     }
     #endif
     

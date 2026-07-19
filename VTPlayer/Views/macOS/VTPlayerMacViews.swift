@@ -46,8 +46,7 @@ extension VTPlayerView {
                             macSidebarRow(for: url)
                         }
                     } header: {
-                        Label("Pinned", systemImage: "pin.fill")
-                            .font(.caption.weight(.semibold))
+                        Text("Pinned")
                     }
                 }
 
