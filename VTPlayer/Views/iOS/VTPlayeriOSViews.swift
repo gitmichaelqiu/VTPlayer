@@ -126,12 +126,13 @@ extension VTPlayerView {
                 let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
                 
                 List {
-                    Section(isExpanded: $isPinnedExpanded) {
-                        ForEach(pinnedList, id: \.self) { url in
-                            videoRow(for: url)
-                        }
-                    } header: {
-                        if !pinnedList.isEmpty {
+                    if !pinnedList.isEmpty {
+                        Section(isExpanded: $isPinnedExpanded) {
+                            ForEach(pinnedList, id: \.self) { url in
+                                videoRow(for: url)
+                                    .id("\(url.path)-pinned")
+                            }
+                        } header: {
                             Text("Pinned")
                         }
                     }
@@ -139,6 +140,7 @@ extension VTPlayerView {
                     Section {
                         ForEach(unpinnedList, id: \.self) { url in
                             videoRow(for: url)
+                                .id("\(url.path)-unpinned")
                         }
                     } header: {
                         if !pinnedList.isEmpty {
@@ -190,9 +192,7 @@ extension VTPlayerView {
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                    togglePin(for: url)
-                }
+                togglePin(for: url)
             } label: {
                 Label(pinnedVideos.contains(url.lastPathComponent) ? "Unpin" : "Pin", 
                       systemImage: pinnedVideos.contains(url.lastPathComponent) ? "pin.slash.fill" : "pin.fill")
