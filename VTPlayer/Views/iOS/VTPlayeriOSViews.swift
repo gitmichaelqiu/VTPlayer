@@ -183,7 +183,7 @@ extension VTPlayerView {
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                     
-                    Text(formatDateAdded(for: url))
+                    Text(sortBy == .dateOpened ? formatDateOpened(for: url) : formatDateAdded(for: url))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -215,8 +215,6 @@ extension VTPlayerView {
             }
         }
         .contextMenu {
-            ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
-            
             Button {
                 togglePin(for: url)
             } label: {
@@ -237,6 +235,8 @@ extension VTPlayerView {
             } label: {
                 Label("Copy Name", systemImage: "doc.on.doc")
             }
+            
+            ShareLink(item: url, preview: SharePreview(url.lastPathComponent))
             
             Divider()
             
@@ -620,6 +620,18 @@ extension VTPlayerView {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    func formatDateOpened(for url: URL) -> String {
+        let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDates") as? [String: Double] ?? [:]
+        guard let timeInterval = dates[url.lastPathComponent] else {
+            return "Opened recently"
+        }
+        let date = Date(timeIntervalSince1970: timeInterval)
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return "Opened " + formatter.string(from: date)
     }
     #endif
 
