@@ -183,7 +183,17 @@ struct VideoThumbnailView: View {
                 if let duration = try? await asset.load(.duration) {
                     let seconds = CMTimeGetSeconds(duration)
                     if seconds.isFinite {
-                        await MainActor.run { durationString = String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
+                        let totalSeconds = Int(seconds)
+                        let hours = totalSeconds / 3600
+                        let mins = (totalSeconds % 3600) / 60
+                        let secs = totalSeconds % 60
+                        await MainActor.run {
+                            if hours > 0 {
+                                durationString = String(format: "%02d:%02d:%02d", hours, mins, secs)
+                            } else {
+                                durationString = String(format: "%d:%02d", mins, secs)
+                            }
+                        }
                     }
                 }
             }
