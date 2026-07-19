@@ -268,13 +268,12 @@ final class VTPlayerViewModel {
         min(8, max(2, bufferedFrameLimit / 2))
     }
 
-    /// FI generates frames between adjacent source timestamps. Keeping one
-    /// source interval in the presentation queue prevents a late processor
-    /// completion from collapsing the interpolated and source frames into one
-    /// display refresh.
+    /// The producer prebuffers complete FI output before audio starts, so
+    /// presentation can use the same PTS as AVPlayer's audio clock. Delaying
+    /// every interpolated frame by one source interval made audio lead video
+    /// even when the cache was healthy.
     var interpolationPresentationDelay: Double {
-        guard frameInterpolationLevel > 0, sourceFrameRate > 0 else { return 0 }
-        return 1.0 / sourceFrameRate
+        0
     }
     var outputPresentationInterval: Double {
         guard sourceFrameRate > 0 else { return 1.0 / 30.0 }
@@ -299,8 +298,11 @@ final class VTPlayerViewModel {
     var seekGeneration: UInt64 = 0
     var isInitializingPipeline = false
 
-    // Audio sync monitoring (diagnostic only — never pauses player)
+    // Audio is held only while the pipeline primes or catches up to an
+    // already-running audio clock. Frame-cache capacity stays independent.
     var lastRenderedPTS: CMTime = .zero
+    var isAwaitingPipelineAudioStart = false
+    var isHoldingAudioForVideoCatchUp = false
     // AVPlayer can expose a frame-quantized currentTime for silent or low-rate
     // assets.  Interpolated output must be paced by a monotonic clock between
     // those observations, otherwise two generated frames are drained at once
@@ -940,6 +942,8 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
+        self.isAwaitingPipelineAudioStart = false
+        self.isHoldingAudioForVideoCatchUp = false
         resetPresentationClock(at: seconds)
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
@@ -978,6 +982,8 @@ final class VTPlayerViewModel {
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime
         self.lastRenderedPTS = currentTime
+        self.isAwaitingPipelineAudioStart = false
+        self.isHoldingAudioForVideoCatchUp = false
         resetPresentationClock(at: CMTimeGetSeconds(currentTime))
         Task { @MainActor in
             await self.activeCoordinator?.clearHistory()
@@ -1002,6 +1008,8 @@ final class VTPlayerViewModel {
         self.currentTime = seconds
         self.saveProgress()
         self.lastRenderedPTS = .zero
+        self.isAwaitingPipelineAudioStart = false
+        self.isHoldingAudioForVideoCatchUp = false
         resetPresentationClock(at: seconds)
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)

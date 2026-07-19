@@ -197,6 +197,8 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        isAwaitingPipelineAudioStart = false
+        isHoldingAudioForVideoCatchUp = false
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0
@@ -409,6 +411,8 @@ extension VTPlayerViewModel {
 
     private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
+        isAwaitingPipelineAudioStart = false
+        isHoldingAudioForVideoCatchUp = false
         #if os(macOS)
         pipelinePresentationReady = false
         setNativeVideoEnabled(true)
@@ -636,7 +640,6 @@ extension VTPlayerViewModel {
             // consumer stalls (empty cache) while audio keeps running,
             // creating an audible gap followed by a video jump.
             self.isInitializingPipeline = true
-            let wasRate = self.player?.rate ?? 0
             self.player?.pause()
             pausedForInitialization = true
 
@@ -713,7 +716,12 @@ extension VTPlayerViewModel {
                 if shouldResume {
                     self.isPlaying = true
                     self.isPaused = false
-                    player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+                    // Keep audio paused until the processor has produced a
+                    // small PTS-ordered lead. Starting AVPlayer here used to
+                    // let audio run ahead while the first enhanced frames
+                    // were still being generated.
+                    self.isAwaitingPipelineAudioStart = true
+                    player.pause()
                 } else {
                     player.pause()
                 }
@@ -884,29 +892,58 @@ extension VTPlayerViewModel {
             let myGen = gen
             while !Task.isCancelled {
                 guard myGen == self.playbackGeneration else { break }
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                try? await Task.sleep(nanoseconds: 50_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
+
+                if self.isAwaitingPipelineAudioStart {
+                    let isPrimed = self.lockCache {
+                        max(0, self.processedFrameCache.count - self.processedFrameCacheStart) >= self.resumeBufferFrameCount
+                    }
+                    guard isPrimed else { continue }
+
+                    let startTime = self.lastRenderedPTS
+                    await player.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    guard myGen == self.playbackGeneration,
+                          !self.isPaused,
+                          self.isAwaitingPipelineAudioStart else { continue }
+                    self.resetPresentationClock(at: CMTimeGetSeconds(startTime))
+                    self.isAwaitingPipelineAudioStart = false
+                    player.rate = Float(self.playbackSpeed)
+                    continue
+                }
+
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
-                // Keep the audio clock independent from the processed-frame
-                // queue. Pausing AVPlayer here can deadlock playback when a
-                // restart or a slow FI/SR frame leaves fewer than two frames
-                // buffered; the display consumer already performs PTS-aware
-                // pacing and late-frame dropping.
                 self.isBuffering = false
 
-                // Record desync for diagnostics without interrupting audio.
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
+                    // Preserve the cache and let its queued frames catch up
+                    // to the audio PTS. The display consumer explicitly uses
+                    // the frozen audio time while this flag is set, so it
+                    // cannot render past audio or oscillate around the hold.
+                    if !self.isHoldingAudioForVideoCatchUp {
+                        self.isHoldingAudioForVideoCatchUp = true
+                        player.pause()
+                    }
                 } else {
                     self.audioSyncLatency = 0
+                }
+
+                if self.isHoldingAudioForVideoCatchUp,
+                   latency <= 0.025 {
+                    self.isHoldingAudioForVideoCatchUp = false
+                    self.resetPresentationClock(at: currentSecs)
+                    player.rate = Float(self.playbackSpeed)
+                    continue
                 }
 
                 // AVPlayer may stop playback (rate → 0) if its audio decoder fails
                 // on certain file formats. Periodically re-assert the desired rate
                 // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline {
+                if player.rate == 0 && self.isPlaying && !self.isPaused &&
+                    !self.isInitializingPipeline && !self.isHoldingAudioForVideoCatchUp {
                     player.rate = Float(self.playbackSpeed)
                 }
             }
@@ -936,12 +973,15 @@ extension VTPlayerViewModel {
 
     @MainActor
     func tickDisplayLink() {
-        guard isPlaying && !isPaused, let player = self.player else { return }
+        guard isPlaying && !isPaused, !isAwaitingPipelineAudioStart,
+              let player = self.player else { return }
         displayLinkTickCount += 1
         
         let currentTime = player.currentTime()
         let observedSecs = CMTimeGetSeconds(currentTime)
-        let currentSecs = presentationClockSeconds(playerSeconds: observedSecs)
+        let currentSecs = isHoldingAudioForVideoCatchUp
+            ? observedSecs
+            : presentationClockSeconds(playerSeconds: observedSecs)
         let presentationSecs = currentSecs - interpolationPresentationDelay
         
         var lastFrameToRender: VTFrame? = nil
@@ -1140,6 +1180,8 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        isAwaitingPipelineAudioStart = false
+        isHoldingAudioForVideoCatchUp = false
         lastRenderedPTS = .zero
         lockCache { clearProcessedFrameCache() }
         
