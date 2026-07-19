@@ -414,17 +414,17 @@ extension VTFrameProcessorCoordinator {
 
             // Use the previous frame in the input batch, or fall back to
             // frameHistory/upscaledFrameHistory for the first frame in the batch.
-            let prevFP: VTFrameProcessorFrame
+            let prevFP: VTFrameProcessorFrame?
             if idx > 0,
                let prev = VTFrameProcessorFrame(buffer: inputFrames[idx - 1].buffer,
                                                  presentationTimeStamp: inputFrames[idx - 1].presentationTimeStamp) {
                 prevFP = prev
             } else {
                 let historyToUse = stages.keys.contains(.spatial) ? upscaledFrameHistory : frameHistory
-                prevFP = historyToUse.count >= 2 ? historyToUse[1] : sourceFP
+                prevFP = historyToUse.count >= 2 ? historyToUse[1] : nil
             }
 
-            let nextFP: VTFrameProcessorFrame
+            let nextFP: VTFrameProcessorFrame?
             if idx + 1 < inputFrames.count,
                let next = VTFrameProcessorFrame(
                    buffer: inputFrames[idx + 1].buffer,
@@ -432,7 +432,7 @@ extension VTFrameProcessorCoordinator {
                ) {
                 nextFP = next
             } else {
-                nextFP = sourceFP
+                nextFP = nil
             }
 
             guard let params = VTMotionBlurParameters(
