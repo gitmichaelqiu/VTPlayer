@@ -122,10 +122,10 @@ extension VTPlayerView {
                     return pinnedList.sorted(by: sortBlock) + unpinnedList.sorted(by: sortBlock)
                 }()
                 
+                let pinnedList = sortedVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
+                let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
+                
                 List {
-                    let pinnedList = sortedVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
-                    let unpinnedList = sortedVideos.filter { !pinnedVideos.contains($0.lastPathComponent) }
-                    
                     Section(isExpanded: $isPinnedExpanded) {
                         ForEach(pinnedList, id: \.self) { url in
                             videoRow(for: url)

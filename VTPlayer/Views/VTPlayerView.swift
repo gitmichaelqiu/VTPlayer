@@ -498,7 +498,7 @@ struct VTPlayerView: View {
 
     func togglePin(for url: URL) {
         let filename = url.lastPathComponent
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+        withAnimation(.default) {
             if pinnedVideos.contains(filename) {
                 pinnedVideos.remove(filename)
             } else {
