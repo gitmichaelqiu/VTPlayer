@@ -466,6 +466,8 @@ extension VTPlayerView {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .padding(.vertical, 5)
+                .padding(.horizontal, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(
@@ -499,6 +501,8 @@ extension VTPlayerView {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .padding(.vertical, 5)
+                .padding(.horizontal, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(
