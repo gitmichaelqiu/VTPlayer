@@ -15,15 +15,15 @@ extension VTPlayerViewModel {
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
         validateEnhancementSelections()
-        #if os(macOS)
-        // A new pipeline has no frame yet. Keep native presentation alive
-        // until the replacement produces one instead of exposing a black
-        // Metal drawable during coordinator startup.
-        pipelinePresentationReady = false
-        setNativeVideoEnabled(true)
-        #endif
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
+            #if os(macOS)
+            // A new pipeline has no frame yet. Keep native presentation alive
+            // until the replacement produces one instead of exposing a black
+            // Metal drawable during coordinator startup.
+            pipelinePresentationReady = false
+            setNativeVideoEnabled(true)
+            #endif
             if isPipelineActive {
                 startPlaybackLoop()
             } else {
@@ -39,6 +39,11 @@ extension VTPlayerViewModel {
             // would cause a visible freeze on resume.  Flag it so play()
             // rebuilds the pipeline when the user unpauses.
             enhancementsPendingRestart = true
+            #if os(macOS)
+            if !isPipelineActive {
+                setNativeVideoEnabled(true)
+            }
+            #endif
         }
         #endif
     }

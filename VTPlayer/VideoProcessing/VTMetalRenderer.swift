@@ -37,8 +37,11 @@ public final class VTMetalRenderer: MTKView {
     private var lastLayoutSize: CGSize = .zero
     #endif
 
-    /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
-    public var sharpness: Float = 0.0
+    public var sharpness: Float = 0.0 {
+        didSet {
+            requestRedrawForImageAdjustment()
+        }
+    }
 
     /// SDR-to-HDR mapping strength. Enabling it opts the drawable into EDR when
     /// the current display has available headroom.
