@@ -411,51 +411,50 @@ extension VTPlayerView {
                 
                 // Super Resolution Menu
                 Menu {
-                    Button {
-                        viewModel.superResolutionLevel = 0
-                        viewModel.qualitySuperResolutionScaleFactor = 0
-                        viewModel.updateEnhancements()
+                    Picker(selection: Binding(
+                        get: {
+                            viewModel.qualitySuperResolutionScaleFactor > 0
+                                ? 10 + viewModel.qualitySuperResolutionScaleFactor
+                                : viewModel.superResolutionLevel
+                        },
+                        set: { selection in
+                            switch selection {
+                            case 2:
+                                viewModel.superResolutionLevel = 2
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 4:
+                                viewModel.superResolutionLevel = 4
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 12:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 2
+                            case 14:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 4
+                            default:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            }
+                            viewModel.updateEnhancements()
+                        }
+                    )) {
+                        Text("Off").tag(0)
+                        if viewModel.availableSuperResolutionScales.contains(2) {
+                            Text("Low Latency 2x").tag(2)
+                        }
+                        if viewModel.availableSuperResolutionScales.contains(4) {
+                            Text("Low Latency 4x").tag(4)
+                        }
+                        if viewModel.availableQualitySuperResolutionScales.contains(2) {
+                            Text("Quality 2x").tag(12)
+                        }
+                        if viewModel.availableQualitySuperResolutionScales.contains(4) {
+                            Text("Quality 4x").tag(14)
+                        }
                     } label: {
-                        Label("Off", systemImage: viewModel.superResolutionLevel == 0 && viewModel.qualitySuperResolutionScaleFactor == 0 ? "checkmark" : "")
+                        EmptyView()
                     }
-                    Divider()
-                    if viewModel.availableSuperResolutionScales.contains(2) {
-                        Button {
-                            viewModel.superResolutionLevel = 2
-                            viewModel.qualitySuperResolutionScaleFactor = 0
-                            viewModel.updateEnhancements()
-                        } label: {
-                            Label("Low Latency 2x", systemImage: viewModel.superResolutionLevel == 2 ? "checkmark" : "")
-                        }
-                    }
-                    if viewModel.availableSuperResolutionScales.contains(4) {
-                        Button {
-                            viewModel.superResolutionLevel = 4
-                            viewModel.qualitySuperResolutionScaleFactor = 0
-                            viewModel.updateEnhancements()
-                        } label: {
-                            Label("Low Latency 4x", systemImage: viewModel.superResolutionLevel == 4 ? "checkmark" : "")
-                        }
-                    }
-                    Divider()
-                    if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                        Button {
-                            viewModel.superResolutionLevel = 0
-                            viewModel.qualitySuperResolutionScaleFactor = 2
-                            viewModel.updateEnhancements()
-                        } label: {
-                            Label("Quality 2x", systemImage: viewModel.qualitySuperResolutionScaleFactor == 2 ? "checkmark" : "")
-                        }
-                    }
-                    if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                        Button {
-                            viewModel.superResolutionLevel = 0
-                            viewModel.qualitySuperResolutionScaleFactor = 4
-                            viewModel.updateEnhancements()
-                        } label: {
-                            Label("Quality 4x", systemImage: viewModel.qualitySuperResolutionScaleFactor == 4 ? "checkmark" : "")
-                        }
-                    }
+                    .pickerStyle(.inline)
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
@@ -529,21 +528,9 @@ extension VTPlayerView {
                 .fixedSize()
                 .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
                 
-                // Denoise Menu
-                Menu {
-                    Picker(selection: Binding(
-                        get: { viewModel.denoiseStrength },
-                        set: { viewModel.denoiseStrength = $0; viewModel.updateEnhancements() }
-                    )) {
-                        Text("Off").tag(0.0)
-                        Text("0.25").tag(0.25)
-                        Text("0.5").tag(0.5)
-                        Text("0.75").tag(0.75)
-                        Text("1.0").tag(1.0)
-                    } label: {
-                        EmptyView()
-                    }
-                    .pickerStyle(.inline)
+                // Denoise Popover
+                Button {
+                    showDenoisePopover.toggle()
                 } label: {
                     let isActive = viewModel.denoiseStrength > 0
                     Text("Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
@@ -554,9 +541,27 @@ extension VTPlayerView {
                         .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
                         .cornerRadius(6)
                 }
-                .menuStyle(.borderlessButton)
+                .buttonStyle(.plain)
                 .fixedSize()
                 .help("Denoise — filters compression noise and high-frequency grain")
+                .popover(isPresented: $showDenoisePopover, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
+                            .font(.headline)
+                        Slider(
+                            value: $viewModel.denoiseStrength,
+                            in: 0...1,
+                            step: 0.05,
+                            onEditingChanged: { editing in
+                                if !editing {
+                                    viewModel.updateEnhancements()
+                                }
+                            }
+                        )
+                    }
+                    .padding(16)
+                    .frame(width: 220)
+                }
 
                 // Image Adjustments Popover Button
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
@@ -665,16 +670,27 @@ extension VTPlayerView {
 
     @ViewBuilder
     var playbackSpeedControl: some View {
-        HStack(spacing: 6) {
-            Text(String(format: "%.2fx", viewModel.playbackSpeed))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(width: 45, alignment: .trailing)
-            Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
-                .frame(width: 80)
-                .tint(.cyan)
+        Button(action: { showPlaybackSpeedPopover.toggle() }) {
+            Text("Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(viewModel.playbackSpeed == 1 ? .secondary : .primary)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 10)
+                .background(viewModel.playbackSpeed == 1 ? Color.white.opacity(0.04) : Color.white.opacity(0.12))
+                .cornerRadius(6)
         }
+        .buttonStyle(.plain)
         .help("Adjust playback speed (0.5x - 2x)")
+        .popover(isPresented: $showPlaybackSpeedPopover, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))")
+                    .font(.headline)
+                Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
+                    .tint(.cyan)
+            }
+            .padding(16)
+            .frame(width: 220)
+        }
     }
     
     @ViewBuilder

@@ -110,6 +110,8 @@ struct VTPlayerView: View {
     @State var showSettingsSheet = false
     @State var showDiagnosticsSheet = false
     @State var showClearAllAlert = false
+    @State var showDenoisePopover = false
+    @State var showPlaybackSpeedPopover = false
     @Environment(\.dismiss) var dismiss
     
     enum SortOption: String, CaseIterable, Identifiable {

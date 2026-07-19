@@ -85,15 +85,20 @@ struct PlaybackSettingsView: View {
                         viewModel.updateEnhancements()
                     }
 
-                    Picker("Denoise Strength", selection: $viewModel.denoiseStrength) {
-                        Text("Off").tag(0.0)
-                        Text("0.25").tag(0.25)
-                        Text("0.50").tag(0.5)
-                        Text("0.75").tag(0.75)
-                        Text("1.00").tag(1.0)
-                    }
-                    .onChange(of: viewModel.denoiseStrength) { _, _ in
-                        viewModel.updateEnhancements()
+                    HStack {
+                        Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
+                        Spacer()
+                        Slider(
+                            value: $viewModel.denoiseStrength,
+                            in: 0...1,
+                            step: 0.05,
+                            onEditingChanged: { editing in
+                                if !editing {
+                                    viewModel.updateEnhancements()
+                                }
+                            }
+                        )
+                        .frame(width: 150)
                     }
                 }
 
