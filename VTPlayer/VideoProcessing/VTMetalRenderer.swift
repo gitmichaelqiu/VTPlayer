@@ -34,6 +34,7 @@ public final class VTMetalRenderer: MTKView {
     #if os(macOS)
     private var renderingActive = false
     private var pausedLayoutRedrawPending = false
+    private var lastLayoutSize: CGSize = .zero
     #endif
 
     /// Sharpness intensity (0 = off, >0 applies CIUnsharpMask)
@@ -245,8 +246,13 @@ public final class VTMetalRenderer: MTKView {
 
     public override func layout() {
         super.layout()
-        if updateDrawableSizeForBackingScale(), isPaused {
-            requestPausedLayoutRedraw()
+        let sizeChanged = bounds.size != lastLayoutSize
+        if sizeChanged {
+            lastLayoutSize = bounds.size
+            updateDrawableSizeForBackingScale()
+            if isPaused {
+                requestPausedLayoutRedraw()
+            }
         }
     }
 
