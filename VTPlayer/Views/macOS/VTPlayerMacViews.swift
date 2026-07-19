@@ -459,13 +459,10 @@ extension VTPlayerView {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
                     let isActive = scale > 0
-                    Text(isQL ? "Super Res: \(scale)x QL" : "Super Res: \(isActive ? "\(scale)x" : "Off")")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isActive ? .primary : .secondary)
-                        .padding(.vertical, 5)
-                        .padding(.horizontal, 10)
-                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
-                        .cornerRadius(6)
+                    enhancementControlLabel(
+                        isQL ? "Super Res: \(scale)x QL" : "Super Res: \(isActive ? "\(scale)x" : "Off")",
+                        isActive: isActive
+                    )
                 }
                 .menuStyle(.borderlessButton)
                 .tint(.secondary)
@@ -487,13 +484,10 @@ extension VTPlayerView {
                     .pickerStyle(.inline)
                 } label: {
                     let isActive = viewModel.frameInterpolationLevel > 0
-                    Text("Interpolation: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isActive ? .primary : .secondary)
-                        .padding(.vertical, 5)
-                        .padding(.horizontal, 10)
-                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
-                        .cornerRadius(6)
+                    enhancementControlLabel(
+                        "Interpolation: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")",
+                        isActive: isActive
+                    )
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
@@ -516,13 +510,10 @@ extension VTPlayerView {
                     .pickerStyle(.inline)
                 } label: {
                     let isActive = viewModel.motionBlurStrength > 0
-                    Text("Motion Blur: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isActive ? .primary : .secondary)
-                        .padding(.vertical, 5)
-                        .padding(.horizontal, 10)
-                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
-                        .cornerRadius(6)
+                    enhancementControlLabel(
+                        "Motion Blur: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")",
+                        isActive: isActive
+                    )
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
@@ -533,13 +524,10 @@ extension VTPlayerView {
                     showDenoisePopover.toggle()
                 } label: {
                     let isActive = viewModel.denoiseStrength > 0
-                    Text("Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isActive ? .primary : .secondary)
-                        .padding(.vertical, 5)
-                        .padding(.horizontal, 10)
-                        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
-                        .cornerRadius(6)
+                    enhancementControlLabel(
+                        "Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")",
+                        isActive: isActive
+                    )
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
@@ -565,16 +553,10 @@ extension VTPlayerView {
 
                 // Image Adjustments Popover Button
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "slider.horizontal.3")
-                        Text("Adjustments")
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle((viewModel.sharpness > 0 || viewModel.hdrStrength > 0 || viewModel.hdrColorfulness > 0) ? .primary : .secondary)
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
-                    .background((viewModel.sharpness > 0 || viewModel.hdrStrength > 0 || viewModel.hdrColorfulness > 0) ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
-                    .cornerRadius(6)
+                    enhancementControlLabel(
+                        "Adjustments",
+                        isActive: viewModel.sharpness > 0 || viewModel.hdrStrength > 0 || viewModel.hdrColorfulness > 0
+                    )
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
@@ -671,13 +653,10 @@ extension VTPlayerView {
     @ViewBuilder
     var playbackSpeedControl: some View {
         Button(action: { showPlaybackSpeedPopover.toggle() }) {
-            Text("Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(viewModel.playbackSpeed == 1 ? .secondary : .primary)
-                .padding(.vertical, 5)
-                .padding(.horizontal, 10)
-                .background(viewModel.playbackSpeed == 1 ? Color.white.opacity(0.04) : Color.white.opacity(0.12))
-                .cornerRadius(6)
+            enhancementControlLabel(
+                "Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))",
+                isActive: viewModel.playbackSpeed != 1
+            )
         }
         .buttonStyle(.plain)
         .help("Adjust playback speed (0.5x - 2x)")
@@ -691,6 +670,17 @@ extension VTPlayerView {
             .padding(16)
             .frame(width: 220)
         }
+    }
+
+    @ViewBuilder
+    func enhancementControlLabel(_ title: String, isActive: Bool) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isActive ? .primary : .secondary)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
     
     @ViewBuilder
