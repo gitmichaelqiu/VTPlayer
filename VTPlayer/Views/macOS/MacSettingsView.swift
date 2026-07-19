@@ -234,6 +234,7 @@ struct MacSettingsView: View {
 
 struct GeneralSettingsTab: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
+    @AppStorage("VTAlwaysDarkOnPlayback") private var alwaysDarkOnPlayback = false
 
     var body: some View {
         SettingsContainer(.general) {
@@ -244,6 +245,17 @@ struct GeneralSettingsTab: View {
                         helperText: "Toggle whether file extensions (e.g. .mp4, .mkv) are visible in the recent files list."
                     ) {
                         Toggle("", isOn: $showFileExtensions)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    Divider()
+
+                    SettingsRow(
+                        "Always dark when a video is playing",
+                        helperText: "Force the application window to use dark mode styling during video playback, regardless of system theme."
+                    ) {
+                        Toggle("", isOn: $alwaysDarkOnPlayback)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -278,11 +290,11 @@ struct EnhancementsSettingsTab: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .frame(width: 100)
-                        .padding(.trailing, -10)
+                        .padding(.trailing, -16)
                     }
                 }
 
-                SettingsSection("Enhancements & Post-processing") {
+                SettingsSection("Postprocessing") {
                     SliderSettingsRow(
                         "Motion Blur Strength",
                         helperText: "Apply a simulated motion blur filter (capped at 30 to prevent extreme darkening).",

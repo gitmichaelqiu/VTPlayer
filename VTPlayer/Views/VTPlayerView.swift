@@ -136,6 +136,7 @@ struct VTPlayerView: View {
     @State var isRecentsExpanded = true
     @State var isSettingsExpanded = false
     @AppStorage("VTShowFileExtensions") var showFileExtensions = true
+    @AppStorage("VTAlwaysDarkOnPlayback") var alwaysDarkOnPlayback = false
     
     @AppStorage("VTDefaultSRLevel") var defaultSRLevel = 0
     @AppStorage("VTDefaultQSRLevel") var defaultQSRLevel = 0
@@ -233,7 +234,7 @@ struct VTPlayerView: View {
             photoLibrary: .shared()
         )
         #endif
-        .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
+        .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
         #if os(macOS)
         .onOpenURL { url in
             viewModel.openVideo(url)
@@ -247,7 +248,7 @@ struct VTPlayerView: View {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 leftSidebar
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 360)
-                    .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
+                    .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
             } detail: {
                 videoContent
                     .frame(minWidth: 0, idealWidth: 720)
@@ -257,7 +258,7 @@ struct VTPlayerView: View {
                     )) {
                         rightSidebar
                             .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
-                            .preferredColorScheme(viewModel.videoURL != nil ? .dark : nil)
+                            .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
                     }
                     .toolbar {
                         ToolbarItemGroup(placement: .primaryAction) {
