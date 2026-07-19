@@ -584,7 +584,7 @@ extension VTPlayerView {
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
                     enhancementControlLabel(
                         "Adjustments",
-                        isActive: viewModel.sharpness > 0 || viewModel.hdrStrength > 0 || viewModel.hdrColorfulness > 0
+                        isActive: viewModel.sharpness > 0 || viewModel.hdrStrength > 0
                     )
                 }
                 .buttonStyle(.plain)
