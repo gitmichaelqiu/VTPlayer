@@ -61,7 +61,6 @@ extension VTPlayerView {
                 }
             }
             .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
             .frame(minWidth: 0, maxWidth: .infinity)
 
             Divider()
