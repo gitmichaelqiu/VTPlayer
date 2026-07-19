@@ -239,6 +239,17 @@ extension VTPlayerViewModel {
 
         playbackGeneration += 1
         let restartGeneration = playbackGeneration
+
+        // A superseded initializer may already have paused AVPlayer while it
+        // creates a VideoToolbox session.  Its generation no longer owns
+        // playback, so release that pause before waiting for teardown.  This
+        // keeps the native presentation moving during rapid setting changes
+        // and prevents an abandoned initialization gate from suppressing the
+        // audio-sync recovery task.
+        isInitializingPipeline = false
+        if isPlaying, !isPaused {
+            player?.rate = Float(playbackSpeed)
+        }
         let oldProducer = producerTask
         let oldCoordinator = activeCoordinator
         producerTask?.cancel()
@@ -507,12 +518,25 @@ extension VTPlayerViewModel {
 
         producerTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
+            var pausedForInitialization = false
             
             defer {
                 // A replacement loop has a newer generation. Never let a
                 // cancelled predecessor erase its producer handle.
                 if self.playbackGeneration == gen {
                     self.producerTask = nil
+
+                    // Session setup pauses AVPlayer so a new cache can be
+                    // primed.  Every successful path below clears this flag.
+                    // If setup exits early (for example, because a setting
+                    // changed while VideoToolbox was initializing), restore
+                    // the player instead of leaving it frozen until a seek.
+                    if pausedForInitialization && self.isInitializingPipeline {
+                        self.isInitializingPipeline = false
+                        if self.isPlaying && !self.isPaused {
+                            self.player?.rate = Float(self.playbackSpeed)
+                        }
+                    }
                 }
             }
 
@@ -614,6 +638,7 @@ extension VTPlayerViewModel {
             self.isInitializingPipeline = true
             let wasRate = self.player?.rate ?? 0
             self.player?.pause()
+            pausedForInitialization = true
 
             do {
                 if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
@@ -684,6 +709,7 @@ extension VTPlayerViewModel {
                 await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 let shouldResume = shouldResumePlayback && gen == self.playbackGeneration
                 self.isInitializingPipeline = false
+                pausedForInitialization = false
                 if shouldResume {
                     self.isPlaying = true
                     self.isPaused = false
@@ -693,6 +719,7 @@ extension VTPlayerViewModel {
                 }
             } else {
                 self.isInitializingPipeline = false
+                pausedForInitialization = false
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
