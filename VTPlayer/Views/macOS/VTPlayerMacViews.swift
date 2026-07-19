@@ -368,7 +368,7 @@ extension VTPlayerView {
             // Video Scrubbing Timeline Progress Bar
             HStack(spacing: 8) {
                 Text(formatTime(isScrubbing ? scrubTime : viewModel.currentTime))
-                    .font(.system(.caption2, design: .monospaced))
+                    .font(.system(.caption2))
                     .foregroundStyle(.secondary)
                 
                 Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
@@ -390,7 +390,7 @@ extension VTPlayerView {
                 }
                 
                 Text(formatTime(viewModel.duration))
-                    .font(.system(.caption2, design: .monospaced))
+                    .font(.system(.caption2))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12)
