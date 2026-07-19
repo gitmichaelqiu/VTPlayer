@@ -12,7 +12,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var localizedName: LocalizedStringResource {
         switch self {
         case .general: return "General"
-        case .enhancements: return "Default Enhancements"
+        case .enhancements: return "Defaults"
         case .about: return "About"
         }
     }
@@ -36,106 +36,6 @@ let sidebarFontSize: CGFloat = 16
 // Tighter Header Height
 let titleHeaderHeight: CGFloat = 48
 
-class LoopVideoPlayerNSView: NSView {
-    private var looper: AVPlayerLooper?
-    private var player: AVQueuePlayer?
-    private(set) var currentURL: URL?
-
-    var playerLayer: AVPlayerLayer? {
-        self.layer as? AVPlayerLayer
-    }
-    
-    override func makeBackingLayer() -> CALayer {
-        let layer = AVPlayerLayer()
-        layer.videoGravity = .resizeAspect
-        layer.backgroundColor = NSColor.clear.cgColor
-        return layer
-    }
-    
-    func setupPlayer(with url: URL) {
-        cleanup()
-        self.currentURL = url
-        self.wantsLayer = true
-        self.layer?.backgroundColor = NSColor.clear.cgColor
-        
-        let player = AVQueuePlayer()
-        let playerItem = AVPlayerItem(url: url)
-        let playerLooper = AVPlayerLooper(player: player, templateItem: playerItem)
-        
-        self.playerLayer?.player = player
-        player.isMuted = true
-        player.play()
-        
-        self.looper = playerLooper
-        self.player = player
-    }
-
-    override func viewWillMove(toWindow newWindow: NSWindow?) {
-        super.viewWillMove(toWindow: newWindow)
-        
-        if let oldWindow = self.window {
-            NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: oldWindow)
-        }
-        
-        if let newWindow = newWindow {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(windowWillClose(_:)),
-                name: NSWindow.willCloseNotification,
-                object: newWindow
-            )
-        } else {
-            cleanup()
-        }
-    }
-    
-    @objc private func windowWillClose(_ notification: Notification) {
-        cleanup()
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-
-    func cleanup() {
-        player?.pause()
-        playerLayer?.player = nil
-        looper = nil
-        player = nil
-        currentURL = nil
-    }
-    
-    override func scrollWheel(with event: NSEvent) {
-        self.nextResponder?.scrollWheel(with: event)
-    }
-}
-
-struct LoopVideoPlayerRepresentable: NSViewRepresentable {
-    let videoURL: URL
-    
-    func makeNSView(context: Context) -> LoopVideoPlayerNSView {
-        let view = LoopVideoPlayerNSView()
-        view.setupPlayer(with: videoURL)
-        return view
-    }
-    
-    func updateNSView(_ nsView: LoopVideoPlayerNSView, context: Context) {
-        if nsView.currentURL != videoURL {
-            nsView.setupPlayer(with: videoURL)
-        }
-    }
-    
-    static func dismantleNSView(_ nsView: LoopVideoPlayerNSView, coordinator: Coordinator) {
-        nsView.cleanup()
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-    
-    class Coordinator {}
-}
-
 struct IsSettingsPreRenderingKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -144,19 +44,6 @@ extension EnvironmentValues {
     var isSettingsPreRendering: Bool {
         get { self[IsSettingsPreRenderingKey.self] }
         set { self[IsSettingsPreRenderingKey.self] = newValue }
-    }
-}
-
-struct LoopVideoPlayerView: View {
-    let videoURL: URL
-    @Environment(\.isSettingsPreRendering) private var isPreRendering
-    
-    var body: some View {
-        if isPreRendering {
-            Color.clear
-        } else {
-            LoopVideoPlayerRepresentable(videoURL: videoURL)
-        }
     }
 }
 
@@ -310,9 +197,7 @@ struct SettingsRow<Content: View>: View {
     let content: Content
     let helperText: LocalizedStringKey?
     let warningText: LocalizedStringKey?
-    let demoVideoName: String?
     
-    @AppStorage("VTShowDemoVideos") private var showDemoVideos = true
     @Environment(\.settingsTab) var currentTab
     @EnvironmentObject var navigationState: SettingsNavigationState
 
@@ -320,13 +205,11 @@ struct SettingsRow<Content: View>: View {
         _ title: LocalizedStringResource,
         helperText: LocalizedStringKey? = nil,
         warningText: LocalizedStringKey? = nil,
-        demoVideoName: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.helperText = helperText
         self.warningText = warningText
-        self.demoVideoName = demoVideoName
         self.content = content()
     }
 
@@ -349,20 +232,6 @@ struct SettingsRow<Content: View>: View {
 
                 content
                     .frame(alignment: .trailing)
-            }
-
-            if showDemoVideos,
-               let videoName = demoVideoName,
-               let videoURL = Bundle.main.url(forResource: videoName, withExtension: "mp4") {
-                LoopVideoPlayerView(videoURL: videoURL)
-                    .frame(height: 180)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
-                    )
-                    .padding(.top, 4)
-                    .padding(.bottom, 6)
             }
         }
         .padding(.vertical, 6)
@@ -490,10 +359,8 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
     let step: V?
     let helperText: LocalizedStringKey?
     let warningText: LocalizedStringKey?
-    let demoVideoName: String?
     let valueString: (V) -> String
 
-    @AppStorage("VTShowDemoVideos") private var showDemoVideos = true
     @Environment(\.settingsTab) var currentTab
     @EnvironmentObject var navigationState: SettingsNavigationState
 
@@ -501,7 +368,6 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
         _ title: LocalizedStringResource,
         helperText: LocalizedStringKey? = nil,
         warningText: LocalizedStringKey? = nil,
-        demoVideoName: String? = nil,
         value: Binding<V>,
         range: ClosedRange<V>,
         defaultValue: V,
@@ -511,7 +377,6 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
         self.title = title
         self.helperText = helperText
         self.warningText = warningText
-        self.demoVideoName = demoVideoName
         self._value = value
         self.range = range
         self.defaultValue = defaultValue
@@ -554,20 +419,6 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                     .monospacedDigit()
                     .foregroundColor(.secondary)
                     .frame(minWidth: 50, alignment: .trailing)
-            }
-
-            if showDemoVideos,
-               let videoName = demoVideoName,
-               let videoURL = Bundle.main.url(forResource: videoName, withExtension: "mp4") {
-                LoopVideoPlayerView(videoURL: videoURL)
-                    .frame(height: 180)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
-                    )
-                    .padding(.top, 4)
-                    .padding(.bottom, 6)
             }
         }
         .padding(.vertical, 8)

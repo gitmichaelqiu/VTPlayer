@@ -51,7 +51,7 @@ extension VTPlayerViewModel {
     }
 
     func applyDefaultPlaybackSettings() {
-        superResolutionLevel = UserDefaults.standard.integer(forKey: "VTDefaultSRLevel")
+        superResolutionLevel = 0
         frameInterpolationLevel = UserDefaults.standard.integer(forKey: "VTDefaultFILevel")
         playbackSpeed = 1.0
         
@@ -67,10 +67,7 @@ extension VTPlayerViewModel {
         hdrColorfulness = defHDRColorfulness
         renderer.hdrColorfulness = Float(defHDRColorfulness)
         
-        // Load the requested Quality SR default before capability validation;
-        // model readiness and per-scale support are checked when the video is
-        // opened, rather than silently converting or discarding QL2 here.
-        qualitySuperResolutionScaleFactor = UserDefaults.standard.integer(forKey: "VTDefaultQSRLevel")
+        qualitySuperResolutionScaleFactor = 0
         motionBlurStrength = UserDefaults.standard.integer(forKey: "VTDefaultMBLevel")
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1

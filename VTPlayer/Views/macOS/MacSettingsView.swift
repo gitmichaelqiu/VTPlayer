@@ -234,7 +234,6 @@ struct MacSettingsView: View {
 
 struct GeneralSettingsTab: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
-    @AppStorage("VTShowDemoVideos") private var showDemoVideos = true
 
     var body: some View {
         SettingsContainer(.general) {
@@ -248,17 +247,6 @@ struct GeneralSettingsTab: View {
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
-                    
-                    Divider()
-                    
-                    SettingsRow(
-                        "Show settings demo videos",
-                        helperText: "Display visual comparison videos inside the settings panel when available."
-                    ) {
-                        Toggle("", isOn: $showDemoVideos)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -267,8 +255,6 @@ struct GeneralSettingsTab: View {
 }
 
 struct EnhancementsSettingsTab: View {
-    @AppStorage("VTDefaultSRLevel") private var defaultSRLevel = 0
-    @AppStorage("VTDefaultQSRLevel") private var defaultQSRLevel = 0
     @AppStorage("VTDefaultFILevel") private var defaultFILevel = 0
     @AppStorage("VTDefaultMBLevel") private var defaultMBLevel = 0
     @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
@@ -278,39 +264,7 @@ struct EnhancementsSettingsTab: View {
     var body: some View {
         SettingsContainer(.enhancements) {
             VStack(alignment: .leading, spacing: 20) {
-                SettingsSection("Neural Engine Scaling & Fluidity") {
-                    SettingsRow(
-                        "Super Resolution",
-                        helperText: "Low-latency spatial upscaling level using VideoToolbox scaler."
-                    ) {
-                        Picker("", selection: $defaultSRLevel) {
-                            Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 100)
-                    }
-
-                    Divider()
-
-                    SettingsRow(
-                        "Quality Super Resolution",
-                        helperText: "High-quality Super Resolution (requires downloading coreML model weights)."
-                    ) {
-                        Picker("", selection: $defaultQSRLevel) {
-                            Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 100)
-                    }
-
-                    Divider()
-
+                SettingsSection("Neural Engine Fluidity") {
                     SettingsRow(
                         "Frame Interpolation",
                         helperText: "Temporal low-latency frame interpolation factor to boost frame rate."
@@ -323,24 +277,23 @@ struct EnhancementsSettingsTab: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .frame(width: 100)
+                        .padding(.trailing, -4)
                     }
                 }
 
                 SettingsSection("Enhancements & Post-processing") {
-                    SettingsRow(
+                    SliderSettingsRow(
                         "Motion Blur Strength",
-                        helperText: "Apply a simulated motion blur filter (capped at 30 to prevent extreme darkening)."
-                    ) {
-                        Picker("", selection: $defaultMBLevel) {
-                            Text("Off").tag(0)
-                            ForEach(1...30, id: \.self) { val in
-                                Text("\(val)").tag(val)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 100)
-                    }
+                        helperText: "Apply a simulated motion blur filter (capped at 30 to prevent extreme darkening).",
+                        value: Binding(
+                            get: { Double(defaultMBLevel) },
+                            set: { defaultMBLevel = Int($0) }
+                        ),
+                        range: 0.0...30.0,
+                        defaultValue: 0.0,
+                        step: 1.0,
+                        valueString: { $0 > 0 ? String(format: "%.0f", $0) : "Off" }
+                    )
 
                     Divider()
 
