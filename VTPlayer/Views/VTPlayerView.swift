@@ -248,10 +248,8 @@ struct VTPlayerView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleRightSidebarTriggered)) { _ in
-            if viewModel.videoURL != nil {
-                withAnimation {
-                    viewModel.showSidebar.toggle()
-                }
+            withAnimation {
+                viewModel.showSidebar.toggle()
             }
         }
         #if os(macOS)
@@ -272,10 +270,7 @@ struct VTPlayerView: View {
                 videoContent
                     .frame(minWidth: 0, idealWidth: 720)
                     .clipped()
-                    .inspector(isPresented: Binding(
-                        get: { viewModel.showSidebar && viewModel.videoURL != nil },
-                        set: { viewModel.showSidebar = $0 }
-                    )) {
+                    .inspector(isPresented: $viewModel.showSidebar) {
                         rightSidebar
                             .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
                             .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
