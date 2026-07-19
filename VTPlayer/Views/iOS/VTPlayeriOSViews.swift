@@ -314,39 +314,6 @@ extension VTPlayerView {
             
             // Default Playback Settings Section
             Section("Default Playback Configuration") {
-                Picker("Super Resolution", selection: Binding(
-                    get: {
-                        defaultQSRLevel > 0 ? 10 + defaultQSRLevel : defaultSRLevel
-                    },
-                    set: { selection in
-                        switch selection {
-                        case 2, 4:
-                            defaultSRLevel = selection
-                            defaultQSRLevel = 0
-                        case 12, 14:
-                            defaultSRLevel = 0
-                            defaultQSRLevel = selection - 10
-                        default:
-                            defaultSRLevel = 0
-                            defaultQSRLevel = 0
-                        }
-                    }
-                )) {
-                    Text("Off").tag(0)
-                    if globallySupportedLowLatencySR {
-                        Text("Low Latency 2x").tag(2)
-                        Text("Low Latency 4x").tag(4)
-                    }
-                    if globallySupportedQualityScales.contains(2) {
-                        Text("Quality 2x").tag(12)
-                    }
-                    if globallySupportedQualityScales.contains(4) {
-                        Text("Quality 4x").tag(14)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(.secondary)
-                
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
                     Text("2x Interpolation").tag(2)
@@ -365,7 +332,7 @@ extension VTPlayerView {
                     Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .frame(width: 24, alignment: .trailing)
+                        .frame(width: 36, alignment: .trailing)
                 }
                 
                 HStack {
@@ -376,7 +343,7 @@ extension VTPlayerView {
                     Text(String(format: "%.2f", defaultDNLevel))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .frame(width: 32, alignment: .trailing)
+                        .frame(width: 36, alignment: .trailing)
                 }
                 
                 HStack {
@@ -387,7 +354,7 @@ extension VTPlayerView {
                     Text(String(format: "%.1f", defaultSharpness))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .frame(width: 24, alignment: .trailing)
+                        .frame(width: 36, alignment: .trailing)
                 }
                 
                 HStack {
@@ -398,68 +365,24 @@ extension VTPlayerView {
                     Text(String(format: "%.1f", defaultHDRBoost))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .frame(width: 24, alignment: .trailing)
+                        .frame(width: 36, alignment: .trailing)
                 }
 
-                HStack {
-                    Text("HDR Colorfulness")
-                    Spacer()
-                    Slider(value: $defaultHDRColorfulness, in: 0.0...1.0, step: 0.05)
-                    .frame(width: 140)
-                    .disabled(defaultHDRBoost <= 0)
-                    Text(String(format: "%.2f", defaultHDRColorfulness))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24, alignment: .trailing)
-                }
-            }
-            
-            // Quality SR Model Section
-            Section("Quality Super Resolution Model") {
-                VStack(alignment: .leading, spacing: 8) {
+                if defaultHDRBoost > 0 {
                     HStack {
-                        Text("Model Status")
+                        Text("HDR Colorfulness")
                         Spacer()
-                        modelStatusLabelView(viewModel.modelManager.status)
+                        Slider(value: $defaultHDRColorfulness, in: 0.0...1.0, step: 0.05)
+                        .frame(width: 140)
+                        Text(String(format: "%.2f", defaultHDRColorfulness))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
                     }
-                    
-                    if case .downloadRequired = viewModel.modelManager.status {
-                        Button(action: {
-                            viewModel.downloadGlobalModel()
-                        }) {
-                            Text("Download Quality SR Model")
-                                .font(.body.bold())
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    } else if case .failed(let errMsg) = viewModel.modelManager.status {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Error: \(errMsg)")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                            
-                            Button(action: {
-                                viewModel.downloadGlobalModel()
-                            }) {
-                                Text("Retry Download")
-                                    .font(.body.bold())
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 4)
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    } else if case .downloading(let progress) = viewModel.modelManager.status {
-                        ProgressView(value: progress) {
-                            Text(String(format: "Downloading (%.0f%%)", progress * 100))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .progressViewStyle(.linear)
-                        .padding(.vertical, 4)
-                    }
+                    .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
             
             // Gallery Configuration Section
             Section("Gallery Configuration") {
