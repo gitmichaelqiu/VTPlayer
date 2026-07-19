@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import Combine
 import AVKit
@@ -580,3 +581,4 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
         }
     }
 }
+#endif

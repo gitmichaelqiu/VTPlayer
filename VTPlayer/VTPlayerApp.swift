@@ -12,12 +12,14 @@ struct VTPlayerApp: App {
             ContentView()
         }
         #if os(macOS)
-        Settings {
-            MacSettingsView()
-                .frame(width: CGFloat(defaultSettingsWindowWidth), height: CGFloat(defaultSettingsWindowHeight))
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    SettingsWindowManager.shared.showSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
-        .windowResizability(.contentSize)
-        .windowStyle(.hiddenTitleBar)
         #endif
     }
 }

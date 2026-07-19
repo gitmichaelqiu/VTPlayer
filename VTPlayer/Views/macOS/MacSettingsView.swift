@@ -1,10 +1,16 @@
+#if os(macOS)
 import SwiftUI
 import Combine
+import AppKit
 
 struct MacSettingsView: View {
     @StateObject private var navigationState = SettingsNavigationState()
-    @State private var selectedTab: SettingsTab? = .general
+    @State private var selectedTab: SettingsTab?
     @State private var searchText = ""
+
+    init(initialTab: SettingsTab? = .general) {
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         ZStack {
@@ -477,3 +483,66 @@ struct AboutLinkRow: View {
         }
     }
 }
+
+class SettingsHostingController: NSHostingController<AnyView> {
+    init(initialTab: SettingsTab? = .general) {
+        let rootView = MacSettingsView(initialTab: initialTab)
+        super.init(rootView: AnyView(rootView))
+    }
+
+    @MainActor required dynamic init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        self.preferredContentSize = NSSize(
+            width: defaultSettingsWindowWidth, height: defaultSettingsWindowHeight)
+    }
+}
+
+class SettingsWindowManager: NSObject, NSWindowDelegate {
+    static let shared = SettingsWindowManager()
+    
+    private var settingsWindowController: NSWindowController?
+    
+    func showSettings(tab: SettingsTab = .general) {
+        if let window = settingsWindowController?.window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: defaultSettingsWindowWidth, height: defaultSettingsWindowHeight),
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.identifier = NSUserInterfaceItemIdentifier("SettingsWindow")
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.center()
+        window.minSize = NSSize(width: CGFloat(defaultSettingsWindowWidth), height: CGFloat(defaultSettingsWindowHeight))
+        window.maxSize = NSSize(width: CGFloat(defaultSettingsWindowWidth), height: CGFloat(defaultSettingsWindowHeight))
+        window.collectionBehavior = [.participatesInCycle]
+        window.level = .normal
+        
+        let settingsVC = SettingsHostingController(initialTab: tab)
+        window.contentViewController = settingsVC
+        
+        let windowController = NSWindowController(window: window)
+        window.delegate = self
+        settingsWindowController = windowController
+        
+        windowController.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        settingsWindowController = nil
+    }
+}
+#endif
