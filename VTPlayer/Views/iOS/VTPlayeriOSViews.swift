@@ -129,10 +129,6 @@ extension VTPlayerView {
                     Section(isExpanded: $isPinnedExpanded) {
                         ForEach(pinnedList, id: \.self) { url in
                             videoRow(for: url)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .top).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
                         }
                     } header: {
                         if !pinnedList.isEmpty {
@@ -143,10 +139,6 @@ extension VTPlayerView {
                     Section {
                         ForEach(unpinnedList, id: \.self) { url in
                             videoRow(for: url)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .top).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
                         }
                     } header: {
                         if !pinnedList.isEmpty {
