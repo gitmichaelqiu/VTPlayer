@@ -121,6 +121,7 @@ final class VTPlayerViewModel {
     var isFullScreen = false
     var showControls = true
     var isHoveringControlBar = false
+    var isHoveringVideo = false
     var showAdjustmentsPopover = false
     
     var currentBackgroundColor: Color {
@@ -922,12 +923,12 @@ final class VTPlayerViewModel {
             #endif
             if shouldHide {
                 self.showControls = false
-                #if os(macOS)
-                if self.isFullScreen && !self.cursorHidden {
-                    NSCursor.hide()
-                    self.cursorHidden = true
-                }
-                #endif
+                 #if os(macOS)
+                 if !self.cursorHidden && self.isHoveringVideo {
+                     NSCursor.hide()
+                     self.cursorHidden = true
+                 }
+                 #endif
             }
         }
     }

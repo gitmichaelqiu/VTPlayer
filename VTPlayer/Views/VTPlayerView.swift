@@ -365,7 +365,19 @@ struct VTPlayerView: View {
             #endif
         }
         .onContinuousHover { phase in
-            viewModel.userActivityDetected()
+            switch phase {
+            case .active(_):
+                viewModel.isHoveringVideo = true
+                viewModel.userActivityDetected()
+            case .ended:
+                viewModel.isHoveringVideo = false
+                #if os(macOS)
+                if viewModel.cursorHidden {
+                    NSCursor.unhide()
+                    viewModel.cursorHidden = false
+                }
+                #endif
+            }
         }
     }
 
