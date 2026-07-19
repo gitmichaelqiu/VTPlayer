@@ -65,9 +65,9 @@ public final class VTMetalRenderer: MTKView {
     private var nativeHDRColorSpace: CGColorSpace? {
         switch nativeHDRTransfer {
         case .pq:
-            return CGColorSpace(name: kCGColorSpaceITUR_2100_PQ)
+            return CGColorSpace(name: CGColorSpace.itur_2100_PQ)
         case .hlg:
-            return CGColorSpace(name: kCGColorSpaceITUR_2100_HLG)
+            return CGColorSpace(name: CGColorSpace.itur_2100_HLG)
         case nil:
             return nil
         }
