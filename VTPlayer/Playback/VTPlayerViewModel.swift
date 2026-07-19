@@ -698,20 +698,25 @@ final class VTPlayerViewModel {
     
     #if os(macOS)
     @objc func reloadRecentVideos() {
-        let removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
-        let urls = NSDocumentController.shared.recentDocumentURLs.filter { url in
-            !removed.contains(url.path)
+        let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideosMac")
+        if let paths = paths {
+            var urls: [URL] = []
+            for path in paths {
+                if let url = URL(string: path) {
+                    urls.append(url)
+                }
+            }
+            self.recentVideos = urls
+        } else {
+            // First-run migration from NSDocumentController if available
+            let removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
+            let urls = NSDocumentController.shared.recentDocumentURLs.filter { url in
+                !removed.contains(url.path)
+            }
+            self.recentVideos = urls
+            let paths = urls.map { $0.absoluteString }
+            UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
         }
-
-        // NSDocumentController orders these by most recently opened, while
-        // the sidebar's default sort is the date the item was added.
-        var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
-        let migrationNow = Date().timeIntervalSince1970
-        for (index, url) in urls.enumerated() where dates[url.path] == nil {
-            dates[url.path] = migrationNow - Double(index)
-        }
-        UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
-        self.recentVideos = urls
     }
 
     func recordRecentDateIfNeeded(for url: URL) {
@@ -726,39 +731,35 @@ final class VTPlayerViewModel {
     }
 
     func addRecentVideoMac(_ url: URL) {
-        var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
-        removed.removeAll { $0 == url.path }
-        if removed.isEmpty {
-            UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
-        } else {
-            UserDefaults.standard.set(removed, forKey: "VTRemovedRecentVideos")
+        var list = self.recentVideos.filter { $0 != url }
+        list.insert(url, at: 0)
+        if list.count > 50 {
+            list = Array(list.prefix(50))
         }
+        self.recentVideos = list
+        
+        let paths = list.map { $0.absoluteString }
+        UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
 
-        var urls = NSDocumentController.shared.recentDocumentURLs.filter { recentURL in
-            !removed.contains(recentURL.path)
-        }
-        if !urls.contains(url) {
-            urls.insert(url, at: 0)
-        }
-        recentVideos = urls
+        #if os(macOS)
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
+        #endif
     }
     
     func deleteRecentVideoMac(at url: URL) {
         let wasSelected = videoURL == url
+        self.recentVideos.removeAll { $0 == url }
+        
+        let paths = self.recentVideos.map { $0.absoluteString }
+        UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
 
         var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
         dates.removeValue(forKey: url.path)
         UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
+        
         var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
         openedDates.removeValue(forKey: url.path)
         UserDefaults.standard.set(openedDates, forKey: "VTRecentVideosOpenedDatesMac")
-
-        var removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
-        if !removed.contains(url.path) {
-            removed.append(url.path)
-            UserDefaults.standard.set(removed, forKey: "VTRemovedRecentVideos")
-        }
-        reloadRecentVideos()
 
         if wasSelected {
             stop()
@@ -768,11 +769,14 @@ final class VTPlayerViewModel {
 
     func clearRecentVideosMac() {
         let hadSelectedVideo = videoURL != nil
+        #if os(macOS)
         NSDocumentController.shared.clearRecentDocuments(nil)
+        #endif
+        self.recentVideos.removeAll()
+        UserDefaults.standard.removeObject(forKey: "VTRecentVideosMac")
         UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
         UserDefaults.standard.removeObject(forKey: "VTRecentVideosDatesMac")
         UserDefaults.standard.removeObject(forKey: "VTRecentVideosOpenedDatesMac")
-        reloadRecentVideos()
 
         if hadSelectedVideo {
             stop()
