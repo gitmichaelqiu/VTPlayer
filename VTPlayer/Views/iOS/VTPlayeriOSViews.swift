@@ -190,7 +190,9 @@ extension VTPlayerView {
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
-                togglePin(for: url)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    togglePin(for: url)
+                }
             } label: {
                 Label(pinnedVideos.contains(url.lastPathComponent) ? "Unpin" : "Pin", 
                       systemImage: pinnedVideos.contains(url.lastPathComponent) ? "pin.slash.fill" : "pin.fill")
