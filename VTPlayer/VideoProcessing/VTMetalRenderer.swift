@@ -26,6 +26,11 @@ public final class VTMetalRenderer: MTKView {
     
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
+    private enum NativeHDRTransfer: Equatable {
+        case pq
+        case hlg
+    }
+    private var nativeHDRTransfer: NativeHDRTransfer?
     #if os(macOS)
     private var renderingActive = false
     private var pausedLayoutRedrawPending = false
@@ -56,6 +61,17 @@ public final class VTMetalRenderer: MTKView {
     public private(set) var isExtendedDynamicRangeActive = false
 
     private let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
+
+    private var nativeHDRColorSpace: CGColorSpace? {
+        switch nativeHDRTransfer {
+        case .pq:
+            return CGColorSpace(name: .itur_2100_PQ)
+        case .hlg:
+            return CGColorSpace(name: .itur_2100_HLG)
+        case nil:
+            return nil
+        }
+    }
 
     private lazy var midtoneChromaKernel: CIColorKernel? = CIColorKernel(source: """
         kernel vec4 midtoneChromaCompensation(__sample image, float amount) {
@@ -124,11 +140,21 @@ public final class VTMetalRenderer: MTKView {
 
         // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
         // remain at 1.0 until an EDR layer is already visible.
-        let shouldUseEDR = hdrStrength > 0 && potentialEDRHeadroom > 1.0
+        let nativeHDRColorSpace = nativeHDRColorSpace
+        let shouldUseEDR = (nativeHDRColorSpace != nil || hdrStrength > 0) && potentialEDRHeadroom > 1.0
         if shouldUseEDR {
-            colorPixelFormat = .rgba16Float
-            metalLayer.pixelFormat = .rgba16Float
-            metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
+            if let nativeHDRColorSpace {
+                // PQ and HLG frames must be presented in the transfer
+                // function carried by the decoded video. The linear Display
+                // P3 drawable is reserved for the SDR-to-HDR effect.
+                colorPixelFormat = .bgr10a2Unorm
+                metalLayer.pixelFormat = .bgr10a2Unorm
+                metalLayer.colorspace = nativeHDRColorSpace
+            } else {
+                colorPixelFormat = .rgba16Float
+                metalLayer.pixelFormat = .rgba16Float
+                metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
+            }
             metalLayer.wantsExtendedDynamicRangeContent = true
         } else {
             // Preserve the renderer's original SDR drawable configuration.
@@ -140,6 +166,29 @@ public final class VTMetalRenderer: MTKView {
             metalLayer.wantsExtendedDynamicRangeContent = false
         }
         isExtendedDynamicRangeActive = shouldUseEDR
+    }
+
+    private func updateNativeHDRPresentation(for pixelBuffer: CVPixelBuffer) {
+        let transfer: NativeHDRTransfer?
+        if let attachment = CVBufferCopyAttachment(
+            pixelBuffer,
+            kCVImageBufferTransferFunctionKey,
+            nil
+        ), CFEqual(attachment, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ) {
+            transfer = .pq
+        } else if let attachment = CVBufferCopyAttachment(
+            pixelBuffer,
+            kCVImageBufferTransferFunctionKey,
+            nil
+        ), CFEqual(attachment, kCVImageBufferTransferFunction_ITU_R_2100_HLG) {
+            transfer = .hlg
+        } else {
+            transfer = nil
+        }
+
+        guard transfer != nativeHDRTransfer else { return }
+        nativeHDRTransfer = transfer
+        configureExtendedDynamicRangePresentation()
     }
 
     /// The usable headroom can change with the selected display, brightness,
@@ -237,6 +286,7 @@ public final class VTMetalRenderer: MTKView {
     ///   - isInterpolated: Retained for caller compatibility; rendering uses
     ///     the same user-selected sharpness for source and generated frames.
     public func render(pixelBuffer: CVPixelBuffer, isInterpolated _: Bool = false) {
+        updateNativeHDRPresentation(for: pixelBuffer)
         self.currentPixelBuffer = pixelBuffer
         #if os(macOS)
         if self.isPaused {
@@ -318,7 +368,7 @@ public final class VTMetalRenderer: MTKView {
         // the reference white at strength zero; increasing strength raises the
         // image into extended range, capped by the screen's live headroom.
         let hdrImage: CIImage
-        if isExtendedDynamicRangeActive {
+        if isExtendedDynamicRangeActive, nativeHDRTransfer == nil {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
             let targetHeadroom = 1 + (currentEDRHeadroom - 1) * normalizedStrength
             let exposureEV = log2(targetHeadroom)
@@ -383,7 +433,7 @@ public final class VTMetalRenderer: MTKView {
             commandBuffer: commandBuffer,
             bounds: targetRect,
             colorSpace: isExtendedDynamicRangeActive
-                ? extendedLinearDisplayP3ColorSpace
+                ? (nativeHDRColorSpace ?? extendedLinearDisplayP3ColorSpace)
                 : CGColorSpaceCreateDeviceRGB()
         )
         

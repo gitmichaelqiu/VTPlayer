@@ -247,8 +247,24 @@ public actor VTFrameProcessorCoordinator {
     }
 
     #if os(macOS)
+    func isNativeHDR(_ pixelBuffer: CVPixelBuffer) -> Bool {
+        guard let transferFunction = CVBufferCopyAttachment(
+            pixelBuffer,
+            kCVImageBufferTransferFunctionKey,
+            nil
+        ) else {
+            return false
+        }
+        return CFEqual(transferFunction, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ) ||
+            CFEqual(transferFunction, kCVImageBufferTransferFunction_ITU_R_2100_HLG)
+    }
+
     func configureRendererTransferSession(_ session: VTPixelTransferSession) {
         configureTransferSession(session)
+        // This conversion exists for SDR SR output, where direct Y'CbCr
+        // rendering has known macOS compatibility problems. Never use it for
+        // native HDR: forcing BT.709 here discards its BT.2020 PQ/HLG transfer
+        // characteristics before the renderer can present them as EDR.
         VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DestinationColorPrimaries, value: kCVImageBufferColorPrimaries_ITU_R_709_2)
         VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DestinationTransferFunction, value: kCVImageBufferTransferFunction_ITU_R_709_2)
     }

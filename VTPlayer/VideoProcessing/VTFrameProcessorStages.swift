@@ -60,7 +60,9 @@ extension VTFrameProcessorCoordinator {
 
         #if os(macOS)
         if let session = rendererTransferSession, let pool = rendererPixelBufferPool {
-            currentFrames = try currentFrames.map { try convertForRenderer($0, session: session, pool: pool) }
+            currentFrames = try currentFrames.map {
+                isNativeHDR($0.buffer) ? $0 : try convertForRenderer($0, session: session, pool: pool)
+            }
         }
         #endif
 
