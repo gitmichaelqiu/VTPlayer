@@ -247,12 +247,12 @@ struct VTPlayerView: View {
         if !viewModel.isFullScreen {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 leftSidebar
-                    .ignoresSafeArea()
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 360)
                     .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
             } detail: {
                 videoContent
                     .frame(minWidth: 0, idealWidth: 720)
+                    .clipped()
                     .inspector(isPresented: Binding(
                         get: { viewModel.showSidebar && viewModel.videoURL != nil },
                         set: { viewModel.showSidebar = $0 }
