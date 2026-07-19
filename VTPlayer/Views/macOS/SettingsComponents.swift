@@ -409,11 +409,14 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
             }
 
             HStack {
-                if let step = step {
-                    Slider(value: $value, in: range, step: V.Stride(step))
-                } else {
-                    Slider(value: $value, in: range)
+                Group {
+                    if let step = step {
+                        Slider(value: $value, in: range, step: V.Stride(step))
+                    } else {
+                        Slider(value: $value, in: range)
+                    }
                 }
+                .animation(.easeInOut(duration: 0.2), value: value)
 
                 Text(valueString(value))
                     .monospacedDigit()

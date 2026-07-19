@@ -260,6 +260,7 @@ struct EnhancementsSettingsTab: View {
     @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
     @AppStorage("VTDefaultSharpness") private var defaultSharpness = 0.0
     @AppStorage("VTDefaultHDRBoost") private var defaultHDRBoost = 0.0
+    @AppStorage("VTDefaultHDRColorfulness") private var defaultHDRColorfulness = 0.0
 
     var body: some View {
         SettingsContainer(.enhancements) {
@@ -277,7 +278,7 @@ struct EnhancementsSettingsTab: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .frame(width: 100)
-                        .padding(.trailing, -4)
+                        .padding(.trailing, -10)
                     }
                 }
 
@@ -309,25 +310,43 @@ struct EnhancementsSettingsTab: View {
                 }
 
                 SettingsSection("Color & Image Adjustments") {
-                    SliderSettingsRow(
-                        "Sharpness",
-                        helperText: "Adjust intensity of edge-enhancement contrast (radius is fixed at 0.5).",
-                        value: $defaultSharpness,
-                        range: 0.0...2.0,
-                        defaultValue: 0.0,
-                        step: 0.05
-                    )
+                    VStack(spacing: 0) {
+                        SliderSettingsRow(
+                            "Sharpness",
+                            helperText: "Adjust intensity of edge-enhancement contrast (radius is fixed at 0.5).",
+                            value: $defaultSharpness,
+                            range: 0.0...2.0,
+                            defaultValue: 0.0,
+                            step: 0.05
+                        )
 
-                    Divider()
+                        Divider()
 
-                    SliderSettingsRow(
-                        "HDR Boost",
-                        helperText: "Luminance expansion from SDR into display's EDR headroom.",
-                        value: $defaultHDRBoost,
-                        range: 0.0...2.0,
-                        defaultValue: 0.0,
-                        step: 0.05
-                    )
+                        SliderSettingsRow(
+                            "HDR Boost",
+                            helperText: "Luminance expansion from SDR into display's EDR headroom.",
+                            value: $defaultHDRBoost,
+                            range: 0.0...2.0,
+                            defaultValue: 0.0,
+                            step: 0.05
+                        )
+
+                        if defaultHDRBoost > 0 {
+                            Divider()
+                                .transition(.opacity)
+
+                            SliderSettingsRow(
+                                "HDR Colorfulness",
+                                helperText: "Adjust chroma saturation boost in the midtone range during HDR expansion.",
+                                value: $defaultHDRColorfulness,
+                                range: 0.0...1.0,
+                                defaultValue: 0.0,
+                                step: 0.05
+                            )
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
