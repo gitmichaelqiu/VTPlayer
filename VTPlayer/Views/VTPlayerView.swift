@@ -247,6 +247,7 @@ struct VTPlayerView: View {
         if !viewModel.isFullScreen {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 leftSidebar
+                    .ignoresSafeArea()
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 360)
                     .preferredColorScheme((alwaysDarkOnPlayback && viewModel.videoURL != nil) ? .dark : nil)
             } detail: {
@@ -276,6 +277,9 @@ struct VTPlayerView: View {
             }
             .navigationSplitViewStyle(.balanced)
             .macWindowToolbarFullScreenVisibility()
+            #if os(macOS)
+            .background(Color(nsColor: .windowBackgroundColor))
+            #endif
         } else {
             videoContent
                 .toolbar {
