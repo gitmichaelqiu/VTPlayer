@@ -745,22 +745,6 @@ final class VTPlayerViewModel {
         UserDefaults.standard.removeObject(forKey: securityBookmarkKey(for: url))
     }
 
-    private func makeLocalRecoveryCopy(of url: URL) -> URL? {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("VTPlayer", isDirectory: true)
-            .appendingPathComponent("RecoveredVideos", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-            let destination = support.appendingPathComponent(url.lastPathComponent)
-            try FileManager.default.copyItem(at: url, to: destination)
-            return destination
-        } catch {
-            print("Failed to create local recovery copy: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
     @objc func reloadRecentVideos() {
         for scopedURL in recentSecurityScopedURLs {
             scopedURL.stopAccessingSecurityScopedResource()
@@ -946,14 +930,7 @@ final class VTPlayerViewModel {
             panel.allowedFileTypes = ["mp4", "mov", "m4v", "mkv", "avi"]
             panel.message = "Select this video again to restore access."
             if panel.runModal() == .OK, let selectedURL = panel.url {
-                // A sandbox-owned copy is the final fallback when a prior
-                // build could not preserve its security-scoped bookmark.
-                let selectedHasScope = selectedURL.startAccessingSecurityScopedResource()
-                let localURL = makeLocalRecoveryCopy(of: selectedURL) ?? selectedURL
-                if selectedHasScope {
-                    selectedURL.stopAccessingSecurityScopedResource()
-                }
-                openVideo(localURL)
+                openVideo(selectedURL)
             }
             return
         }
