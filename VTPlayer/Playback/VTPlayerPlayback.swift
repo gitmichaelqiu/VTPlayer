@@ -17,6 +17,7 @@ extension VTPlayerViewModel {
         validateEnhancementSelections()
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
+            pipelinePresentationReady = false
             #if os(macOS)
             // A new pipeline has no frame yet. Keep native presentation alive
             // until the replacement produces one instead of exposing a black
@@ -1007,12 +1008,12 @@ extension VTPlayerViewModel {
         }
         
         if let frame = lastFrameToRender {
-            #if os(macOS)
             if !self.pipelinePresentationReady {
                 self.pipelinePresentationReady = true
+                #if os(macOS)
                 self.setNativeVideoEnabled(false)
+                #endif
             }
-            #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
