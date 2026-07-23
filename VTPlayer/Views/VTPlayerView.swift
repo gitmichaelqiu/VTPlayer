@@ -259,11 +259,6 @@ struct VTPlayerView: View {
         .onOpenURL { url in
             viewModel.openVideo(url)
         }
-        .background(WindowChromeBridge { isFullScreen in
-            if viewModel.isFullScreen != isFullScreen {
-                viewModel.isFullScreen = isFullScreen
-            }
-        })
         #endif
     }
 
@@ -323,9 +318,6 @@ struct VTPlayerView: View {
                         .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
-                .toolbarBackground(.black, for: .windowToolbar)
-                .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
-                .toolbarColorScheme(.dark, for: .windowToolbar)
                 .macWindowToolbarFullScreenVisibility()
         }
     }

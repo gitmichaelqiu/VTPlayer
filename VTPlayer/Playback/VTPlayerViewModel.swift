@@ -466,14 +466,20 @@ final class VTPlayerViewModel {
             name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
-
+        
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(reloadRecentVideos),
-            name: .recentVideosDidChange,
+            selector: #selector(windowDidEnterFullScreen),
+            name: NSWindow.didEnterFullScreenNotification,
             object: nil
         )
         
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidExitFullScreen),
+            name: NSWindow.didExitFullScreenNotification,
+            object: nil
+        )
         #else
         self.recentVideos = []
         loadRecentVideosIOS()
@@ -854,8 +860,6 @@ final class VTPlayerViewModel {
         let paths = list.map { $0.absoluteString }
         UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
 
-        NotificationCenter.default.post(name: .recentVideosDidChange, object: self)
-
         #if os(macOS)
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
         #endif
@@ -881,7 +885,6 @@ final class VTPlayerViewModel {
             stop()
             videoURL = nil
         }
-        NotificationCenter.default.post(name: .recentVideosDidChange, object: self)
     }
 
     func clearRecentVideosMac() {
@@ -899,7 +902,6 @@ final class VTPlayerViewModel {
             stop()
             videoURL = nil
         }
-        NotificationCenter.default.post(name: .recentVideosDidChange, object: self)
     }
     #endif
     
@@ -1016,10 +1018,6 @@ final class VTPlayerViewModel {
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
             window.backgroundColor = .black
-            window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = false
-            window.toolbarStyle = .unified
-            window.title = videoURL?.lastPathComponent ?? "VTPlayer"
         }
     }
     
@@ -1033,9 +1031,6 @@ final class VTPlayerViewModel {
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
             window.backgroundColor = .windowBackgroundColor
-            window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = false
-            window.toolbarStyle = .unified
         }
     }
     #endif
