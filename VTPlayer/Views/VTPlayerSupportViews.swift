@@ -159,9 +159,7 @@ struct WindowChromeBridge: NSViewRepresentable {
                 object: window
             )
             synchronize()
-            DispatchQueue.main.async { [weak self] in
-                self?.synchronize()
-            }
+            scheduleToolbarCleanup(for: window)
         }
 
         @objc private func fullScreenChanged() {
@@ -170,6 +168,18 @@ struct WindowChromeBridge: NSViewRepresentable {
 
         @objc private func windowBecameKey() {
             synchronize()
+            if let window {
+                scheduleToolbarCleanup(for: window)
+            }
+        }
+
+        private func scheduleToolbarCleanup(for window: NSWindow) {
+            for delay in [0.0, 0.05, 0.2, 0.6] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak window] in
+                    guard let self, let window else { return }
+                    self.removeDefaultSidebarToggle(from: window)
+                }
+            }
         }
 
         private func synchronize() {
