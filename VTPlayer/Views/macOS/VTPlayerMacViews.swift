@@ -117,6 +117,8 @@ extension VTPlayerView {
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            // Expand only the selection row; the content keeps its 8pt inset.
+            .padding(.horizontal, -8)
             .clipped()
             .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
             .background(
