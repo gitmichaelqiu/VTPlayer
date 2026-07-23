@@ -38,6 +38,7 @@ public final class VTMetalRenderer: MTKView {
     #endif
     #if os(iOS)
     private var edrRefreshAttempts = 0
+    private var drawableRetryPending = false
     #endif
 
     public var sharpness: Float = 0.0 {
@@ -351,10 +352,25 @@ public final class VTMetalRenderer: MTKView {
     }
     
     public override func draw(_ rect: CGRect) {
-        guard let drawable = currentDrawable,
-              let queue = commandQueue else {
+        guard let drawable = currentDrawable else {
+            #if os(iOS)
+            guard !drawableRetryPending else { return }
+            drawableRetryPending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self else { return }
+                self.drawableRetryPending = false
+                self.setNeedsDisplay(self.bounds)
+                self.draw(self.bounds)
+            }
+            #endif
             return
         }
+        guard let queue = commandQueue else {
+            return
+        }
+        #if os(iOS)
+        drawableRetryPending = false
+        #endif
 
         #if os(macOS)
         // Only advance the presentation queue when this draw has a drawable;
