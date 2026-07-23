@@ -87,6 +87,7 @@ extension VTPlayerView {
         }
         .frame(minWidth: 0, maxWidth: .infinity)
         .clipped()
+        .toolbar(removing: .sidebarToggle)
     }
 
     func macSidebarRow(for url: URL) -> some View {

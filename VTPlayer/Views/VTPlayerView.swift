@@ -301,7 +301,6 @@ struct VTPlayerView: View {
                     }
             }
             .navigationSplitViewStyle(.balanced)
-            .toolbar(removing: .sidebarToggle)
             .macWindowToolbarFullScreenVisibility()
             #if os(macOS)
             .background(Color(nsColor: .windowBackgroundColor))
