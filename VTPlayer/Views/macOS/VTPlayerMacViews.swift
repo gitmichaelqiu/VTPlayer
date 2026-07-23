@@ -61,7 +61,6 @@ extension VTPlayerView {
                 }
             }
             .listStyle(.sidebar)
-            .listContentMargins(.horizontal, 0)
             .frame(minWidth: 0, maxWidth: .infinity)
 
             Divider()
