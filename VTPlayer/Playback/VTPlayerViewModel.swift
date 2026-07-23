@@ -709,7 +709,11 @@ final class VTPlayerViewModel {
 
     func saveSecurityScopedBookmark(for url: URL) {
         do {
-            let bookmark = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+            let bookmark = try url.bookmarkData(
+                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
             UserDefaults.standard.set(bookmark, forKey: securityBookmarkKey(for: url))
             // Ensure the grant is on disk before the app is rebuilt or
             // terminated immediately after opening a file.
