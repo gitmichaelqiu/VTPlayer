@@ -174,6 +174,18 @@ public final class VTMetalRenderer: MTKView {
                 metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
             }
             metalLayer.wantsExtendedDynamicRangeContent = true
+            #if os(iOS)
+            if #available(iOS 26.0, *) {
+                // `wantsExtendedDynamicRangeContent` no longer changes the
+                // default standard preference on iOS 26. Mark this focused
+                // media layer as high range before its first drawable exists.
+                metalLayer.preferredDynamicRange = .high
+                metalLayer.contentsHeadroom = max(
+                    2.0,
+                    min(4.0, pow(2.0, CGFloat(max(hdrStrength, 0))))
+                )
+            }
+            #endif
         } else {
             // Preserve the renderer's original SDR drawable configuration.
             // Forcing sRGB here changes Core Image's YUV conversion and can
@@ -182,6 +194,12 @@ public final class VTMetalRenderer: MTKView {
             metalLayer.pixelFormat = .bgra8Unorm
             metalLayer.colorspace = nil
             metalLayer.wantsExtendedDynamicRangeContent = false
+            #if os(iOS)
+            if #available(iOS 26.0, *) {
+                metalLayer.preferredDynamicRange = .standard
+                metalLayer.contentsHeadroom = 0
+            }
+            #endif
         }
         isExtendedDynamicRangeActive = shouldUseEDR
         if previousPixelFormat != colorPixelFormat || previousEDRState != shouldUseEDR {
@@ -413,7 +431,15 @@ public final class VTMetalRenderer: MTKView {
         let hdrImage: CIImage
         if isExtendedDynamicRangeActive, nativeHDRTransfer == nil {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
-            let availableHeadroom = max(currentEDRHeadroom, potentialEDRHeadroom)
+            let measuredHeadroom = max(currentEDRHeadroom, potentialEDRHeadroom)
+            #if os(iOS)
+            // The first EDR drawable can still report SDR headroom. The layer
+            // is explicitly tagged for at least 2x, so keep the restored boost
+            // visible until UIKit reports the display's live value.
+            let availableHeadroom = max(measuredHeadroom, 2.0)
+            #else
+            let availableHeadroom = measuredHeadroom
+            #endif
             let targetHeadroom = 1 + (availableHeadroom - 1) * normalizedStrength
             let exposureEV = log2(targetHeadroom)
             // Exposure scales RGB uniformly, preserving the source hue and
