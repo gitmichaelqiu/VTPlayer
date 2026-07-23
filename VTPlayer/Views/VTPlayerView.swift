@@ -305,19 +305,8 @@ struct VTPlayerView: View {
                 .navigationTitle(viewModel.videoURL.map {
                     showFileExtensions ? $0.lastPathComponent : $0.deletingPathExtension().lastPathComponent
                 } ?? "VTPlayer")
-                .toolbar {
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        Button(action: { showFileImporter = true }) {
-                            Label("Open Video", systemImage: "plus")
-                        }
-                        .help("Open a local video file")
-                        
-                        Button(action: { viewModel.showSidebar.toggle() }) {
-                            Label("Toggle Sidebar", systemImage: "sidebar.right")
-                        }
-                        .help("Toggle diagnostics and metadata sidebar panel")
-                    }
-                }
+                .toolbarBackground(.black, for: .windowToolbar)
+                .toolbarColorScheme(.dark, for: .windowToolbar)
                 .macWindowToolbarFullScreenVisibility()
         }
     }
