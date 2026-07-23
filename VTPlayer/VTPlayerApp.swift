@@ -32,7 +32,7 @@ struct VTPlayerApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
             
-            CommandGroup(replacing: .newItem) {
+            CommandGroup(after: .newItem) {
                 Button("Open Video...") {
                     NotificationCenter.default.post(name: .openVideoFileTriggered, object: nil)
                 }
