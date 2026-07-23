@@ -359,17 +359,6 @@ public final class VTMetalRenderer: MTKView {
         #endif
     }
 
-    public func refreshPresentationConfiguration() {
-        configureExtendedDynamicRangePresentation()
-        setNeedsDisplay(bounds)
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.configureExtendedDynamicRangePresentation()
-            self.setNeedsDisplay(self.bounds)
-            self.draw()
-        }
-    }
-
     #if os(macOS)
     /// Enables the MTKView display scheduler during playback. Keeping it
     /// paused while stopped avoids rendering the same frame unnecessarily.
