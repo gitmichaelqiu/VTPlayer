@@ -46,6 +46,7 @@ struct VTMetalRendererView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: VTMetalRenderer, context: Context) {
+        uiView.refreshPresentationConfiguration()
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
         uiView.setNeedsDisplay(uiView.bounds)
