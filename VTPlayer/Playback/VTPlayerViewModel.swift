@@ -487,6 +487,13 @@ final class VTPlayerViewModel {
             name: NSWindow.didExitFullScreenNotification,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidBecomeKey),
+            name: NSWindow.didBecomeKeyNotification,
+            object: nil
+        )
         #else
         self.recentVideos = []
         loadRecentVideosIOS()
@@ -1026,13 +1033,9 @@ final class VTPlayerViewModel {
     @objc func windowDidEnterFullScreen() {
         self.isFullScreen = true
         self.userActivityDetected()
-        
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            window.backgroundColor = .black
-            window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = false
-            window.title = videoURL?.lastPathComponent ?? "VTPlayer"
-        }
+        applyFullscreenWindowAppearance()
+        DispatchQueue.main.async { [weak self] in self?.applyFullscreenWindowAppearance() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.applyFullscreenWindowAppearance() }
     }
     
     @objc func windowDidExitFullScreen() {
@@ -1048,6 +1051,26 @@ final class VTPlayerViewModel {
             window.titleVisibility = .visible
             window.titlebarAppearsTransparent = false
         }
+    }
+
+    @objc func windowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === NSApp.keyWindow else { return }
+        let fullscreen = window.styleMask.contains(.fullScreen)
+        isFullScreen = fullscreen
+        if fullscreen {
+            applyFullscreenWindowAppearance(window)
+            DispatchQueue.main.async { [weak self] in self?.applyFullscreenWindowAppearance(window) }
+        }
+    }
+
+    private func applyFullscreenWindowAppearance(_ explicitWindow: NSWindow? = nil) {
+        guard let window = explicitWindow ?? NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        guard window.styleMask.contains(.fullScreen) || isFullScreen else { return }
+        window.backgroundColor = .black
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.title = videoURL?.lastPathComponent ?? "VTPlayer"
     }
     #endif
     
