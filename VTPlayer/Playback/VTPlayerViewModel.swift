@@ -697,34 +697,24 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS)
-    private var macSecurityScopedBookmarks: [String: Data] {
-        get {
-            // UserDefaults bridges nested Data values as `Any`; a direct
-            // cast to [String: Data] can therefore silently return an empty
-            // dictionary after relaunch.
-            let stored = UserDefaults.standard.dictionary(forKey: "VTSecurityScopedBookmarksMac") ?? [:]
-            return stored.reduce(into: [String: Data]()) { result, entry in
-                if let data = entry.value as? Data {
-                    result[entry.key] = data
-                }
-            }
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "VTSecurityScopedBookmarksMac") }
+    private func securityBookmarkKey(for url: URL) -> String {
+        "VTSecurityScopedBookmarkMac.\(url.standardizedFileURL.path)"
     }
 
     func saveSecurityScopedBookmark(for url: URL) {
         do {
             let bookmark = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-            var bookmarks = macSecurityScopedBookmarks
-            bookmarks[url.standardizedFileURL.path] = bookmark
-            macSecurityScopedBookmarks = bookmarks
+            UserDefaults.standard.set(bookmark, forKey: securityBookmarkKey(for: url))
         } catch {
             print("Failed to save security-scoped bookmark: \(error.localizedDescription)")
         }
     }
 
     func resolveSecurityScopedBookmark(for url: URL) -> URL {
-        guard let bookmark = macSecurityScopedBookmarks[url.standardizedFileURL.path] else { return url }
+        let path = url.standardizedFileURL.path
+        let legacyBookmarks = UserDefaults.standard.dictionary(forKey: "VTSecurityScopedBookmarksMac")
+        let legacyBookmark = legacyBookmarks?[path] as? Data
+        guard let bookmark = UserDefaults.standard.data(forKey: securityBookmarkKey(for: url)) ?? legacyBookmark else { return url }
         var isStale = false
         do {
             let resolved = try URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &isStale)
@@ -737,9 +727,7 @@ final class VTPlayerViewModel {
     }
 
     func removeSecurityScopedBookmark(for url: URL) {
-        var bookmarks = macSecurityScopedBookmarks
-        bookmarks.removeValue(forKey: url.standardizedFileURL.path)
-        macSecurityScopedBookmarks = bookmarks
+        UserDefaults.standard.removeObject(forKey: securityBookmarkKey(for: url))
     }
 
     @objc func reloadRecentVideos() {

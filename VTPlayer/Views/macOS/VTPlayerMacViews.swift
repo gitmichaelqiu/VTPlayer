@@ -423,30 +423,34 @@ extension VTPlayerView {
                 .fixedSize()
                 .help("Super Resolution — increases spatial resolution using neural upscaling")
                 .popover(isPresented: $showSuperResolutionPopover, arrowEdge: .top) {
-                    Picker("Super Resolution", selection: Binding(
-                        get: {
-                            viewModel.qualitySuperResolutionScaleFactor > 0
-                                ? 10 + viewModel.qualitySuperResolutionScaleFactor
-                                : viewModel.superResolutionLevel
-                        },
-                        set: { selection in
-                            switch selection {
-                            case 2: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 4: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 12: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
-                            case 14: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
-                            default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Super Resolution")
+                            .font(.headline)
+                        Picker("Super Resolution", selection: Binding(
+                            get: {
+                                viewModel.qualitySuperResolutionScaleFactor > 0
+                                    ? 10 + viewModel.qualitySuperResolutionScaleFactor
+                                    : viewModel.superResolutionLevel
+                            },
+                            set: { selection in
+                                switch selection {
+                                case 2: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
+                                case 4: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
+                                case 12: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
+                                case 14: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
+                                default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
+                                }
+                                viewModel.updateEnhancements()
                             }
-                            viewModel.updateEnhancements()
+                        )) {
+                            Text("Off").tag(0)
+                            if viewModel.availableSuperResolutionScales.contains(2) { Text("Low Latency 2x").tag(2) }
+                            if viewModel.availableSuperResolutionScales.contains(4) { Text("Low Latency 4x").tag(4) }
+                            if viewModel.availableQualitySuperResolutionScales.contains(2) { Text("Quality 2x").tag(12) }
+                            if viewModel.availableQualitySuperResolutionScales.contains(4) { Text("Quality 4x").tag(14) }
                         }
-                    )) {
-                        Text("Off").tag(0)
-                        if viewModel.availableSuperResolutionScales.contains(2) { Text("Low Latency 2x").tag(2) }
-                        if viewModel.availableSuperResolutionScales.contains(4) { Text("Low Latency 4x").tag(4) }
-                        if viewModel.availableQualitySuperResolutionScales.contains(2) { Text("Quality 2x").tag(12) }
-                        if viewModel.availableQualitySuperResolutionScales.contains(4) { Text("Quality 4x").tag(14) }
+                        .pickerStyle(.inline)
                     }
-                    .pickerStyle(.inline)
                     .padding(12)
 
                 // Frame Interpolation Popover
@@ -464,15 +468,19 @@ extension VTPlayerView {
                 .fixedSize()
                 .help("Frame Interpolation — increases video frame rate for fluid movement")
                 .popover(isPresented: $showFrameInterpolationPopover, arrowEdge: .top) {
-                    Picker("Frame Interpolation", selection: Binding(
-                        get: { viewModel.frameInterpolationLevel },
-                        set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
-                    )) {
-                        Text("Off").tag(0)
-                        Text("2x").tag(2)
-                        Text("4x").tag(4)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Frame Interpolation")
+                            .font(.headline)
+                        Picker("Frame Interpolation", selection: Binding(
+                            get: { viewModel.frameInterpolationLevel },
+                            set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
+                        )) {
+                            Text("Off").tag(0)
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
+                        }
+                        .pickerStyle(.inline)
                     }
-                    .pickerStyle(.inline)
                     .padding(12)
                 }
                 
