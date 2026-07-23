@@ -89,7 +89,6 @@ extension VTPlayerView {
         .clipped()
     }
 
-    @ViewBuilder
     func macSidebarRow(for url: URL) -> some View {
         let isPinned = pinnedVideos.contains(url.lastPathComponent)
         let isActive = (url == viewModel.videoURL)
@@ -125,8 +124,6 @@ extension VTPlayerView {
                             )
         }
         .buttonStyle(.plain)
-        // Expand the selectable card to the sidebar edges while preserving
-        // the label's internal 8pt content padding.
         .padding(.horizontal, -8)
         .help(url.path)
         .transition(.asymmetric(

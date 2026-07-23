@@ -10,6 +10,7 @@ import UIKit
 import QuartzCore
 #elseif canImport(AppKit)
 import AppKit
+import UniformTypeIdentifiers
 #endif
 
 /// The Main ViewModel managing the playback loop, synchronization, and processor pipeline.
@@ -928,7 +929,7 @@ final class VTPlayerViewModel {
             panel.canChooseFiles = true
             panel.canChooseDirectories = false
             panel.allowsMultipleSelection = false
-            panel.allowedFileTypes = ["mp4", "mov", "m4v", "mkv", "avi"]
+            panel.allowedContentTypes = [.movie, .quickTimeMovie, .mpeg4Movie]
             panel.message = "Select this video again to restore access."
             if panel.runModal() == .OK, let selectedURL = panel.url {
                 openVideo(selectedURL)
@@ -937,16 +938,16 @@ final class VTPlayerViewModel {
         }
         openVideo(resolvedURL)
         return
-        #endif
-        #if os(iOS)
+        #elseif os(iOS)
         guard FileManager.default.fileExists(atPath: url.path) else {
             if let idx = recentVideos.firstIndex(of: url) {
                 deleteRecentVideoIOS(at: IndexSet(integer: idx))
             }
             return
         }
-        #endif
+        #else
         self.openVideo(url)
+        #endif
     }
     
     #if os(macOS)
