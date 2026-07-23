@@ -87,6 +87,7 @@ extension VTPlayerView {
         }
         .frame(minWidth: 0, maxWidth: .infinity)
         .clipped()
+        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea(.container, edges: .top))
     }
 
     func macSidebarRow(for url: URL) -> some View {

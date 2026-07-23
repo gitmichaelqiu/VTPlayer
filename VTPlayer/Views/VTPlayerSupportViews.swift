@@ -283,7 +283,7 @@ extension View {
     @ViewBuilder
     func macWindowToolbarFullScreenVisibility() -> some View {
         #if os(macOS)
-        self.windowToolbarFullScreenVisibility(.visible)
+        self.windowToolbarFullScreenVisibility(.onHover)
         #else
         self
         #endif
