@@ -413,13 +413,15 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                     if let step = step {
                         Slider(value: Binding(
                             get: { value },
-                            set: { newValue in value = newValue }
+                            set: { newValue in withAnimation(.snappy(duration: 0.18)) { value = newValue } }
                         ), in: range, step: V.Stride(step))
+                        .transaction { $0.disablesAnimations = true }
                     } else {
                         Slider(value: Binding(
                             get: { value },
-                            set: { newValue in value = newValue }
+                            set: { newValue in withAnimation(.snappy(duration: 0.18)) { value = newValue } }
                         ), in: range)
+                        .transaction { $0.disablesAnimations = true }
                     }
                 }
                 Text(valueString(value))
