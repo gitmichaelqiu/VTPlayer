@@ -8,6 +8,9 @@ import CoreVideo
 #if canImport(UIKit)
 import UIKit
 import QuartzCore
+#if os(iOS)
+import MediaPlayer
+#endif
 #elseif canImport(AppKit)
 import AppKit
 import UniformTypeIdentifiers
@@ -230,7 +233,53 @@ final class VTPlayerViewModel {
         guard immediately || abs(seconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
         lastPublishedCurrentTime = seconds
         currentTime = seconds
+        #if os(iOS)
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = seconds
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPaused ? 0.0 : playbackSpeed
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        #endif
     }
+
+    #if os(iOS)
+    func publishNowPlayingArtwork(for url: URL, duration: Double) {
+        let title = UserDefaults.standard.bool(forKey: "VTShowFileExtensions")
+            ? url.lastPathComponent
+            : url.deletingPathExtension().lastPathComponent
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: title,
+            MPMediaItemPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+            MPNowPlayingInfoPropertyPlaybackRate: isPaused ? 0.0 : playbackSpeed
+        ]
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let asset = AVURLAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 600, height: 600)
+            let previewTime = CMTime(seconds: 1, preferredTimescale: 600)
+            let image = (try? generator.copyCGImage(at: previewTime, actualTime: nil))
+                ?? (try? generator.copyCGImage(at: .zero, actualTime: nil))
+            guard let image else { return }
+            let artwork = MPMediaItemArtwork(boundsSize: CGSize(width: image.width, height: image.height)) { _ in
+                UIImage(cgImage: image)
+            }
+            DispatchQueue.main.async {
+                guard let self, self.videoURL == url else { return }
+                var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? info
+                updated[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
+            }
+        }
+    }
+
+    func clearNowPlayingInfo() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+    #endif
 
     func publishProcessingDiagnostics(_ processingTime: Double? = nil) {
         let now = DispatchTime.now()
@@ -608,6 +657,9 @@ final class VTPlayerViewModel {
                     self.readyQualitySuperResolutionScales = readyQualityScales
                     
                     self.player = newPlayer
+                    #if os(iOS)
+                    self.publishNowPlayingArtwork(for: url, duration: durationSecs)
+                    #endif
 
                     let timeObserver = newPlayer.addPeriodicTimeObserver(
                         forInterval: CMTime(value: 1, timescale: 30),

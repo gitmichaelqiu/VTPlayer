@@ -3,6 +3,9 @@ import AVFoundation
 import VideoToolbox
 import CoreVideo
 import MetalKit
+#if os(iOS)
+import MediaPlayer
+#endif
 
 extension VTPlayerViewModel {
     /// Converts monotonic uptime deltas without trapping if a timestamp was
@@ -70,6 +73,11 @@ extension VTPlayerViewModel {
         #endif
 
         player.rate = Float(self.playbackSpeed)
+        #if os(iOS)
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyPlaybackRate] = playbackSpeed
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        #endif
 
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         // Rebuild the pipeline if enhancements were changed while paused,
@@ -116,6 +124,11 @@ extension VTPlayerViewModel {
     func pause() {
         guard let player = player else { return }
         player.pause()
+        #if os(iOS)
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        #endif
         resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
         self.isPaused = true
         self.isBuffering = false
@@ -1160,6 +1173,9 @@ extension VTPlayerViewModel {
         rateObserver = nil
         player?.pause()
         player = nil
+        #if os(iOS)
+        clearNowPlayingInfo()
+        #endif
         
         self.isPlaying = false
         self.isPaused = false
