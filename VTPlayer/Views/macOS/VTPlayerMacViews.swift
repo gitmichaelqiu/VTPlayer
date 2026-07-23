@@ -407,52 +407,9 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
                 
-                // Super Resolution Menu
-                Menu {
-                    Picker(selection: Binding(
-                        get: {
-                            viewModel.qualitySuperResolutionScaleFactor > 0
-                                ? 10 + viewModel.qualitySuperResolutionScaleFactor
-                                : viewModel.superResolutionLevel
-                        },
-                        set: { selection in
-                            switch selection {
-                            case 2:
-                                viewModel.superResolutionLevel = 2
-                                viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 4:
-                                viewModel.superResolutionLevel = 4
-                                viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 12:
-                                viewModel.superResolutionLevel = 0
-                                viewModel.qualitySuperResolutionScaleFactor = 2
-                            case 14:
-                                viewModel.superResolutionLevel = 0
-                                viewModel.qualitySuperResolutionScaleFactor = 4
-                            default:
-                                viewModel.superResolutionLevel = 0
-                                viewModel.qualitySuperResolutionScaleFactor = 0
-                            }
-                            viewModel.updateEnhancements()
-                        }
-                    )) {
-                        Text("Off").tag(0)
-                        if viewModel.availableSuperResolutionScales.contains(2) {
-                            Text("Low Latency 2x").tag(2)
-                        }
-                        if viewModel.availableSuperResolutionScales.contains(4) {
-                            Text("Low Latency 4x").tag(4)
-                        }
-                        if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                            Text("Quality 2x").tag(12)
-                        }
-                        if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                            Text("Quality 4x").tag(14)
-                        }
-                    } label: {
-                        EmptyView()
-                    }
-                    .pickerStyle(.inline)
+                // Super Resolution Popover
+                Button {
+                    showSuperResolutionPopover.toggle()
                 } label: {
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
@@ -462,23 +419,40 @@ extension VTPlayerView {
                         isActive: isActive
                     )
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .fixedSize()
                 .help("Super Resolution — increases spatial resolution using neural upscaling")
-                
-                // Frame Interpolation Menu
-                Menu {
-                    Picker(selection: Binding(
-                        get: { viewModel.frameInterpolationLevel },
-                        set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
+                .popover(isPresented: $showSuperResolutionPopover, arrowEdge: .top) {
+                    Picker("Super Resolution", selection: Binding(
+                        get: {
+                            viewModel.qualitySuperResolutionScaleFactor > 0
+                                ? 10 + viewModel.qualitySuperResolutionScaleFactor
+                                : viewModel.superResolutionLevel
+                        },
+                        set: { selection in
+                            switch selection {
+                            case 2: viewModel.superResolutionLevel = 2; viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 4: viewModel.superResolutionLevel = 4; viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 12: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
+                            case 14: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
+                            default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
+                            }
+                            viewModel.updateEnhancements()
+                        }
                     )) {
                         Text("Off").tag(0)
-                        Text("2x").tag(2)
-                        Text("4x").tag(4)
-                    } label: {
-                        EmptyView()
+                        if viewModel.availableSuperResolutionScales.contains(2) { Text("Low Latency 2x").tag(2) }
+                        if viewModel.availableSuperResolutionScales.contains(4) { Text("Low Latency 4x").tag(4) }
+                        if viewModel.availableQualitySuperResolutionScales.contains(2) { Text("Quality 2x").tag(12) }
+                        if viewModel.availableQualitySuperResolutionScales.contains(4) { Text("Quality 4x").tag(14) }
                     }
                     .pickerStyle(.inline)
+                    .padding(12)
+
+                // Frame Interpolation Popover
+                }
+                Button {
+                    showFrameInterpolationPopover.toggle()
                 } label: {
                     let isActive = viewModel.frameInterpolationLevel > 0
                     enhancementControlLabel(
@@ -486,9 +460,21 @@ extension VTPlayerView {
                         isActive: isActive
                     )
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .fixedSize()
                 .help("Frame Interpolation — increases video frame rate for fluid movement")
+                .popover(isPresented: $showFrameInterpolationPopover, arrowEdge: .top) {
+                    Picker("Frame Interpolation", selection: Binding(
+                        get: { viewModel.frameInterpolationLevel },
+                        set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
+                    )) {
+                        Text("Off").tag(0)
+                        Text("2x").tag(2)
+                        Text("4x").tag(4)
+                    }
+                    .pickerStyle(.inline)
+                    .padding(12)
+                }
                 
                 // Motion Blur Popover
                 Button {

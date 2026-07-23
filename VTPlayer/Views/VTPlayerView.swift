@@ -112,6 +112,8 @@ struct VTPlayerView: View {
     @State var showClearAllAlert = false
     @State var showDenoisePopover = false
     @State var showMotionBlurPopover = false
+    @State var showSuperResolutionPopover = false
+    @State var showFrameInterpolationPopover = false
     @State var showPlaybackSpeedPopover = false
     @Environment(\.dismiss) var dismiss
     

@@ -698,7 +698,17 @@ final class VTPlayerViewModel {
     
     #if os(macOS)
     private var macSecurityScopedBookmarks: [String: Data] {
-        get { UserDefaults.standard.dictionary(forKey: "VTSecurityScopedBookmarksMac") as? [String: Data] ?? [:] }
+        get {
+            // UserDefaults bridges nested Data values as `Any`; a direct
+            // cast to [String: Data] can therefore silently return an empty
+            // dictionary after relaunch.
+            let stored = UserDefaults.standard.dictionary(forKey: "VTSecurityScopedBookmarksMac") ?? [:]
+            return stored.reduce(into: [String: Data]()) { result, entry in
+                if let data = entry.value as? Data {
+                    result[entry.key] = data
+                }
+            }
+        }
         set { UserDefaults.standard.set(newValue, forKey: "VTSecurityScopedBookmarksMac") }
     }
 
