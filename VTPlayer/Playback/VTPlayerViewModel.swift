@@ -461,7 +461,7 @@ final class VTPlayerViewModel {
         availableQualitySuperResolutionScales.removeAll()
         readyQualitySuperResolutionScales.removeAll()
         useSequentialSRFIFallback = false
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let setupGeneration = playbackGeneration
         
         Task {
@@ -502,8 +502,8 @@ final class VTPlayerViewModel {
                 }
                 
                 // Perform SR support checks
-                let supported = await VTFrameProcessorCoordinator.isSuperResolutionSupported()
-                let scales = await VTFrameProcessorCoordinator.supportedSuperResolutionScaleFactors(width: width, height: height)
+                let supported = VTFrameProcessorCoordinator.isSuperResolutionSupported()
+                let scales = VTFrameProcessorCoordinator.supportedSuperResolutionScaleFactors(width: width, height: height)
                 let scalesStr = scales.isEmpty ? "None" : scales.map { String(format: "%.1fx", $0) }.joined(separator: ", ")
                 // Probe each selectable LL SR mode at the dimensions it will
                 // actually process. A 4x cascade needs a second supported 2x

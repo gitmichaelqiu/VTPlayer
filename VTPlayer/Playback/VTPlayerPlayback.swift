@@ -587,7 +587,7 @@ extension VTPlayerViewModel {
                     print("VTSuperResolutionScaler not supported on this system")
                 }
                 if let checkConfig = qlConfig {
-                    await self.modelManager.checkStatus(for: checkConfig)
+                    self.modelManager.checkStatus(for: checkConfig)
                     switch self.modelManager.status {
                     case .ready:
                         break

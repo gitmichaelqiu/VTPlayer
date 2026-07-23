@@ -184,7 +184,7 @@ struct VideoThumbnailView: View {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            let asset = AVAsset(url: url)
+            let asset = AVURLAsset(url: url)
             Task {
                 if let duration = try? await asset.load(.duration) {
                     let seconds = CMTimeGetSeconds(duration)
