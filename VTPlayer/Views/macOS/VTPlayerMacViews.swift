@@ -97,7 +97,7 @@ extension VTPlayerView {
             viewModel.openRecentVideo(url)
         }) {
             HStack(spacing: 10) {
-                VideoThumbnailView(url: url, width: 54, height: 36)
+                VideoThumbnailView(url: url, width: 72, height: 42)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
