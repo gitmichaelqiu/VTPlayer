@@ -444,7 +444,7 @@ extension VTPlayerView {
                 NativeVideoPlayer(
                     player: player,
                     title: displayTitle,
-                    isPipelineActive: viewModel.isPipelineActive && viewModel.pipelinePresentationReady,
+                    isPipelineActive: viewModel.isPipelineActive,
                     showControls: $viewModel.showControls
                 )
                 .ignoresSafeArea()
