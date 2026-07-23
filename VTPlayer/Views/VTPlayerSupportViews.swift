@@ -50,6 +50,37 @@ struct QLModelStatusView: View {
 struct WindowChromeBridge: NSViewRepresentable {
     let onFullScreenChanged: (Bool) -> Void
 
+    // WindowGroup hosts its tab chrome in AppKit's NSTabBar views, while the
+    // public NSWindow action is not effective for this SwiftUI window type.
+    static func toggleTabBar(in window: NSWindow) {
+        let hidden = tabBarViews(in: window).first?.isHidden ?? false
+        setTabBarHidden(!hidden, in: window)
+    }
+
+    static func setTabBarHidden(_ hidden: Bool, in window: NSWindow) {
+        tabBarViews(in: window).forEach { $0.isHidden = hidden }
+    }
+
+    static func isTabBarHidden(in window: NSWindow) -> Bool {
+        tabBarViews(in: window).first?.isHidden ?? false
+    }
+
+    private static func tabBarViews(in window: NSWindow) -> [NSView] {
+        guard let root = window.contentView?.superview else { return [] }
+        var matches: [NSView] = []
+
+        func visit(_ view: NSView) {
+            let className = NSStringFromClass(type(of: view))
+            if className == "NSTabBar" || className == "NSTabBarNewTabButton" {
+                matches.append(view)
+            }
+            view.subviews.forEach(visit)
+        }
+
+        visit(root)
+        return matches
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(onFullScreenChanged: onFullScreenChanged)
     }
@@ -92,6 +123,7 @@ struct WindowChromeBridge: NSViewRepresentable {
                 NotificationCenter.default.removeObserver(self, name: NSWindow.didExitFullScreenNotification, object: oldWindow)
                 NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: oldWindow)
                 NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeMainNotification, object: oldWindow)
+                NotificationCenter.default.removeObserver(self, name: NSWindow.didResizeNotification, object: oldWindow)
             }
 
             observedView = view
@@ -99,7 +131,6 @@ struct WindowChromeBridge: NSViewRepresentable {
             guard let window else { return }
 
             window.tabbingIdentifier = NSWindow.TabbingIdentifier("VTPlayer")
-            window.tabbingMode = .preferred
 
             NotificationCenter.default.addObserver(
                 self,
@@ -125,6 +156,12 @@ struct WindowChromeBridge: NSViewRepresentable {
                 name: NSWindow.didBecomeMainNotification,
                 object: window
             )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowBecameKey),
+                name: NSWindow.didResizeNotification,
+                object: window
+            )
             synchronize()
         }
 
@@ -142,9 +179,9 @@ struct WindowChromeBridge: NSViewRepresentable {
 
             if isFullScreen {
                 if tabBarWasVisible == nil {
-                    tabBarWasVisible = window.tabGroup?.isTabBarVisible
+                    tabBarWasVisible = !WindowChromeBridge.isTabBarHidden(in: window)
                 }
-                window.tabGroup?.isTabBarVisible = false
+                WindowChromeBridge.setTabBarHidden(true, in: window)
                 window.backgroundColor = .black
                 window.appearance = NSAppearance(named: .darkAqua)
                 window.titleVisibility = .visible
@@ -153,7 +190,7 @@ struct WindowChromeBridge: NSViewRepresentable {
                 setTitlebarBackground(on: window, color: .black)
             } else {
                 if let tabBarWasVisible {
-                    window.tabGroup?.isTabBarVisible = tabBarWasVisible
+                    WindowChromeBridge.setTabBarHidden(!tabBarWasVisible, in: window)
                     self.tabBarWasVisible = nil
                 }
                 window.backgroundColor = .windowBackgroundColor
