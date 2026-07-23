@@ -697,13 +697,48 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS)
+    private var macSecurityScopedBookmarks: [String: Data] {
+        get { UserDefaults.standard.dictionary(forKey: "VTSecurityScopedBookmarksMac") as? [String: Data] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "VTSecurityScopedBookmarksMac") }
+    }
+
+    func saveSecurityScopedBookmark(for url: URL) {
+        do {
+            let bookmark = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+            var bookmarks = macSecurityScopedBookmarks
+            bookmarks[url.standardizedFileURL.path] = bookmark
+            macSecurityScopedBookmarks = bookmarks
+        } catch {
+            print("Failed to save security-scoped bookmark: \(error.localizedDescription)")
+        }
+    }
+
+    func resolveSecurityScopedBookmark(for url: URL) -> URL {
+        guard let bookmark = macSecurityScopedBookmarks[url.standardizedFileURL.path] else { return url }
+        var isStale = false
+        do {
+            let resolved = try URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &isStale)
+            if isStale { saveSecurityScopedBookmark(for: resolved) }
+            return resolved
+        } catch {
+            print("Failed to resolve security-scoped bookmark: \(error.localizedDescription)")
+            return url
+        }
+    }
+
+    func removeSecurityScopedBookmark(for url: URL) {
+        var bookmarks = macSecurityScopedBookmarks
+        bookmarks.removeValue(forKey: url.standardizedFileURL.path)
+        macSecurityScopedBookmarks = bookmarks
+    }
+
     @objc func reloadRecentVideos() {
         let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideosMac")
         if let paths = paths {
             var urls: [URL] = []
             for path in paths {
                 if let url = URL(string: path) {
-                    urls.append(url)
+                    urls.append(resolveSecurityScopedBookmark(for: url))
                 }
             }
             self.recentVideos = urls
@@ -756,6 +791,7 @@ final class VTPlayerViewModel {
         var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
         dates.removeValue(forKey: url.path)
         UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
+        removeSecurityScopedBookmark(for: url)
         
         var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
         openedDates.removeValue(forKey: url.path)
@@ -787,8 +823,12 @@ final class VTPlayerViewModel {
     
     func openVideo(_ url: URL) {
         self.stop()
-        
+
+        #if os(macOS)
+        let targetURL = resolveSecurityScopedBookmark(for: url)
+        #else
         var targetURL = url
+        #endif
         
         // Release any previously held security-scoped resource
         if let prev = securityScopedURL {
@@ -796,10 +836,16 @@ final class VTPlayerViewModel {
             self.securityScopedURL = nil
         }
         
-        let isSecurityScoped = url.startAccessingSecurityScopedResource()
+        let isSecurityScoped = targetURL.startAccessingSecurityScopedResource()
         if isSecurityScoped {
-            self.securityScopedURL = url
+            self.securityScopedURL = targetURL
         }
+
+        #if os(macOS)
+        if isSecurityScoped {
+            saveSecurityScopedBookmark(for: targetURL)
+        }
+        #endif
         
         #if os(iOS)
         self.tempLocalURL = nil
