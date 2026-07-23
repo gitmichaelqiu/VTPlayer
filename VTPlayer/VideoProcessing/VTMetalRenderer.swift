@@ -148,12 +148,7 @@ public final class VTMetalRenderer: MTKView {
         // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
         // remain at 1.0 until an EDR layer is already visible.
         let nativeHDRColorSpace = nativeHDRColorSpace
-        let hasHDRIntent = nativeHDRColorSpace != nil || hdrStrength > 0
-        #if os(iOS)
-        let shouldUseEDR = hasHDRIntent && window != nil
-        #else
-        let shouldUseEDR = hasHDRIntent && potentialEDRHeadroom > 1.0
-        #endif
+        let shouldUseEDR = (nativeHDRColorSpace != nil || hdrStrength > 0) && potentialEDRHeadroom > 1.0
         if shouldUseEDR {
             if let nativeHDRColorSpace {
                 // PQ and HLG frames must be presented in the transfer
@@ -404,16 +399,7 @@ public final class VTMetalRenderer: MTKView {
         let hdrImage: CIImage
         if isExtendedDynamicRangeActive, nativeHDRTransfer == nil {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
-            // Before the first EDR drawable, iOS can report 1.0 for both
-            // current and potential headroom. Keep the requested boost active
-            // for that first frame instead of waiting for rotation.
-            let measuredHeadroom = max(currentEDRHeadroom, potentialEDRHeadroom)
-            #if os(iOS)
-            let availableHeadroom = max(measuredHeadroom, 2.0)
-            #else
-            let availableHeadroom = measuredHeadroom
-            #endif
-            let targetHeadroom = 1 + (availableHeadroom - 1) * normalizedStrength
+            let targetHeadroom = 1 + (currentEDRHeadroom - 1) * normalizedStrength
             let exposureEV = log2(targetHeadroom)
             // Exposure scales RGB uniformly, preserving the source hue and
             // chroma relationships. Do not add saturation or contrast here:
