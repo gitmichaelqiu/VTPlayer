@@ -42,16 +42,8 @@ struct VTPlayerApp: App {
                     guard let currentWindow else { return }
                     let hostingController = NSHostingController(rootView: ContentView())
                     let newWindow = NSWindow(
-                        contentRect: currentWindow.contentRect(forFrameRect: currentWindow.frame),
-                        styleMask: currentWindow.styleMask,
-                        backing: .buffered,
-                        defer: false
+                        contentViewController: hostingController
                     )
-                    newWindow.contentViewController = hostingController
-                    newWindow.title = currentWindow.title
-                    newWindow.titleVisibility = currentWindow.titleVisibility
-                    newWindow.titlebarAppearsTransparent = currentWindow.titlebarAppearsTransparent
-                    newWindow.toolbarStyle = currentWindow.toolbarStyle
                     newWindow.setFrame(currentWindow.frame, display: false)
                     newWindow.tabbingIdentifier = "dev.mqiu.VTPlayer"
                     newWindow.tabbingMode = .preferred
