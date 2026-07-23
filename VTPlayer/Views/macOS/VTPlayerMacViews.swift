@@ -115,7 +115,7 @@ extension VTPlayerView {
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, 4)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 2)
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .clipped()
             .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))

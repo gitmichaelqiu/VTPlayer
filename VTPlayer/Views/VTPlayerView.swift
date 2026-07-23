@@ -272,7 +272,9 @@ struct VTPlayerView: View {
                 videoContent
                     .frame(minWidth: 0, idealWidth: 720)
                     .clipped()
-                    .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "VTPlayer")
+                    .navigationTitle(viewModel.videoURL.map {
+                        showFileExtensions ? $0.lastPathComponent : $0.deletingPathExtension().lastPathComponent
+                    } ?? "VTPlayer")
                     .inspector(isPresented: $viewModel.showSidebar) {
                         rightSidebar
                             .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
@@ -299,7 +301,9 @@ struct VTPlayerView: View {
             #endif
         } else {
             videoContent
-                .navigationTitle(viewModel.videoURL?.lastPathComponent ?? "VTPlayer")
+                .navigationTitle(viewModel.videoURL.map {
+                    showFileExtensions ? $0.lastPathComponent : $0.deletingPathExtension().lastPathComponent
+                } ?? "VTPlayer")
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
                         Button(action: { showFileImporter = true }) {
