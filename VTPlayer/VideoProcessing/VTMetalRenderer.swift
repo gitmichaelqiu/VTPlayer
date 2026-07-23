@@ -489,18 +489,10 @@ public final class VTMetalRenderer: MTKView {
         // The renderer is constructed before SwiftUI attaches it to a window,
         // so the active window scene's EDR headroom is only available here.
         configureExtendedDynamicRangePresentation()
-        if hdrStrength > 0 {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.window != nil, self.hdrStrength > 0 else { return }
-                self.configureExtendedDynamicRangePresentation()
-                self.setNeedsDisplay(self.bounds)
-            }
-        }
     }
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        configureExtendedDynamicRangePresentation()
         // Force the MTKView to trigger draw() when bounds change due to rotation,
         // ensuring the aspect ratio transforms recalculate correctly while paused.
         self.setNeedsDisplay(self.bounds)
