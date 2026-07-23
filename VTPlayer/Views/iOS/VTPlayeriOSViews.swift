@@ -210,6 +210,7 @@ extension VTPlayerView {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -425,6 +426,9 @@ extension VTPlayerView {
     #if os(iOS)
     @ViewBuilder
     var iosPlayerView: some View {
+        let displayTitle = viewModel.videoURL.map {
+            showFileExtensions ? $0.lastPathComponent : $0.deletingPathExtension().lastPathComponent
+        } ?? "Video"
         ZStack {
             // Enhanced Metal video renderer sits at the bottom of the ZStack
             if viewModel.isPipelineActive {
@@ -439,7 +443,7 @@ extension VTPlayerView {
             if let player = viewModel.player {
                 NativeVideoPlayer(
                     player: player,
-                    title: viewModel.videoURL?.lastPathComponent ?? "Video",
+                    title: displayTitle,
                     isPipelineActive: viewModel.isPipelineActive,
                     showControls: $viewModel.showControls
                 )
@@ -450,7 +454,7 @@ extension VTPlayerView {
                     .tint(.white)
             }
         }
-        .navigationTitle(viewModel.showControls ? (viewModel.videoURL?.lastPathComponent ?? "Video") : "")
+        .navigationTitle(viewModel.showControls ? displayTitle : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
