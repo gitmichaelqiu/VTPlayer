@@ -642,6 +642,25 @@ extension VTPlayerView {
         .opacity(viewModel.showControls ? 1.0 : 0.0)
         .offset(y: viewModel.showControls ? 0 : 50)
         .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
+        .onChange(of: showSuperResolutionPopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: showFrameInterpolationPopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: showMotionBlurPopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: showDenoisePopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: showPlaybackSpeedPopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: viewModel.showAdjustmentsPopover) { _, _ in syncConfigurationPopoverVisibility() }
+    }
+
+    private func syncConfigurationPopoverVisibility() {
+        let isPresented = showSuperResolutionPopover || showFrameInterpolationPopover ||
+            showMotionBlurPopover || showDenoisePopover || showPlaybackSpeedPopover ||
+            viewModel.showAdjustmentsPopover
+        viewModel.isConfigurationPopoverPresented = isPresented
+        if isPresented {
+            viewModel.showControls = true
+            viewModel.inactivityTask?.cancel()
+        } else {
+            viewModel.userActivityDetected()
+        }
     }
     
     @ViewBuilder

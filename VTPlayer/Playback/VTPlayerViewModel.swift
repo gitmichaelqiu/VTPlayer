@@ -123,6 +123,7 @@ final class VTPlayerViewModel {
     var isHoveringControlBar = false
     var isHoveringVideo = false
     var showAdjustmentsPopover = false
+    var isConfigurationPopoverPresented = false
     
     var currentBackgroundColor: Color {
         if isFullScreen {
@@ -1016,7 +1017,7 @@ final class VTPlayerViewModel {
             #if os(iOS)
             let shouldHide = self.isPlaying && !self.isPaused
             #else
-            let shouldHide = self.isPlaying && !self.isPaused && !self.isHoveringControlBar && !self.showAdjustmentsPopover
+            let shouldHide = self.isPlaying && !self.isPaused && !self.isHoveringControlBar && !self.isConfigurationPopoverPresented
             #endif
             if shouldHide {
                 self.showControls = false
