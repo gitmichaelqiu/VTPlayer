@@ -464,22 +464,6 @@ extension VTPlayerView {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .fixedSize()
-                .padding(.vertical, 5)
-                .padding(.horizontal, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(
-                            max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor) > 0
-                                ? Color.white.opacity(0.12)
-                                : Color.white.opacity(0.04)
-                        )
-                )
-                .foregroundStyle(
-                    max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor) > 0
-                        ? .primary
-                        : .secondary
-                )
                 .help("Super Resolution — increases spatial resolution using neural upscaling")
                 
                 // Frame Interpolation Menu
@@ -504,18 +488,6 @@ extension VTPlayerView {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .fixedSize()
-                .padding(.vertical, 5)
-                .padding(.horizontal, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(
-                            viewModel.frameInterpolationLevel > 0
-                                ? Color.white.opacity(0.12)
-                                : Color.white.opacity(0.04)
-                        )
-                )
-                .foregroundStyle(viewModel.frameInterpolationLevel > 0 ? .primary : .secondary)
                 .help("Frame Interpolation — increases video frame rate for fluid movement")
                 
                 // Motion Blur Popover

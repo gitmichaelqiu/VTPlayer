@@ -842,9 +842,10 @@ final class VTPlayerViewModel {
         }
 
         #if os(macOS)
-        if isSecurityScoped {
-            saveSecurityScopedBookmark(for: targetURL)
-        }
+        // Persist the grant independently of the boolean return value. A
+        // URL may already be scoped by the importer, in which case starting
+        // it again can return false even though bookmark creation is valid.
+        saveSecurityScopedBookmark(for: targetURL)
         #endif
         
         #if os(iOS)
@@ -892,7 +893,15 @@ final class VTPlayerViewModel {
     func openRecentVideo(_ url: URL) {
         #if os(macOS)
         let resolvedURL = resolveSecurityScopedBookmark(for: url)
-        if !FileManager.default.isReadableFile(atPath: resolvedURL.path) {
+        // A security-scoped bookmark is only effective while its URL is
+        // actively being accessed. Start the scope before probing the file;
+        // probing first makes every relaunch look like a missing permission.
+        let hasScope = resolvedURL.startAccessingSecurityScopedResource()
+        let isReadable = FileManager.default.isReadableFile(atPath: resolvedURL.path)
+        if hasScope {
+            resolvedURL.stopAccessingSecurityScopedResource()
+        }
+        if !isReadable {
             let panel = NSOpenPanel()
             panel.canChooseFiles = true
             panel.canChooseDirectories = false
