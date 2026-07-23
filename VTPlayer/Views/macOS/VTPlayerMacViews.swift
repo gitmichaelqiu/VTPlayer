@@ -122,7 +122,7 @@ extension VTPlayerView {
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
-                    .padding(.horizontal, -8)
+                    .scaleEffect(x: 1.12, y: 1.0)
                             )
         }
         .buttonStyle(.plain)
