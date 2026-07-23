@@ -575,6 +575,15 @@ final class VTPlayerViewModel {
 
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
+                #if os(iOS)
+                do {
+                    let audioSession = AVAudioSession.sharedInstance()
+                    try audioSession.setCategory(.playback, mode: .moviePlayback, options: [])
+                    try audioSession.setActive(true)
+                } catch {
+                    print("Failed to configure playback audio session: \(error.localizedDescription)")
+                }
+                #endif
                 
                 // Update properties on @MainActor
                 await MainActor.run {
