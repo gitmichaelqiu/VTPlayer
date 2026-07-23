@@ -105,7 +105,7 @@ struct WindowStateReader: NSViewRepresentable {
         var observers: [NSObjectProtocol] = []
         weak var window: NSWindow?
         var wasFullscreen = false
-        var didHideTabBar = false
+        var tabBarWasVisible = false
         var toolbarWasVisible = false
         let isFullScreen: Binding<Bool>
 
@@ -132,28 +132,20 @@ struct WindowStateReader: NSViewRepresentable {
             isFullScreen.wrappedValue = fullscreen
             if fullscreen != wasFullscreen {
                 if fullscreen {
+                    tabBarWasVisible = window.tabbedWindows != nil
                     toolbarWasVisible = window.toolbar?.isVisible ?? false
-                    window.toggleTabBar(nil)
-                    didHideTabBar = true
+                    if tabBarWasVisible { window.toggleTabBar(nil) }
                     window.toolbar?.isVisible = false
                 } else {
-                    if didHideTabBar { window.toggleTabBar(nil) }
+                    if tabBarWasVisible { window.toggleTabBar(nil) }
                     window.toolbar?.isVisible = toolbarWasVisible
-                    didHideTabBar = false
+                    tabBarWasVisible = false
                 }
                 wasFullscreen = fullscreen
             }
             window.backgroundColor = fullscreen ? .black : .windowBackgroundColor
             window.titlebarAppearsTransparent = false
             window.titleVisibility = .visible
-            window.appearance = fullscreen ? NSAppearance(named: .darkAqua) : nil
-            let titlebarColor = (fullscreen ? NSColor.black : .windowBackgroundColor).cgColor
-            var titlebarView = window.standardWindowButton(.closeButton)?.superview
-            while let view = titlebarView {
-                view.wantsLayer = true
-                view.layer?.backgroundColor = titlebarColor
-                titlebarView = view.superview
-            }
         }
     }
 
