@@ -61,6 +61,7 @@ extension VTPlayerView {
                 }
             }
             .listStyle(.sidebar)
+            .listContentMargins(.horizontal, 0)
             .frame(minWidth: 0, maxWidth: .infinity)
 
             Divider()
@@ -118,7 +119,7 @@ extension VTPlayerView {
             .padding(.horizontal, 8)
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .clipped()
-            .listRowInsets(EdgeInsets(top: 2, leading: -8, bottom: 2, trailing: -8))
+            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
