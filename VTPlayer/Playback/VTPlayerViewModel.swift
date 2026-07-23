@@ -711,6 +711,10 @@ final class VTPlayerViewModel {
         do {
             let bookmark = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
             UserDefaults.standard.set(bookmark, forKey: securityBookmarkKey(for: url))
+            // Ensure the grant is on disk before the app is rebuilt or
+            // terminated immediately after opening a file.
+            UserDefaults.standard.synchronize()
+            NSLog("SECURITY: saved bookmark for %@", url.path)
         } catch {
             print("Failed to save security-scoped bookmark: \(error.localizedDescription)")
         }
@@ -725,6 +729,7 @@ final class VTPlayerViewModel {
         do {
             let resolved = try URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &isStale)
             if isStale { saveSecurityScopedBookmark(for: resolved) }
+            NSLog("SECURITY: resolved bookmark for %@ (stale=%@)", path, isStale ? "YES" : "NO")
             return resolved
         } catch {
             print("Failed to resolve security-scoped bookmark: \(error.localizedDescription)")
