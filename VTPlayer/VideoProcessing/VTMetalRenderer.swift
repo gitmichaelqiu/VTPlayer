@@ -432,11 +432,7 @@ public final class VTMetalRenderer: MTKView {
         let hdrImage: CIImage
         if isExtendedDynamicRangeActive, nativeHDRTransfer == nil {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
-            // iOS can report currentEDRHeadroom as 1.0 until an EDR drawable
-            // has already been presented. Use potential headroom for the first
-            // frame so activation does not depend on a later rotation.
-            let availableHeadroom = max(currentEDRHeadroom, potentialEDRHeadroom)
-            let targetHeadroom = 1 + (availableHeadroom - 1) * normalizedStrength
+            let targetHeadroom = 1 + (currentEDRHeadroom - 1) * normalizedStrength
             let exposureEV = log2(targetHeadroom)
             // Exposure scales RGB uniformly, preserving the source hue and
             // chroma relationships. Do not add saturation or contrast here:
