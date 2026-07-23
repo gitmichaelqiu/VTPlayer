@@ -5,7 +5,11 @@ import AVFoundation
 #if os(iOS)
 final class CustomAVPlayerViewController: AVPlayerViewController {
     var onControlsVisibilityChange: ((Bool) -> Void)?
-    var isPipelineActive = false
+    var isPipelineActive = false {
+        didSet {
+            applyPipelinePresentationIfNeeded()
+        }
+    }
     private var lastKnownVisibility = true
     private var checkTimer: Timer?
 
@@ -22,9 +26,19 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         disableFullscreenButton(in: view)
+        applyPipelinePresentation()
+        checkControlsVisibility()
+    }
+
+    private func applyPipelinePresentationIfNeeded() {
+        guard isViewLoaded else { return }
+        applyPipelinePresentation()
+        view.setNeedsLayout()
+    }
+
+    private func applyPipelinePresentation() {
         makeBackgroundsClear(in: view)
         hideVideoLayer(in: view)
-        checkControlsVisibility()
     }
 
     private func hideVideoLayer(in view: UIView) {
