@@ -492,9 +492,17 @@ class SettingsWindowManager: NSObject, NSWindowDelegate {
     
     func showSettings(tab: SettingsTab = .general) {
         if let window = settingsWindowController?.window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
+            // Recreate the hosting root when a specific tab is requested;
+            // MacSettingsView's initial tab is intentionally immutable after
+            // construction.
+            if tab != .general {
+                window.close()
+                settingsWindowController = nil
+            } else {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
         }
         
         let window = NSWindow(

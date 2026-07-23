@@ -19,6 +19,12 @@ struct VTPlayerApp: App {
         }
         #if os(macOS)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About VTPlayer") {
+                    SettingsWindowManager.shared.showSettings(tab: .about)
+                }
+            }
+
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
                     SettingsWindowManager.shared.showSettings()
