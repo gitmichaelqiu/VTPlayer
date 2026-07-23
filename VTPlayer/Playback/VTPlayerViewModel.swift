@@ -890,6 +890,23 @@ final class VTPlayerViewModel {
     }
     
     func openRecentVideo(_ url: URL) {
+        #if os(macOS)
+        let resolvedURL = resolveSecurityScopedBookmark(for: url)
+        if !FileManager.default.isReadableFile(atPath: resolvedURL.path) {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = false
+            panel.allowsMultipleSelection = false
+            panel.allowedFileTypes = ["mp4", "mov", "m4v", "mkv", "avi"]
+            panel.message = "Select this video again to restore access."
+            if panel.runModal() == .OK, let selectedURL = panel.url {
+                openVideo(selectedURL)
+            }
+            return
+        }
+        openVideo(resolvedURL)
+        return
+        #endif
         #if os(iOS)
         guard FileManager.default.fileExists(atPath: url.path) else {
             if let idx = recentVideos.firstIndex(of: url) {
