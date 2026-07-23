@@ -122,10 +122,12 @@ extension VTPlayerView {
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
-                    .scaleEffect(x: 1.12, y: 1.0)
                             )
         }
         .buttonStyle(.plain)
+        // Expand the selectable card to the sidebar edges while preserving
+        // the label's internal 8pt content padding.
+        .padding(.horizontal, -8)
         .help(url.path)
         .transition(.asymmetric(
             insertion: .move(edge: .top).combined(with: .opacity),
