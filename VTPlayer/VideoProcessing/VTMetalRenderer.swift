@@ -34,6 +34,9 @@ public final class VTMetalRenderer: MTKView {
     #if os(macOS)
     private var renderingActive = false
     private var pausedLayoutRedrawPending = false
+    #if os(iOS)
+    private var edrRefreshAttempts = 0
+    #endif
     private var lastLayoutSize: CGSize = .zero
     #endif
 
@@ -170,6 +173,18 @@ public final class VTMetalRenderer: MTKView {
             metalLayer.wantsExtendedDynamicRangeContent = false
         }
         isExtendedDynamicRangeActive = shouldUseEDR
+        #if os(iOS)
+        if shouldUseEDR {
+            edrRefreshAttempts = 0
+        } else if hdrStrength > 0, window != nil, edrRefreshAttempts < 8 {
+            edrRefreshAttempts += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self, self.window != nil, self.hdrStrength > 0 else { return }
+                self.configureExtendedDynamicRangePresentation()
+                self.setNeedsDisplay(self.bounds)
+            }
+        }
+        #endif
     }
 
     private func updateNativeHDRPresentation(for pixelBuffer: CVPixelBuffer) {
