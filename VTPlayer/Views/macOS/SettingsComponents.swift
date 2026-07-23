@@ -422,6 +422,8 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                     .monospacedDigit()
                     .foregroundColor(.secondary)
                     .frame(minWidth: 50, alignment: .trailing)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.18), value: value)
             }
         }
         .padding(.vertical, 8)

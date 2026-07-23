@@ -501,6 +501,8 @@ extension VTPlayerView {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")")
                             .font(.headline)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.motionBlurStrength)
                         Slider(
                             value: Binding(
                                 get: { Double(viewModel.motionBlurStrength) },
@@ -536,6 +538,8 @@ extension VTPlayerView {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
                             .font(.headline)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.denoiseStrength)
                         Slider(
                             value: $viewModel.denoiseStrength,
                             in: 0...1,
@@ -573,18 +577,24 @@ extension VTPlayerView {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")")
                                 .font(.caption)
+                                .contentTransition(.numericText())
+                                .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
                             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("HDR Boost: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : "Off")")
                                 .font(.caption)
+                                .contentTransition(.numericText())
+                                .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
                             Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("HDR Colorfulness: \(String(format: "%.2f", viewModel.hdrColorfulness))")
                                 .font(.caption)
+                                .contentTransition(.numericText())
+                                .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
                             Slider(value: $viewModel.hdrColorfulness, in: 0...1, step: 0.05)
                                 .disabled(viewModel.hdrStrength <= 0)
                         }
@@ -663,6 +673,8 @@ extension VTPlayerView {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))")
                     .font(.headline)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.18), value: viewModel.playbackSpeed)
                 Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
             }
             .padding(16)

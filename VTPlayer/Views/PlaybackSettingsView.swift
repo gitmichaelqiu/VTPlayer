@@ -95,6 +95,8 @@ struct PlaybackSettingsView: View {
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.motionBlurStrength)
                     }
 
                     HStack {
@@ -115,6 +117,8 @@ struct PlaybackSettingsView: View {
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.denoiseStrength)
                     }
                 }
 
@@ -128,6 +132,8 @@ struct PlaybackSettingsView: View {
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
                     }
 
                     HStack {
@@ -139,6 +145,8 @@ struct PlaybackSettingsView: View {
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
                     }
 
                     HStack {
@@ -151,6 +159,8 @@ struct PlaybackSettingsView: View {
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
                     }
                 }
             }
