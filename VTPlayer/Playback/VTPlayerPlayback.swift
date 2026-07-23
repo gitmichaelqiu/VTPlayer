@@ -25,6 +25,7 @@ extension VTPlayerViewModel {
             // A new pipeline has no frame yet. Keep native presentation alive
             // until the replacement produces one instead of exposing a black
             // Metal drawable during coordinator startup.
+            pipelinePresentationReady = false
             setNativeVideoEnabled(true)
             #endif
             if isPipelineActive {
@@ -187,8 +188,8 @@ extension VTPlayerViewModel {
     #endif
 
     func stopPlaybackLoopOnly() {
-        pipelinePresentationReady = false
         #if os(macOS)
+        pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(true)
         stopDisplayLinkIfNeeded()
@@ -427,8 +428,8 @@ extension VTPlayerViewModel {
 
     private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
-        pipelinePresentationReady = false
         #if os(macOS)
+        pipelinePresentationReady = false
         setNativeVideoEnabled(true)
         #endif
         isBuffering = false
@@ -1116,8 +1117,8 @@ extension VTPlayerViewModel {
 
     /// Pauses/stops playback entirely.
     func stop() {
-        pipelinePresentationReady = false
         #if os(macOS)
+        pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(false)
         stopDisplayLinkIfNeeded()
