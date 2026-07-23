@@ -198,7 +198,7 @@ struct WindowChromeBridge: NSViewRepresentable {
 
         private func removeDefaultSidebarToggle(from window: NSWindow) {
             guard let toolbar = window.toolbar else { return }
-            let sidebarIdentifier = NSToolbarItem.Identifier(NSToolbarToggleSidebarItemIdentifier)
+            let sidebarIdentifier = NSToolbarItem.Identifier.toggleSidebar
             while let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == sidebarIdentifier }) {
                 toolbar.removeItem(at: index)
             }
