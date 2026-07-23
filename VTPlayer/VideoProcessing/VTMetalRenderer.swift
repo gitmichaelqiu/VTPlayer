@@ -227,7 +227,12 @@ public final class VTMetalRenderer: MTKView {
             draw()
         }
         #else
-        draw()
+        setNeedsDisplay(bounds)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.setNeedsDisplay(self.bounds)
+            self.draw()
+        }
         #endif
     }
 

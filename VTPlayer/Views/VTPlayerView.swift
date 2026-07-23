@@ -48,6 +48,7 @@ struct VTMetalRendererView: UIViewRepresentable {
     func updateUIView(_ uiView: VTMetalRenderer, context: Context) {
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
+        uiView.setNeedsDisplay(uiView.bounds)
     }
 }
 #elseif canImport(AppKit)
