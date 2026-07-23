@@ -179,7 +179,6 @@ struct WindowChromeBridge: NSViewRepresentable {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak window] in
                     guard let self, let window else { return }
                     self.hideDocumentControls(in: window)
-                    self.removeDefaultSidebarToggle(from: window)
                     if window.styleMask.contains(.fullScreen) {
                         WindowChromeBridge.setTabBarHidden(true, in: window)
                     }
@@ -190,7 +189,6 @@ struct WindowChromeBridge: NSViewRepresentable {
         private func synchronize() {
             guard let window else { return }
             hideDocumentControls(in: window)
-            removeDefaultSidebarToggle(from: window)
             let isFullScreen = window.styleMask.contains(.fullScreen)
 
             if isFullScreen {
@@ -219,18 +217,6 @@ struct WindowChromeBridge: NSViewRepresentable {
             }
 
             onFullScreenChanged(isFullScreen)
-        }
-
-        private func removeDefaultSidebarToggle(from window: NSWindow) {
-            guard let toolbar = window.toolbar else { return }
-            while let index = toolbar.items.firstIndex(where: { item in
-                let identifier = item.itemIdentifier.rawValue.lowercased()
-                return item.itemIdentifier == .toggleSidebar
-                    || identifier.contains("togglesidebar")
-                    || identifier.contains("navigationsplitview")
-            }) {
-                toolbar.removeItem(at: index)
-            }
         }
 
         private func hideDocumentControls(in window: NSWindow) {
@@ -297,7 +283,7 @@ extension View {
     @ViewBuilder
     func macWindowToolbarFullScreenVisibility() -> some View {
         #if os(macOS)
-        self.windowToolbarFullScreenVisibility(.onHover)
+        self.windowToolbarFullScreenVisibility(.visible)
         #else
         self
         #endif
