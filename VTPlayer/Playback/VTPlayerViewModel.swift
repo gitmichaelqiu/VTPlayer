@@ -1029,6 +1029,9 @@ final class VTPlayerViewModel {
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
             window.backgroundColor = .black
+            window.titleVisibility = .visible
+            window.titlebarAppearsTransparent = false
+            window.title = videoURL?.lastPathComponent ?? "VTPlayer"
         }
     }
     
@@ -1042,6 +1045,8 @@ final class VTPlayerViewModel {
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
             window.backgroundColor = .windowBackgroundColor
+            window.titleVisibility = .visible
+            window.titlebarAppearsTransparent = false
         }
     }
     #endif

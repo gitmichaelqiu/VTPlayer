@@ -14,6 +14,12 @@ extension Notification.Name {
 
 @main
 struct VTPlayerApp: App {
+    #if os(macOS)
+    init() {
+        NSWindow.allowsAutomaticWindowTabbing = true
+    }
+    #endif
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -34,10 +40,22 @@ struct VTPlayerApp: App {
             }
             
             CommandGroup(after: .newItem) {
+                Button("New Tab") {
+                    NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
                 Button("Open Video...") {
                     NotificationCenter.default.post(name: .openVideoFileTriggered, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+            }
+
+            CommandGroup(after: .windowArrangement) {
+                Button("Show/Hide Tab Bar") {
+                    NSApp.keyWindow?.toggleTabBar(nil)
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             }
             
             CommandGroup(replacing: .sidebar) {
