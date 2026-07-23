@@ -34,10 +34,10 @@ public final class VTMetalRenderer: MTKView {
     #if os(macOS)
     private var renderingActive = false
     private var pausedLayoutRedrawPending = false
+    private var lastLayoutSize: CGSize = .zero
+    #endif
     #if os(iOS)
     private var edrRefreshAttempts = 0
-    #endif
-    private var lastLayoutSize: CGSize = .zero
     #endif
 
     public var sharpness: Float = 0.0 {
