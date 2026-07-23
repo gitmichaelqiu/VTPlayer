@@ -50,8 +50,9 @@ struct QLModelStatusView: View {
 struct WindowChromeBridge: NSViewRepresentable {
     let onFullScreenChanged: (Bool) -> Void
 
-    // WindowGroup hosts its tab chrome in AppKit's NSTabBar views, while the
-    // public NSWindow action is not effective for this SwiftUI window type.
+    // WindowGroup hosts its tab chrome in AppKit's NSTabBar views. Keep this
+    // fallback limited to the explicit tab-bar command; fullscreen is left to
+    // SwiftUI's documented toolbar hover behavior.
     static func toggleTabBar(in window: NSWindow) {
         let hidden = tabBarViews(in: window).first?.isHidden ?? false
         setTabBarHidden(!hidden, in: window)
@@ -59,10 +60,6 @@ struct WindowChromeBridge: NSViewRepresentable {
 
     static func setTabBarHidden(_ hidden: Bool, in window: NSWindow) {
         tabBarViews(in: window).forEach { $0.isHidden = hidden }
-    }
-
-    static func isTabBarHidden(in window: NSWindow) -> Bool {
-        tabBarViews(in: window).first?.isHidden ?? false
     }
 
     private static func tabBarViews(in window: NSWindow) -> [NSView] {
@@ -106,7 +103,6 @@ struct WindowChromeBridge: NSViewRepresentable {
         var onFullScreenChanged: (Bool) -> Void
         weak var observedView: NSView?
         weak var window: NSWindow?
-        var tabBarWasVisible: Bool?
 
         init(onFullScreenChanged: @escaping (Bool) -> Void) {
             self.onFullScreenChanged = onFullScreenChanged
@@ -163,6 +159,9 @@ struct WindowChromeBridge: NSViewRepresentable {
                 object: window
             )
             synchronize()
+            DispatchQueue.main.async { [weak self] in
+                self?.synchronize()
+            }
         }
 
         @objc private func fullScreenChanged() {
@@ -175,13 +174,10 @@ struct WindowChromeBridge: NSViewRepresentable {
 
         private func synchronize() {
             guard let window else { return }
+            removeDefaultSidebarToggle(from: window)
             let isFullScreen = window.styleMask.contains(.fullScreen)
 
             if isFullScreen {
-                if tabBarWasVisible == nil {
-                    tabBarWasVisible = !WindowChromeBridge.isTabBarHidden(in: window)
-                }
-                WindowChromeBridge.setTabBarHidden(true, in: window)
                 window.backgroundColor = .black
                 window.appearance = NSAppearance(named: .darkAqua)
                 window.titleVisibility = .visible
@@ -189,10 +185,6 @@ struct WindowChromeBridge: NSViewRepresentable {
                 window.toolbarStyle = .unified
                 setTitlebarBackground(on: window, color: .black)
             } else {
-                if let tabBarWasVisible {
-                    WindowChromeBridge.setTabBarHidden(!tabBarWasVisible, in: window)
-                    self.tabBarWasVisible = nil
-                }
                 window.backgroundColor = .windowBackgroundColor
                 window.appearance = nil
                 window.titleVisibility = .visible
@@ -202,6 +194,14 @@ struct WindowChromeBridge: NSViewRepresentable {
             }
 
             onFullScreenChanged(isFullScreen)
+        }
+
+        private func removeDefaultSidebarToggle(from window: NSWindow) {
+            guard let toolbar = window.toolbar else { return }
+            let sidebarIdentifier = NSToolbarItem.Identifier(NSToolbarToggleSidebarItemIdentifier)
+            while let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == sidebarIdentifier }) {
+                toolbar.removeItem(at: index)
+            }
         }
 
         private func setTitlebarBackground(on window: NSWindow, color: NSColor) {
