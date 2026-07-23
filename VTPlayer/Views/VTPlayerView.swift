@@ -104,6 +104,9 @@ struct WindowStateReader: NSViewRepresentable {
     final class Coordinator {
         var observers: [NSObjectProtocol] = []
         weak var window: NSWindow?
+        var wasFullscreen = false
+        var tabBarWasVisible = false
+        var toolbarWasVisible = false
         let isFullScreen: Binding<Bool>
 
         init(isFullScreen: Binding<Bool>) { self.isFullScreen = isFullScreen }
@@ -127,6 +130,19 @@ struct WindowStateReader: NSViewRepresentable {
         func update(_ window: NSWindow) {
             let fullscreen = window.styleMask.contains(.fullScreen)
             isFullScreen.wrappedValue = fullscreen
+            if fullscreen != wasFullscreen {
+                if fullscreen {
+                    tabBarWasVisible = window.tabbedWindows != nil
+                    toolbarWasVisible = window.toolbar?.isVisible ?? false
+                    if tabBarWasVisible { window.toggleTabBar(nil) }
+                    window.toolbar?.isVisible = false
+                } else {
+                    if tabBarWasVisible { window.toggleTabBar(nil) }
+                    window.toolbar?.isVisible = toolbarWasVisible
+                    tabBarWasVisible = false
+                }
+                wasFullscreen = fullscreen
+            }
             window.backgroundColor = fullscreen ? .black : .windowBackgroundColor
             window.titlebarAppearsTransparent = false
             window.titleVisibility = .visible
