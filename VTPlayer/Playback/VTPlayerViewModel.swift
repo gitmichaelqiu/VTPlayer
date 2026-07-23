@@ -439,6 +439,10 @@ final class VTPlayerViewModel {
     deinit {
         NotificationCenter.default.removeObserver(self)
         #if os(macOS)
+        for scopedURL in recentSecurityScopedURLs {
+            scopedURL.stopAccessingSecurityScopedResource()
+        }
+        recentSecurityScopedURLs.removeAll()
         if cursorHidden {
             NSCursor.unhide()
         }
@@ -697,6 +701,8 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS)
+    @ObservationIgnored private var recentSecurityScopedURLs: [URL] = []
+
     private func securityBookmarkKey(for url: URL) -> String {
         "VTSecurityScopedBookmarkMac.\(url.standardizedFileURL.path)"
     }
@@ -731,12 +737,20 @@ final class VTPlayerViewModel {
     }
 
     @objc func reloadRecentVideos() {
+        for scopedURL in recentSecurityScopedURLs {
+            scopedURL.stopAccessingSecurityScopedResource()
+        }
+        recentSecurityScopedURLs.removeAll(keepingCapacity: true)
         let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideosMac")
         if let paths = paths {
             var urls: [URL] = []
             for path in paths {
                 if let url = URL(string: path) {
-                    urls.append(resolveSecurityScopedBookmark(for: url))
+                    let resolved = resolveSecurityScopedBookmark(for: url)
+                    if resolved.startAccessingSecurityScopedResource() {
+                        recentSecurityScopedURLs.append(resolved)
+                    }
+                    urls.append(resolved)
                 }
             }
             self.recentVideos = urls

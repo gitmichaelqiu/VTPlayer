@@ -426,7 +426,7 @@ extension VTPlayerView {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Super Resolution")
                             .font(.headline)
-                        Picker("Super Resolution", selection: Binding(
+                        Picker("", selection: Binding(
                             get: {
                                 viewModel.qualitySuperResolutionScaleFactor > 0
                                     ? 10 + viewModel.qualitySuperResolutionScaleFactor
@@ -471,7 +471,7 @@ extension VTPlayerView {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Frame Interpolation")
                             .font(.headline)
-                        Picker("Frame Interpolation", selection: Binding(
+                        Picker("", selection: Binding(
                             get: { viewModel.frameInterpolationLevel },
                             set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
                         )) {
