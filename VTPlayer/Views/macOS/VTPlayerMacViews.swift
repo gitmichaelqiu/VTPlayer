@@ -122,7 +122,8 @@ extension VTPlayerView {
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
-            )
+                            )
+                            .transaction { $0.animation = .snappy(duration: 0.18) }
         }
         .buttonStyle(.plain)
         .help(url.path)
@@ -516,6 +517,7 @@ extension VTPlayerView {
                                 }
                             }
                         )
+                        .transaction { $0.animation = .snappy(duration: 0.18) }
                     }
                     .padding(16)
                     .frame(width: 220)
@@ -580,6 +582,7 @@ extension VTPlayerView {
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
                             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                                .transaction { $0.animation = .snappy(duration: 0.18) }
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
@@ -588,6 +591,7 @@ extension VTPlayerView {
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
                             Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                                .transaction { $0.animation = .snappy(duration: 0.18) }
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -596,6 +600,7 @@ extension VTPlayerView {
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
                             Slider(value: $viewModel.hdrColorfulness, in: 0...1, step: 0.05)
+                                .transaction { $0.animation = .snappy(duration: 0.18) }
                                 .disabled(viewModel.hdrStrength <= 0)
                         }
                     }
@@ -650,6 +655,7 @@ extension VTPlayerView {
             .foregroundStyle(viewModel.sharpness > 0 ? .cyan : .secondary)
             .frame(width: hoverSH ? 90 : 22, alignment: .leading)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                .transaction { $0.animation = .snappy(duration: 0.18) }
                 .labelsHidden()
                 .frame(width: 60)
                 .opacity(hoverSH ? 1 : 0)
@@ -676,6 +682,7 @@ extension VTPlayerView {
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.18), value: viewModel.playbackSpeed)
                 Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
+                    .transaction { $0.animation = .snappy(duration: 0.18) }
             }
             .padding(16)
             .frame(width: 220)

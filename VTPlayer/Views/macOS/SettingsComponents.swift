@@ -411,9 +411,15 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
             HStack {
                 Group {
                     if let step = step {
-                        Slider(value: $value, in: range, step: V.Stride(step))
+                        Slider(value: Binding(
+                            get: { value },
+                            set: { newValue in withAnimation(.snappy(duration: 0.18)) { value = newValue } }
+                        ), in: range, step: V.Stride(step))
                     } else {
-                        Slider(value: $value, in: range)
+                        Slider(value: Binding(
+                            get: { value },
+                            set: { newValue in withAnimation(.snappy(duration: 0.18)) { value = newValue } }
+                        ), in: range)
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: value)
