@@ -145,10 +145,21 @@ public final class VTMetalRenderer: MTKView {
     private func configureExtendedDynamicRangePresentation() {
         guard let metalLayer = layer as? CAMetalLayer else { return }
 
+        let previousPixelFormat = colorPixelFormat
+        let previousEDRState = isExtendedDynamicRangeActive
+
         // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
         // remain at 1.0 until an EDR layer is already visible.
         let nativeHDRColorSpace = nativeHDRColorSpace
-        let shouldUseEDR = (nativeHDRColorSpace != nil || hdrStrength > 0) && potentialEDRHeadroom > 1.0
+        let hasHDRIntent = nativeHDRColorSpace != nil || hdrStrength > 0
+        #if os(iOS)
+        // iOS may not report EDR headroom until its layer already requests it.
+        // Once attached, opt in based on intent so restored settings do not
+        // wait for a rotation to create the first EDR drawable.
+        let shouldUseEDR = hasHDRIntent && window != nil
+        #else
+        let shouldUseEDR = hasHDRIntent && potentialEDRHeadroom > 1.0
+        #endif
         if shouldUseEDR {
             if let nativeHDRColorSpace {
                 // PQ and HLG frames must be presented in the transfer
@@ -173,6 +184,9 @@ public final class VTMetalRenderer: MTKView {
             metalLayer.wantsExtendedDynamicRangeContent = false
         }
         isExtendedDynamicRangeActive = shouldUseEDR
+        if previousPixelFormat != colorPixelFormat || previousEDRState != shouldUseEDR {
+            releaseDrawables()
+        }
         #if os(iOS)
         if shouldUseEDR {
             edrRefreshAttempts = 0
@@ -399,7 +413,8 @@ public final class VTMetalRenderer: MTKView {
         let hdrImage: CIImage
         if isExtendedDynamicRangeActive, nativeHDRTransfer == nil {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
-            let targetHeadroom = 1 + (currentEDRHeadroom - 1) * normalizedStrength
+            let availableHeadroom = max(currentEDRHeadroom, potentialEDRHeadroom)
+            let targetHeadroom = 1 + (availableHeadroom - 1) * normalizedStrength
             let exposureEV = log2(targetHeadroom)
             // Exposure scales RGB uniformly, preserving the source hue and
             // chroma relationships. Do not add saturation or contrast here:
@@ -476,10 +491,19 @@ public final class VTMetalRenderer: MTKView {
         // The renderer is constructed before SwiftUI attaches it to a window,
         // so the active window scene's EDR headroom is only available here.
         configureExtendedDynamicRangePresentation()
+        if hdrStrength > 0 || nativeHDRTransfer != nil {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.window != nil else { return }
+                self.configureExtendedDynamicRangePresentation()
+                self.setNeedsDisplay(self.bounds)
+                self.draw()
+            }
+        }
     }
 
     public override func layoutSubviews() {
         super.layoutSubviews()
+        configureExtendedDynamicRangePresentation()
         // Force the MTKView to trigger draw() when bounds change due to rotation,
         // ensuring the aspect ratio transforms recalculate correctly while paused.
         self.setNeedsDisplay(self.bounds)
