@@ -97,54 +97,6 @@ final class MacNativeVideoPlayerView: NSView {
         playerLayer.frame = bounds
     }
 }
-
-struct WindowStateReader: NSViewRepresentable {
-    @Binding var isFullScreen: Bool
-
-    final class Coordinator {
-        var observers: [NSObjectProtocol] = []
-        weak var window: NSWindow?
-        let isFullScreen: Binding<Bool>
-
-        init(isFullScreen: Binding<Bool>) { self.isFullScreen = isFullScreen }
-        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
-
-        func attach(to window: NSWindow) {
-            guard self.window !== window else { return }
-            observers.forEach(NotificationCenter.default.removeObserver)
-            observers.removeAll()
-            self.window = window
-            update(window)
-            for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification,
-                         NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification] {
-                observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    guard let self, let window = self.window else { return }
-                    self.update(window)
-                })
-            }
-        }
-
-        func update(_ window: NSWindow) {
-            let fullscreen = window.styleMask.contains(.fullScreen)
-            isFullScreen.wrappedValue = fullscreen
-            window.backgroundColor = fullscreen ? .black : .windowBackgroundColor
-            window.titlebarAppearsTransparent = false
-            window.titleVisibility = .visible
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(isFullScreen: $isFullScreen)
-    }
-
-    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard let window = nsView.window else { return }
-        context.coordinator.attach(to: window)
-        isFullScreen = window.styleMask.contains(.fullScreen)
-        context.coordinator.update(window)
-    }
-}
 #endif
 
 /// The premium media player user interface view.
@@ -242,9 +194,6 @@ struct VTPlayerView: View {
         } message: {
             Text("Enter a new name for the video file.")
         }
-        #if os(macOS)
-        .background(WindowStateReader(isFullScreen: $viewModel.isFullScreen))
-        #endif
         #if os(macOS)
         .alert("Clear Playback History?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
@@ -362,15 +311,13 @@ struct VTPlayerView: View {
                             Label("Open Video", systemImage: "plus")
                         }
                         .help("Open a local video file")
-
+                        
                         Button(action: { viewModel.showSidebar.toggle() }) {
                             Label("Toggle Sidebar", systemImage: "sidebar.right")
                         }
                         .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
-                .toolbarBackground(.black, for: .windowToolbar)
-                .toolbarColorScheme(.dark, for: .windowToolbar)
                 .macWindowToolbarFullScreenVisibility()
         }
     }

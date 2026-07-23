@@ -494,12 +494,6 @@ final class VTPlayerViewModel {
             name: NSWindow.didBecomeKeyNotification,
             object: nil
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidBecomeKey),
-            name: NSWindow.didBecomeMainNotification,
-            object: nil
-        )
         #else
         self.recentVideos = []
         loadRecentVideosIOS()
@@ -1061,7 +1055,7 @@ final class VTPlayerViewModel {
 
     @objc func windowDidBecomeKey(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
-              window === NSApp.keyWindow || window === NSApp.mainWindow else { return }
+              window === NSApp.keyWindow else { return }
         let fullscreen = window.styleMask.contains(.fullScreen)
         isFullScreen = fullscreen
         if fullscreen {
