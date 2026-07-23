@@ -22,7 +22,6 @@ private struct WindowTabConfigurator: NSViewRepresentable {
     final class Coordinator {
         weak var window: NSWindow?
         var tabBarWasVisible = false
-        var toolbarWasVisible = false
         var observers: [NSObjectProtocol] = []
 
         deinit {
@@ -47,22 +46,15 @@ private struct WindowTabConfigurator: NSViewRepresentable {
         }
 
         private func enterFullscreen() {
-            guard let window else { return }
+            guard let window, window.tabbedWindows != nil else { return }
             tabBarWasVisible = true
-            toolbarWasVisible = window.toolbar?.isVisible ?? false
-            window.toolbar?.isVisible = false
-            window.backgroundColor = .black
-            window.titlebarAppearsTransparent = false
             window.toggleTabBar(nil)
         }
 
         private func exitFullscreen() {
-            guard let window else { return }
-            let shouldRestoreTabBar = tabBarWasVisible
+            guard tabBarWasVisible, let window, window.tabbedWindows == nil else { return }
             tabBarWasVisible = false
-            if shouldRestoreTabBar { window.toggleTabBar(nil) }
-            window.toolbar?.isVisible = toolbarWasVisible
-            window.backgroundColor = .windowBackgroundColor
+            window.toggleTabBar(nil)
         }
     }
 
