@@ -37,11 +37,6 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
         view.subviews.forEach { hideVideoLayer(in: $0) }
     }
 
-    func updatePipelinePresentation() {
-        hideVideoLayer(in: view)
-        makeBackgroundsClear(in: view)
-    }
-
     private func startTimer() {
         checkTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -135,9 +130,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: CustomAVPlayerViewController, context: Context) {
-        controller.player = player
         controller.isPipelineActive = isPipelineActive
-        controller.updatePipelinePresentation()
         if let item = player.currentItem, item.externalMetadata.isEmpty { applyTitle(to: item) }
     }
 
