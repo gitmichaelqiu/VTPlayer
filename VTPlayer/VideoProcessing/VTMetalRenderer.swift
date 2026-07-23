@@ -145,9 +145,6 @@ public final class VTMetalRenderer: MTKView {
     private func configureExtendedDynamicRangePresentation() {
         guard let metalLayer = layer as? CAMetalLayer else { return }
 
-        let previousPixelFormat = colorPixelFormat
-        let previousEDRState = isExtendedDynamicRangeActive
-
         // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
         // remain at 1.0 until an EDR layer is already visible.
         let nativeHDRColorSpace = nativeHDRColorSpace
@@ -195,12 +192,6 @@ public final class VTMetalRenderer: MTKView {
             }
         }
         isExtendedDynamicRangeActive = shouldUseEDR
-        if previousPixelFormat != colorPixelFormat || previousEDRState != shouldUseEDR {
-            // MTKView may already own an SDR drawable when HDR is restored
-            // from per-video settings. Drop that drawable so the next draw is
-            // allocated with the new pixel format and dynamic-range metadata.
-            releaseDrawables()
-        }
         #if os(iOS)
         if shouldUseEDR {
             edrRefreshAttempts = 0
