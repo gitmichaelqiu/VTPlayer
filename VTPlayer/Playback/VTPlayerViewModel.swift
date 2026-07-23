@@ -466,6 +466,13 @@ final class VTPlayerViewModel {
             name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reloadRecentVideos),
+            name: .recentVideosDidChange,
+            object: nil
+        )
         
         NotificationCenter.default.addObserver(
             self,
@@ -860,6 +867,8 @@ final class VTPlayerViewModel {
         let paths = list.map { $0.absoluteString }
         UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
 
+        NotificationCenter.default.post(name: .recentVideosDidChange, object: self)
+
         #if os(macOS)
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
         #endif
@@ -885,6 +894,7 @@ final class VTPlayerViewModel {
             stop()
             videoURL = nil
         }
+        NotificationCenter.default.post(name: .recentVideosDidChange, object: self)
     }
 
     func clearRecentVideosMac() {
@@ -902,6 +912,7 @@ final class VTPlayerViewModel {
             stop()
             videoURL = nil
         }
+        NotificationCenter.default.post(name: .recentVideosDidChange, object: self)
     }
     #endif
     
