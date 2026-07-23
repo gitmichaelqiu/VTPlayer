@@ -171,13 +171,6 @@ public final class VTMetalRenderer: MTKView {
                 metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
             }
             metalLayer.wantsExtendedDynamicRangeContent = true
-            if #available(iOS 26.0, *) {
-                // Newer Core Animation defaults to standard dynamic range even
-                // when the layer requests EDR. Explicitly select high range so
-                // the first drawable is not tone-mapped until a later layout.
-                metalLayer.preferredDynamicRange = .high
-                metalLayer.contentsHeadroom = max(1.0, min(4.0, pow(2.0, Double(max(hdrStrength, 0)))))
-            }
         } else {
             // Preserve the renderer's original SDR drawable configuration.
             // Forcing sRGB here changes Core Image's YUV conversion and can
@@ -186,10 +179,6 @@ public final class VTMetalRenderer: MTKView {
             metalLayer.pixelFormat = .bgra8Unorm
             metalLayer.colorspace = nil
             metalLayer.wantsExtendedDynamicRangeContent = false
-            if #available(iOS 26.0, *) {
-                metalLayer.preferredDynamicRange = .standard
-                metalLayer.contentsHeadroom = 0
-            }
         }
         isExtendedDynamicRangeActive = shouldUseEDR
         #if os(iOS)
