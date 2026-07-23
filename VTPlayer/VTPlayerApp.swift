@@ -50,8 +50,9 @@ struct VTPlayerApp: App {
                     newWindow.contentViewController = hostingController
                     newWindow.title = currentWindow.title
                     newWindow.titleVisibility = currentWindow.titleVisibility
-                    newWindow.titlebarAppearsTransparent = currentWindow.titlebarAppearsTransparent
+                    newWindow.titlebarAppearsTransparent = false
                     newWindow.toolbarStyle = currentWindow.toolbarStyle
+                    newWindow.backgroundColor = currentWindow.backgroundColor
                     newWindow.setFrame(currentWindow.frame, display: false)
                     newWindow.tabbingIdentifier = "dev.mqiu.VTPlayer"
                     newWindow.tabbingMode = .preferred
