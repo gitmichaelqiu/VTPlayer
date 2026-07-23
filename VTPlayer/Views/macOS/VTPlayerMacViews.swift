@@ -507,7 +507,11 @@ extension VTPlayerView {
                         Slider(
                             value: Binding(
                                 get: { Double(viewModel.motionBlurStrength) },
-                                set: { viewModel.motionBlurStrength = Int($0) }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) {
+                                        viewModel.motionBlurStrength = Int(newValue)
+                                    }
+                                }
                             ),
                             in: 0...30,
                             step: 1,
@@ -543,7 +547,14 @@ extension VTPlayerView {
                             .contentTransition(.numericText())
                             .animation(.snappy(duration: 0.18), value: viewModel.denoiseStrength)
                         Slider(
-                            value: $viewModel.denoiseStrength,
+                            value: Binding(
+                                get: { viewModel.denoiseStrength },
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) {
+                                        viewModel.denoiseStrength = newValue
+                                    }
+                                }
+                            ),
                             in: 0...1,
                             step: 0.05,
                             onEditingChanged: { editing in
@@ -581,7 +592,10 @@ extension VTPlayerView {
                                 .font(.caption)
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
-                            Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                            Slider(value: Binding(
+                                get: { viewModel.sharpness },
+                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue } }
+                            ), in: 0...2, step: 0.25)
                                 .transaction { $0.animation = .snappy(duration: 0.18) }
                         }
                         
@@ -590,7 +604,10 @@ extension VTPlayerView {
                                 .font(.caption)
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
-                            Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                            Slider(value: Binding(
+                                get: { viewModel.hdrStrength },
+                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue } }
+                            ), in: 0...2, step: 0.25)
                                 .transaction { $0.animation = .snappy(duration: 0.18) }
                         }
 
@@ -599,7 +616,10 @@ extension VTPlayerView {
                                 .font(.caption)
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
-                            Slider(value: $viewModel.hdrColorfulness, in: 0...1, step: 0.05)
+                            Slider(value: Binding(
+                                get: { viewModel.hdrColorfulness },
+                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue } }
+                            ), in: 0...1, step: 0.05)
                                 .transaction { $0.animation = .snappy(duration: 0.18) }
                                 .disabled(viewModel.hdrStrength <= 0)
                         }
@@ -681,7 +701,10 @@ extension VTPlayerView {
                     .font(.headline)
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.18), value: viewModel.playbackSpeed)
-                Slider(value: $viewModel.playbackSpeed, in: 0.5...2.0, step: 0.25)
+                Slider(value: Binding(
+                    get: { viewModel.playbackSpeed },
+                    set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.playbackSpeed = newValue } }
+                ), in: 0.5...2.0, step: 0.25)
                     .transaction { $0.animation = .snappy(duration: 0.18) }
             }
             .padding(16)
