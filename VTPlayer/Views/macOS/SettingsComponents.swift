@@ -1,5 +1,26 @@
 #if os(macOS)
 import SwiftUI
+
+private struct AnimatedSettingsValue: View {
+    let text: String
+    @State private var displayedText: String
+
+    init(text: String) {
+        self.text = text
+        _displayedText = State(initialValue: text)
+    }
+
+    var body: some View {
+        Text(displayedText)
+            .monospacedDigit()
+            .contentTransition(.numericText())
+            .onChange(of: text) { _, newText in
+                withAnimation(.snappy(duration: 0.18)) {
+                    displayedText = newText
+                }
+            }
+    }
+}
 import Combine
 import AVKit
 import AVFoundation
@@ -424,13 +445,9 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                         .transaction { $0.disablesAnimations = true }
                     }
                 }
-                Text(valueString(value))
-                    .monospacedDigit()
+                AnimatedSettingsValue(text: valueString(value))
                     .foregroundColor(.secondary)
                     .frame(minWidth: 50, alignment: .trailing)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.18), value: value)
-                    .animation(.snappy(duration: 0.18), value: valueString(value))
             }
         }
         .padding(.vertical, 8)
