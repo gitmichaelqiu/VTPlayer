@@ -91,6 +91,7 @@ struct WindowChromeBridge: NSViewRepresentable {
                 NotificationCenter.default.removeObserver(self, name: NSWindow.didEnterFullScreenNotification, object: oldWindow)
                 NotificationCenter.default.removeObserver(self, name: NSWindow.didExitFullScreenNotification, object: oldWindow)
                 NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: oldWindow)
+                NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeMainNotification, object: oldWindow)
             }
 
             observedView = view
@@ -116,6 +117,12 @@ struct WindowChromeBridge: NSViewRepresentable {
                 self,
                 selector: #selector(windowBecameKey),
                 name: NSWindow.didBecomeKeyNotification,
+                object: window
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowBecameKey),
+                name: NSWindow.didBecomeMainNotification,
                 object: window
             )
             synchronize()
