@@ -387,7 +387,6 @@ struct VTPlayerView: View {
                 }
                 .toolbarBackground(.black, for: .windowToolbar)
                 .toolbarColorScheme(.dark, for: .windowToolbar)
-                .macWindowToolbarFullScreenVisibility()
         }
     }
 
