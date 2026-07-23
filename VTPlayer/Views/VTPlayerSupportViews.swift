@@ -68,7 +68,7 @@ struct WindowChromeBridge: NSViewRepresentable {
 
         func visit(_ view: NSView) {
             let className = NSStringFromClass(type(of: view))
-            if className == "NSTabBar" || className == "NSTabBarNewTabButton" {
+            if className.localizedCaseInsensitiveContains("tabbar") {
                 matches.append(view)
             }
             view.subviews.forEach(visit)
@@ -223,8 +223,12 @@ struct WindowChromeBridge: NSViewRepresentable {
 
         private func removeDefaultSidebarToggle(from window: NSWindow) {
             guard let toolbar = window.toolbar else { return }
-            let sidebarIdentifier = NSToolbarItem.Identifier.toggleSidebar
-            while let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == sidebarIdentifier }) {
+            while let index = toolbar.items.firstIndex(where: { item in
+                let identifier = item.itemIdentifier.rawValue.lowercased()
+                return item.itemIdentifier == .toggleSidebar
+                    || identifier.contains("togglesidebar")
+                    || identifier.contains("navigationsplitview")
+            }) {
                 toolbar.removeItem(at: index)
             }
         }
