@@ -47,6 +47,132 @@ struct QLModelStatusView: View {
 
 /// Helper view for blur/visual effect backgrounds.
 #if os(macOS)
+struct WindowChromeBridge: NSViewRepresentable {
+    let onFullScreenChanged: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onFullScreenChanged: onFullScreenChanged)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.attach(to: view)
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onFullScreenChanged = onFullScreenChanged
+        context.coordinator.attach(to: nsView)
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: nsView)
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var onFullScreenChanged: (Bool) -> Void
+        weak var observedView: NSView?
+        weak var window: NSWindow?
+        var tabBarWasVisible: Bool?
+
+        init(onFullScreenChanged: @escaping (Bool) -> Void) {
+            self.onFullScreenChanged = onFullScreenChanged
+        }
+
+        func attach(to view: NSView) {
+            guard view.window !== window else {
+                synchronize()
+                return
+            }
+
+            if let oldWindow = window {
+                NotificationCenter.default.removeObserver(self, name: NSWindow.didEnterFullScreenNotification, object: oldWindow)
+                NotificationCenter.default.removeObserver(self, name: NSWindow.didExitFullScreenNotification, object: oldWindow)
+                NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: oldWindow)
+            }
+
+            observedView = view
+            window = view.window
+            guard let window else { return }
+
+            window.tabbingIdentifier = NSWindow.TabbingIdentifier("VTPlayer")
+            window.tabbingMode = .preferred
+
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(fullScreenChanged),
+                name: NSWindow.didEnterFullScreenNotification,
+                object: window
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(fullScreenChanged),
+                name: NSWindow.didExitFullScreenNotification,
+                object: window
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowBecameKey),
+                name: NSWindow.didBecomeKeyNotification,
+                object: window
+            )
+            synchronize()
+        }
+
+        @objc private func fullScreenChanged() {
+            synchronize()
+        }
+
+        @objc private func windowBecameKey() {
+            synchronize()
+        }
+
+        private func synchronize() {
+            guard let window else { return }
+            let isFullScreen = window.styleMask.contains(.fullScreen)
+
+            if isFullScreen {
+                if tabBarWasVisible == nil {
+                    tabBarWasVisible = window.tabGroup?.isTabBarVisible
+                }
+                window.tabGroup?.isTabBarVisible = false
+                window.backgroundColor = .black
+                window.appearance = NSAppearance(named: .darkAqua)
+                window.titleVisibility = .visible
+                window.titlebarAppearsTransparent = false
+                window.toolbarStyle = .unified
+                setTitlebarBackground(on: window, color: .black)
+            } else {
+                if let tabBarWasVisible {
+                    window.tabGroup?.isTabBarVisible = tabBarWasVisible
+                    self.tabBarWasVisible = nil
+                }
+                window.backgroundColor = .windowBackgroundColor
+                window.appearance = nil
+                window.titleVisibility = .visible
+                window.titlebarAppearsTransparent = false
+                window.toolbarStyle = .unified
+                setTitlebarBackground(on: window, color: .windowBackgroundColor)
+            }
+
+            onFullScreenChanged(isFullScreen)
+        }
+
+        private func setTitlebarBackground(on window: NSWindow, color: NSColor) {
+            guard let closeButton = window.standardWindowButton(.closeButton) else { return }
+            let titlebarView = closeButton.superview?.superview
+            titlebarView?.wantsLayer = true
+            titlebarView?.layer?.backgroundColor = color.cgColor
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+    }
+}
+
 struct VisualEffectView: NSViewRepresentable {
     let material: PlatformVisualEffectMaterial
     let blendingMode: PlatformVisualEffectBlendingMode

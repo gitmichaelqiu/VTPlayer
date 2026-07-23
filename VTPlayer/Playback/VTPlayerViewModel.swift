@@ -474,19 +474,6 @@ final class VTPlayerViewModel {
             object: nil
         )
         
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidEnterFullScreen),
-            name: NSWindow.didEnterFullScreenNotification,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidExitFullScreen),
-            name: NSWindow.didExitFullScreenNotification,
-            object: nil
-        )
         #else
         self.recentVideos = []
         loadRecentVideosIOS()
