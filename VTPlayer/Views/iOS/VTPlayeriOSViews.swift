@@ -1,6 +1,28 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+
+private struct AnimatedIOSSettingValue: View {
+    let text: String
+    @State private var displayedText: String
+
+    init(text: String) {
+        self.text = text
+        _displayedText = State(initialValue: text)
+    }
+
+    var body: some View {
+        Text(displayedText)
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .contentTransition(.numericText())
+            .onChange(of: text) { _, newText in
+                withAnimation(.snappy(duration: 0.18)) {
+                    displayedText = newText
+                }
+            }
+    }
+}
 import VideoToolbox
 #if canImport(UIKit)
 import UIKit
@@ -323,9 +345,7 @@ extension VTPlayerView {
                         set: { defaultMBLevel = Int($0) }
                     ), in: 0...30, step: 1)
                     .frame(width: 140)
-                    Text(defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    AnimatedIOSSettingValue(text: defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
                         .frame(width: 36, alignment: .trailing)
                 }
                 
@@ -334,9 +354,7 @@ extension VTPlayerView {
                     Spacer()
                     Slider(value: $defaultDNLevel, in: 0.0...1.0, step: 0.05)
                     .frame(width: 140)
-                    Text(String(format: "%.2f", defaultDNLevel))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    AnimatedIOSSettingValue(text: String(format: "%.2f", defaultDNLevel))
                         .frame(width: 36, alignment: .trailing)
                 }
                 
@@ -345,9 +363,7 @@ extension VTPlayerView {
                     Spacer()
                     Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.1)
                     .frame(width: 140)
-                    Text(String(format: "%.1f", defaultSharpness))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    AnimatedIOSSettingValue(text: String(format: "%.1f", defaultSharpness))
                         .frame(width: 36, alignment: .trailing)
                 }
                 
@@ -363,9 +379,7 @@ extension VTPlayerView {
                         }
                     ), in: 0.0...2.0, step: 0.1)
                     .frame(width: 140)
-                    Text(String(format: "%.1f", defaultHDRBoost))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    AnimatedIOSSettingValue(text: String(format: "%.1f", defaultHDRBoost))
                         .frame(width: 36, alignment: .trailing)
                 }
 
@@ -375,9 +389,7 @@ extension VTPlayerView {
                         Spacer()
                         Slider(value: $defaultHDRColorfulness, in: 0.0...1.0, step: 0.05)
                         .frame(width: 140)
-                        Text(String(format: "%.2f", defaultHDRColorfulness))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                        AnimatedIOSSettingValue(text: String(format: "%.2f", defaultHDRColorfulness))
                             .frame(width: 36, alignment: .trailing)
                     }
                     .transition(.opacity)
