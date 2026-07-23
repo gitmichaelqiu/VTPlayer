@@ -178,6 +178,12 @@ struct VideoThumbnailView: View {
 
     private func loadMetadata() {
         DispatchQueue.global(qos: .userInitiated).async {
+            let hasSecurityScope = url.startAccessingSecurityScopedResource()
+            defer {
+                if hasSecurityScope {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
             let asset = AVAsset(url: url)
             Task {
                 if let duration = try? await asset.load(.duration) {
@@ -200,7 +206,10 @@ struct VideoThumbnailView: View {
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
             generator.maximumSize = CGSize(width: 180, height: 120)
-            if let image = try? generator.copyCGImage(at: CMTime(seconds: 1, preferredTimescale: 600), actualTime: nil) {
+            let previewTime = CMTime(seconds: 1, preferredTimescale: 600)
+            let image = (try? generator.copyCGImage(at: previewTime, actualTime: nil))
+                ?? (try? generator.copyCGImage(at: .zero, actualTime: nil))
+            if let image {
                 DispatchQueue.main.async { thumbnail = Image(decorative: image, scale: 1) }
             }
         }
