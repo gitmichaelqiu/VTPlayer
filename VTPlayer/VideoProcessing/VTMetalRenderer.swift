@@ -148,7 +148,15 @@ public final class VTMetalRenderer: MTKView {
         // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
         // remain at 1.0 until an EDR layer is already visible.
         let nativeHDRColorSpace = nativeHDRColorSpace
-        let shouldUseEDR = (nativeHDRColorSpace != nil || hdrStrength > 0) && potentialEDRHeadroom > 1.0
+        let hasHDRIntent = nativeHDRColorSpace != nil || hdrStrength > 0
+        #if os(iOS)
+        // Request EDR as soon as the view is attached. On iOS, headroom can
+        // remain at 1.0 until the layer opts in, so waiting for headroom first
+        // prevents the first playback frame from ever enabling XDR output.
+        let shouldUseEDR = hasHDRIntent && window != nil
+        #else
+        let shouldUseEDR = hasHDRIntent && potentialEDRHeadroom > 1.0
+        #endif
         if shouldUseEDR {
             if let nativeHDRColorSpace {
                 // PQ and HLG frames must be presented in the transfer
@@ -315,6 +323,11 @@ public final class VTMetalRenderer: MTKView {
     ///   - isInterpolated: Retained for caller compatibility; rendering uses
     ///     the same user-selected sharpness for source and generated frames.
     public func render(pixelBuffer: CVPixelBuffer, isInterpolated _: Bool = false) {
+        #if os(iOS)
+        if hdrStrength > 0 {
+            configureExtendedDynamicRangePresentation()
+        }
+        #endif
         updateNativeHDRPresentation(for: pixelBuffer)
         self.currentPixelBuffer = pixelBuffer
         #if os(macOS)
