@@ -43,34 +43,17 @@ struct VTPlayerApp: App {
             }
             
             CommandGroup(after: .newItem) {
-                Button("New Tab") {
-                    guard let currentWindow = NSApp.keyWindow else { return }
-                    let hostingController = NSHostingController(rootView: ContentView())
-                    let newWindow = NSWindow(
-                        contentRect: currentWindow.contentRect(forFrameRect: currentWindow.frame),
-                        styleMask: currentWindow.styleMask,
-                        backing: .buffered,
-                        defer: false
-                    )
-                    newWindow.contentViewController = hostingController
-                    newWindow.title = currentWindow.title
-                    newWindow.titleVisibility = currentWindow.titleVisibility
-                    newWindow.titlebarAppearsTransparent = false
-                    newWindow.toolbarStyle = currentWindow.toolbarStyle
-                    newWindow.backgroundColor = currentWindow.backgroundColor
-                    newWindow.setFrame(currentWindow.frame, display: false)
-                    newWindow.tabbingIdentifier = "dev.mqiu.VTPlayer"
-                    newWindow.tabbingMode = .preferred
-                    newWindow.isReleasedWhenClosed = false
-                    currentWindow.addTabbedWindow(newWindow, ordered: .above)
-                    currentWindow.tabGroup?.selectedWindow = newWindow
-                }
-                .keyboardShortcut("t", modifiers: .command)
-
                 Button("Open Video...") {
                     NotificationCenter.default.post(name: .openVideoFileTriggered, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+            }
+
+            CommandGroup(after: .windowArrangement) {
+                Button("Show/Hide Tab Bar") {
+                    NSApp.keyWindow?.toggleTabBar(nil)
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             }
 
             CommandGroup(after: .windowArrangement) {

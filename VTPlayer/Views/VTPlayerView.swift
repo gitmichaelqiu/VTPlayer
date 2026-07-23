@@ -318,7 +318,8 @@ struct VTPlayerView: View {
                         .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
-                .macWindowToolbarFullScreenVisibility()
+                .toolbarBackground(.black, for: .windowToolbar)
+                .toolbarColorScheme(.dark, for: .windowToolbar)
         }
     }
 

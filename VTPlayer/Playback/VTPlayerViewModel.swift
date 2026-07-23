@@ -1031,6 +1031,7 @@ final class VTPlayerViewModel {
             window.backgroundColor = .black
             window.titleVisibility = .visible
             window.titlebarAppearsTransparent = false
+            window.toolbarStyle = .unified
             window.title = videoURL?.lastPathComponent ?? "VTPlayer"
         }
     }
@@ -1047,6 +1048,7 @@ final class VTPlayerViewModel {
             window.backgroundColor = .windowBackgroundColor
             window.titleVisibility = .visible
             window.titlebarAppearsTransparent = false
+            window.toolbarStyle = .unified
         }
     }
     #endif
