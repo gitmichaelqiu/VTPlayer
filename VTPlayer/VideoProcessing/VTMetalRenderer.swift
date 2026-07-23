@@ -245,7 +245,7 @@ public final class VTMetalRenderer: MTKView {
         guard let screen = window?.screen else { return 1.0 }
         return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
         #elseif os(iOS)
-        guard let screen = window?.windowScene?.screen else { return 1.0 }
+        let screen = window?.windowScene?.screen ?? UIScreen.main
         return Float(screen.currentEDRHeadroom)
         #else
         return 1.0
@@ -257,7 +257,7 @@ public final class VTMetalRenderer: MTKView {
         guard let screen = window?.screen else { return 1.0 }
         return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
         #elseif os(iOS)
-        guard let screen = window?.windowScene?.screen else { return 1.0 }
+        let screen = window?.windowScene?.screen ?? UIScreen.main
         return Float(screen.potentialEDRHeadroom)
         #else
         return 1.0
