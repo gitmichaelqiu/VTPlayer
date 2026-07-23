@@ -103,6 +103,7 @@ struct WindowChromeBridge: NSViewRepresentable {
         var onFullScreenChanged: (Bool) -> Void
         weak var observedView: NSView?
         weak var window: NSWindow?
+        var tabBarWasVisible: Bool?
 
         init(onFullScreenChanged: @escaping (Bool) -> Void) {
             self.onFullScreenChanged = onFullScreenChanged
@@ -179,6 +180,9 @@ struct WindowChromeBridge: NSViewRepresentable {
                     guard let self, let window else { return }
                     self.hideDocumentControls(in: window)
                     self.removeDefaultSidebarToggle(from: window)
+                    if window.styleMask.contains(.fullScreen) {
+                        WindowChromeBridge.setTabBarHidden(true, in: window)
+                    }
                 }
             }
         }
@@ -190,6 +194,11 @@ struct WindowChromeBridge: NSViewRepresentable {
             let isFullScreen = window.styleMask.contains(.fullScreen)
 
             if isFullScreen {
+                if tabBarWasVisible == nil {
+                    let tabBars = WindowChromeBridge.tabBarViews(in: window)
+                    tabBarWasVisible = tabBars.contains { !$0.isHidden }
+                }
+                WindowChromeBridge.setTabBarHidden(true, in: window)
                 window.backgroundColor = .black
                 window.appearance = NSAppearance(named: .darkAqua)
                 window.titleVisibility = .visible
@@ -197,6 +206,10 @@ struct WindowChromeBridge: NSViewRepresentable {
                 window.toolbarStyle = .unified
                 setTitlebarBackground(on: window, color: .black)
             } else {
+                if let tabBarWasVisible {
+                    WindowChromeBridge.setTabBarHidden(!tabBarWasVisible, in: window)
+                    self.tabBarWasVisible = nil
+                }
                 window.backgroundColor = .windowBackgroundColor
                 window.appearance = nil
                 window.titleVisibility = .visible
