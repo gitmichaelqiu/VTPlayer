@@ -4,6 +4,9 @@
 //
 
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 extension Notification.Name {
     static let openVideoFileTriggered = Notification.Name("openVideoFileTriggered")
@@ -41,7 +44,26 @@ struct VTPlayerApp: App {
             
             CommandGroup(after: .newItem) {
                 Button("New Tab") {
-                    NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
+                    guard let currentWindow = NSApp.keyWindow else { return }
+                    let hostingController = NSHostingController(rootView: ContentView())
+                    let newWindow = NSWindow(
+                        contentRect: currentWindow.contentRect(forFrameRect: currentWindow.frame),
+                        styleMask: currentWindow.styleMask,
+                        backing: .buffered,
+                        defer: false
+                    )
+                    newWindow.contentViewController = hostingController
+                    newWindow.title = currentWindow.title
+                    newWindow.titleVisibility = currentWindow.titleVisibility
+                    newWindow.titlebarAppearsTransparent = false
+                    newWindow.toolbarStyle = currentWindow.toolbarStyle
+                    newWindow.backgroundColor = currentWindow.backgroundColor
+                    newWindow.setFrame(currentWindow.frame, display: false)
+                    newWindow.tabbingIdentifier = "dev.mqiu.VTPlayer"
+                    newWindow.tabbingMode = .preferred
+                    newWindow.isReleasedWhenClosed = false
+                    currentWindow.addTabbedWindow(newWindow, ordered: .above)
+                    currentWindow.tabGroup?.selectedWindow = newWindow
                 }
                 .keyboardShortcut("t", modifiers: .command)
 
