@@ -123,7 +123,6 @@ extension VTPlayerView {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
                             )
-                            .transaction { $0.animation = .snappy(duration: 0.18) }
         }
         .buttonStyle(.plain)
         .help(url.path)
@@ -508,9 +507,7 @@ extension VTPlayerView {
                             value: Binding(
                                 get: { Double(viewModel.motionBlurStrength) },
                                 set: { newValue in
-                                    withAnimation(.snappy(duration: 0.18)) {
-                                        viewModel.motionBlurStrength = Int(newValue)
-                                    }
+                                    viewModel.motionBlurStrength = Int(newValue)
                                 }
                             ),
                             in: 0...30,
@@ -521,7 +518,6 @@ extension VTPlayerView {
                                 }
                             }
                         )
-                        .transaction { $0.animation = .snappy(duration: 0.18) }
                     }
                     .padding(16)
                     .frame(width: 220)
@@ -550,9 +546,7 @@ extension VTPlayerView {
                             value: Binding(
                                 get: { viewModel.denoiseStrength },
                                 set: { newValue in
-                                    withAnimation(.snappy(duration: 0.18)) {
-                                        viewModel.denoiseStrength = newValue
-                                    }
+                                    viewModel.denoiseStrength = newValue
                                 }
                             ),
                             in: 0...1,
@@ -594,9 +588,8 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
                             Slider(value: Binding(
                                 get: { viewModel.sharpness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue } }
+                                set: { newValue in viewModel.sharpness = newValue }
                             ), in: 0...2, step: 0.25)
-                                .transaction { $0.animation = .snappy(duration: 0.18) }
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
@@ -606,9 +599,8 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
                             Slider(value: Binding(
                                 get: { viewModel.hdrStrength },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue } }
+                                set: { newValue in viewModel.hdrStrength = newValue }
                             ), in: 0...2, step: 0.25)
-                                .transaction { $0.animation = .snappy(duration: 0.18) }
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -618,9 +610,8 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
                             Slider(value: Binding(
                                 get: { viewModel.hdrColorfulness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue } }
+                                set: { newValue in viewModel.hdrColorfulness = newValue }
                             ), in: 0...1, step: 0.05)
-                                .transaction { $0.animation = .snappy(duration: 0.18) }
                                 .disabled(viewModel.hdrStrength <= 0)
                         }
                     }
@@ -675,7 +666,6 @@ extension VTPlayerView {
             .foregroundStyle(viewModel.sharpness > 0 ? .cyan : .secondary)
             .frame(width: hoverSH ? 90 : 22, alignment: .leading)
             Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                .transaction { $0.animation = .snappy(duration: 0.18) }
                 .labelsHidden()
                 .frame(width: 60)
                 .opacity(hoverSH ? 1 : 0)
@@ -703,9 +693,8 @@ extension VTPlayerView {
                     .animation(.snappy(duration: 0.18), value: viewModel.playbackSpeed)
                 Slider(value: Binding(
                     get: { viewModel.playbackSpeed },
-                    set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.playbackSpeed = newValue } }
+                    set: { newValue in viewModel.playbackSpeed = newValue }
                 ), in: 0.5...2.0, step: 0.25)
-                    .transaction { $0.animation = .snappy(duration: 0.18) }
             }
             .padding(16)
             .frame(width: 220)

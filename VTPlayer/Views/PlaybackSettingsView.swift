@@ -91,7 +91,6 @@ struct PlaybackSettingsView: View {
                             }
                         )
                         .frame(width: 150)
-                        .transaction { $0.animation = .snappy(duration: 0.18) }
                         Text(viewModel.motionBlurStrength == 0 ? "Off" : "\(viewModel.motionBlurStrength)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -114,7 +113,6 @@ struct PlaybackSettingsView: View {
                             }
                         )
                         .frame(width: 150)
-                        .transaction { $0.animation = .snappy(duration: 0.18) }
                         Text(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -130,7 +128,6 @@ struct PlaybackSettingsView: View {
                         Spacer()
                         Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
                             .frame(width: 150)
-                            .transaction { $0.animation = .snappy(duration: 0.18) }
                         Text(String(format: "%.2f", viewModel.sharpness))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -144,7 +141,6 @@ struct PlaybackSettingsView: View {
                         Spacer()
                         Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
                             .frame(width: 150)
-                            .transaction { $0.animation = .snappy(duration: 0.18) }
                         Text(String(format: "%.2f", viewModel.hdrStrength))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -158,7 +154,6 @@ struct PlaybackSettingsView: View {
                         Spacer()
                         Slider(value: $viewModel.hdrColorfulness, in: 0...1, step: 0.05)
                             .frame(width: 150)
-                            .transaction { $0.animation = .snappy(duration: 0.18) }
                             .disabled(viewModel.hdrStrength <= 0)
                         Text(String(format: "%.2f", viewModel.hdrColorfulness))
                             .font(.subheadline.monospacedDigit())
