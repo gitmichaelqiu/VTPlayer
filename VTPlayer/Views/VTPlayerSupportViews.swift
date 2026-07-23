@@ -177,6 +177,7 @@ struct WindowChromeBridge: NSViewRepresentable {
             for delay in [0.0, 0.05, 0.2, 0.6] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak window] in
                     guard let self, let window else { return }
+                    self.hideDocumentControls(in: window)
                     self.removeDefaultSidebarToggle(from: window)
                 }
             }
@@ -184,6 +185,7 @@ struct WindowChromeBridge: NSViewRepresentable {
 
         private func synchronize() {
             guard let window else { return }
+            hideDocumentControls(in: window)
             removeDefaultSidebarToggle(from: window)
             let isFullScreen = window.styleMask.contains(.fullScreen)
 
@@ -214,11 +216,19 @@ struct WindowChromeBridge: NSViewRepresentable {
             }
         }
 
+        private func hideDocumentControls(in window: NSWindow) {
+            window.standardWindowButton(.documentIconButton)?.isHidden = true
+            window.standardWindowButton(.documentVersionsButton)?.isHidden = true
+        }
+
         private func setTitlebarBackground(on window: NSWindow, color: NSColor) {
             guard let closeButton = window.standardWindowButton(.closeButton) else { return }
-            let titlebarView = closeButton.superview?.superview
-            titlebarView?.wantsLayer = true
-            titlebarView?.layer?.backgroundColor = color.cgColor
+            var view: NSView? = closeButton
+            while let current = view {
+                current.wantsLayer = true
+                current.layer?.backgroundColor = color.cgColor
+                view = current.superview
+            }
         }
 
         deinit {
