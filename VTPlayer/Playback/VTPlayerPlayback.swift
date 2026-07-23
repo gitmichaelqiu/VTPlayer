@@ -1020,13 +1020,13 @@ extension VTPlayerViewModel {
         }
         
         if let frame = lastFrameToRender {
-            self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
             if !self.pipelinePresentationReady {
                 self.pipelinePresentationReady = true
                 #if os(macOS)
                 self.setNativeVideoEnabled(false)
                 #endif
             }
+            self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
             #endif
