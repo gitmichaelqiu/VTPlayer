@@ -158,8 +158,16 @@ public final class VTMetalRenderer: MTKView {
                 metalLayer.pixelFormat = .bgr10a2Unorm
                 metalLayer.colorspace = nativeHDRColorSpace
             } else {
+                #if os(iOS)
+                // XR 10-bit preserves EDR headroom with substantially less
+                // drawable memory than RGBA16Float, which matters when SR/FI
+                // already retain large VideoToolbox buffers.
+                colorPixelFormat = .bgra10_xr
+                metalLayer.pixelFormat = .bgra10_xr
+                #else
                 colorPixelFormat = .rgba16Float
                 metalLayer.pixelFormat = .rgba16Float
+                #endif
                 metalLayer.colorspace = extendedLinearDisplayP3ColorSpace
             }
             metalLayer.wantsExtendedDynamicRangeContent = true
