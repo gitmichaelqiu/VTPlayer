@@ -35,7 +35,7 @@ struct VTPlayerApp: App {
             
             CommandGroup(after: .newItem) {
                 Button("New Tab") {
-                    NSApp.keyWindow?.perform(#selector(NSResponder.newWindowForTab(_:)), with: nil)
+                    NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
                 }
                 .keyboardShortcut("t", modifiers: .command)
 
