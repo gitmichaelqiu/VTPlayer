@@ -293,37 +293,58 @@ extension VTPlayerView {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
             Section {
-                HStack(spacing: 16) {
-                    if let icon = viewModel.appIcon {
-                        icon
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 60, height: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                            )
-                            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                    } else {
-                        Image(systemName: "cpu.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.blue)
-                            .frame(width: 60, height: 60)
-                            .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
+                VStack(alignment: .leading, spacing: 0) {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            isAboutCardExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 16) {
+                            aboutAppIcon
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("VTPlayer")
-                            .font(.headline)
-                            .bold()
-                        Text("Hardware-Accelerated AI Enhancer")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text("Version 1.0")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("VTPlayer")
+                                    .font(.headline)
+                                    .bold()
+                                Text("Hardware-Accelerated AI Enhancer")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text("Version 1.0")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            Image(systemName: "chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isAboutCardExpanded ? 180 : 0))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if isAboutCardExpanded {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Divider()
+                                .padding(.top, 16)
+
+                            Text("Made by Michael Yicheng Qiu")
+                                .font(.subheadline.weight(.medium))
+
+                            Text("A real-time video player built with SwiftUI, Metal, and VideoToolbox.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+
+                            VStack(spacing: 0) {
+                                aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
+                                aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
+                                aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
+                                aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                            }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
                 .padding(.vertical, 4)
@@ -407,6 +428,52 @@ extension VTPlayerView {
         .navigationTitle("About")
         .onAppear {
             viewModel.checkGlobalModelStatus()
+        }
+    }
+
+    @ViewBuilder
+    private var aboutAppIcon: some View {
+        if let icon = viewModel.appIcon {
+            icon
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        } else {
+            Image(systemName: "cpu.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(.blue)
+                .frame(width: 60, height: 60)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private func aboutLinkRow(title: String, systemImage: String, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .frame(width: 20)
+                    .foregroundStyle(.secondary)
+
+                Text(title)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
     }
     #endif
