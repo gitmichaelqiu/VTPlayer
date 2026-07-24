@@ -296,9 +296,6 @@ extension VTPlayerView {
             Section {
                 DisclosureGroup(isExpanded: $isAboutCardExpanded) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Divider()
-                            .padding(.horizontal, -20)
-
                         Text("Made by Michael Yicheng Qiu")
                             .font(.subheadline.weight(.medium))
 
