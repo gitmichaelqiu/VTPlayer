@@ -315,7 +315,7 @@ extension VTPlayerView {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, -20)
-                    .padding(.top, 8)
+                    .padding(.top, -15)
                 } label: {
                     HStack(alignment: .center, spacing: 16) {
                         aboutAppIcon
