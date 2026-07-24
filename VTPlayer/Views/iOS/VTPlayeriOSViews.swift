@@ -330,7 +330,7 @@ extension VTPlayerView {
             }
             
             // Default Playback Settings Section
-            Section("Default Playback Configuration") {
+            Section("Defaults") {
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
                     Text("2x Interpolation").tag(2)
@@ -399,21 +399,9 @@ extension VTPlayerView {
             .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
             
             // Gallery Configuration Section
-            Section("Gallery Configuration") {
+            Section("Display") {
                 Toggle("Show File Extensions", isOn: $showFileExtensions)
             }
-
-            // Copyright Row
-            Section {
-                HStack {
-                    Spacer()
-                    Text("Copyright © 2026 Michael Qiu. All rights reserved.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }
-            .listRowBackground(Color.clear)
         }
         .listStyle(.insetGrouped)
         .navigationTitle("About")
