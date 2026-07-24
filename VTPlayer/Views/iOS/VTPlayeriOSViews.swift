@@ -24,39 +24,6 @@ private struct AnimatedIOSSettingValue: View {
     }
 }
 
-private struct AboutDisclosureGroupStyle: DisclosureGroupStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    configuration.isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    configuration.label
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(configuration.isExpanded ? 180 : 0))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if configuration.isExpanded {
-                Divider()
-                    .padding(.top, 12)
-
-                configuration.content
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.22), value: configuration.isExpanded)
-    }
-}
 import VideoToolbox
 #if canImport(UIKit)
 import UIKit
@@ -327,41 +294,62 @@ extension VTPlayerView {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
             Section {
-                DisclosureGroup(isExpanded: $isAboutCardExpanded) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Made by Michael Yicheng Qiu")
-                            .font(.subheadline.weight(.medium))
-
-                        Text("A real-time video player built with SwiftUI, Metal, and VideoToolbox.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-
-                        VStack(spacing: 0) {
-                            aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
-                            aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
-                            aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
-                            aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                VStack(alignment: .leading, spacing: 0) {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            isAboutCardExpanded.toggle()
                         }
-                    }
-                } label: {
-                    HStack(alignment: .center, spacing: 16) {
-                        aboutAppIcon
+                    } label: {
+                        HStack(alignment: .center, spacing: 16) {
+                            aboutAppIcon
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("VTPlayer")
-                                .font(.headline)
-                                .bold()
-                            Text("Hardware-Accelerated AI Enhancer")
-                                .font(.subheadline)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("VTPlayer")
+                                    .font(.headline)
+                                    .bold()
+                                Text("Hardware-Accelerated AI Enhancer")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text("Version 1.0")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            Image(systemName: "chevron.down")
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text("Version 1.0")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isAboutCardExpanded ? 180 : 0))
                         }
+                        .frame(minHeight: 60)
+                        .contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                    .buttonStyle(.plain)
+
+                    if isAboutCardExpanded {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Divider()
+
+                            Text("Made by Michael Yicheng Qiu")
+                                .font(.subheadline.weight(.medium))
+
+                            Text("A real-time video player built with SwiftUI, Metal, and VideoToolbox.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+
+                            VStack(spacing: 0) {
+                                aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
+                                aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
+                                aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
+                                aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 12)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
-                .disclosureGroupStyle(AboutDisclosureGroupStyle())
                 .padding(.vertical, 4)
             }
             
@@ -448,16 +436,25 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var aboutAppIcon: some View {
-        Image("VTPlayer")
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: 60, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        if let icon = viewModel.appIcon {
+            icon
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        } else {
+            Image(systemName: "cpu.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(.blue)
+                .frame(width: 60, height: 60)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
     }
 
     @ViewBuilder
