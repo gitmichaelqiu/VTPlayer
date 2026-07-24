@@ -23,6 +23,40 @@ private struct AnimatedIOSSettingValue: View {
             }
     }
 }
+
+private struct AboutDisclosureGroupStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    configuration.isExpanded.wrappedValue.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    configuration.label
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(configuration.isExpanded.wrappedValue ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if configuration.isExpanded {
+                Divider()
+                    .padding(.top, 12)
+
+                configuration.content
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: configuration.isExpanded.wrappedValue)
+    }
+}
 import VideoToolbox
 #if canImport(UIKit)
 import UIKit
@@ -309,9 +343,8 @@ extension VTPlayerView {
                             aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
                         }
                     }
-                    .padding(.top, 12)
                 } label: {
-                    HStack(spacing: 16) {
+                    HStack(alignment: .center, spacing: 16) {
                         aboutAppIcon
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -326,7 +359,9 @@ extension VTPlayerView {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                 }
+                .disclosureGroupStyle(AboutDisclosureGroupStyle())
                 .padding(.vertical, 4)
             }
             
@@ -413,25 +448,16 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var aboutAppIcon: some View {
-        if let icon = viewModel.appIcon {
-            icon
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-        } else {
-            Image(systemName: "cpu.fill")
-                .font(.system(size: 24))
-                .foregroundStyle(.blue)
-                .frame(width: 60, height: 60)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
+        Image("VTPlayer")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 60, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
     }
 
     @ViewBuilder
