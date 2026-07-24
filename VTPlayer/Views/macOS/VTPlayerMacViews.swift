@@ -700,8 +700,11 @@ extension VTPlayerView {
     @ViewBuilder
     var playbackSpeedControl: some View {
         Button(action: { showPlaybackSpeedPopover.toggle() }) {
-            enhancementControlLabel(
-                "Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))",
+            compactPlaybackControlLabel(
+                systemImage: "speedometer",
+                value: viewModel.playbackSpeed == 1
+                    ? nil
+                    : String(format: "%.2fx", viewModel.playbackSpeed),
                 isActive: viewModel.playbackSpeed != 1
             )
         }
@@ -726,16 +729,13 @@ extension VTPlayerView {
     @ViewBuilder
     var volumeControl: some View {
         Button(action: { showVolumePopover.toggle() }) {
-            HStack(spacing: 6) {
-                Image(systemName: volumeSymbolName)
-                Text("Volume: \(Int((viewModel.volume * 100).rounded()))%")
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(viewModel.volume < 1 ? .primary : .secondary)
-            .padding(.vertical, 5)
-            .padding(.horizontal, 10)
-            .background(viewModel.volume < 1 ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            compactPlaybackControlLabel(
+                systemImage: volumeSymbolName,
+                value: viewModel.volume == 1
+                    ? nil
+                    : "\(Int((viewModel.volume * 100).rounded()))%",
+                isActive: viewModel.volume != 1
+            )
         }
         .buttonStyle(.plain)
         .help("Adjust volume (0% - 100%)")
@@ -755,6 +755,26 @@ extension VTPlayerView {
             .padding(16)
             .frame(width: 220)
         }
+    }
+
+    @ViewBuilder
+    private func compactPlaybackControlLabel(
+        systemImage: String,
+        value: String?,
+        isActive: Bool
+    ) -> some View {
+        HStack(spacing: value == nil ? 0 : 5) {
+            Image(systemName: systemImage)
+            if let value {
+                Text(value)
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(isActive ? .primary : .secondary)
+        .padding(.vertical, 5)
+        .padding(.horizontal, value == nil ? 7 : 9)
+        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var volumeSymbolName: String {
