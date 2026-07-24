@@ -621,9 +621,9 @@ extension VTPlayerView {
                 
                 Spacer()
                 
-                playbackSpeedControl
-
                 volumeControl
+
+                playbackSpeedControl
                 
                 Divider()
                     .frame(height: 16)
