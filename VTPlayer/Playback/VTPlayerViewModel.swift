@@ -75,6 +75,16 @@ final class VTPlayerViewModel {
             }
         }
     }
+    var volume: Double = 1.0 {
+        didSet {
+            let clamped = max(0.0, min(1.0, volume))
+            if clamped != volume {
+                volume = clamped
+                return
+            }
+            player?.volume = Float(clamped)
+        }
+    }
     
     // Video Track Specs
     var videoWidth: Int = 0

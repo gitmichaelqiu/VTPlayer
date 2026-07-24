@@ -116,6 +116,7 @@ struct VTPlayerView: View {
     @State var showSuperResolutionPopover = false
     @State var showFrameInterpolationPopover = false
     @State var showPlaybackSpeedPopover = false
+    @State var showVolumePopover = false
     @Environment(\.dismiss) var dismiss
     
     enum SortOption: String, CaseIterable, Identifiable {

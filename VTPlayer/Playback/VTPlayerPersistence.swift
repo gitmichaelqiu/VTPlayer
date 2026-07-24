@@ -16,6 +16,7 @@ extension VTPlayerViewModel {
             "superResolutionLevel": superResolutionLevel,
             "frameInterpolationLevel": frameInterpolationLevel,
             "playbackSpeed": playbackSpeed,
+            "volume": volume,
             "sharpness": sharpness,
             "hdrStrength": hdrStrength,
             "hdrColorfulness": hdrColorfulness,
@@ -35,6 +36,7 @@ extension VTPlayerViewModel {
         superResolutionLevel = settings["superResolutionLevel"] as? Int ?? 0
         frameInterpolationLevel = settings["frameInterpolationLevel"] as? Int ?? 0
         playbackSpeed = settings["playbackSpeed"] as? Double ?? 1.0
+        volume = settings["volume"] as? Double ?? 1.0
         let loadedSharpness = settings["sharpness"] as? Double ?? 0.0
         if loadedSharpness != sharpness {
             sharpness = loadedSharpness
@@ -54,6 +56,7 @@ extension VTPlayerViewModel {
         superResolutionLevel = 0
         frameInterpolationLevel = UserDefaults.standard.integer(forKey: "VTDefaultFILevel")
         playbackSpeed = 1.0
+        volume = 1.0
         
         let defSharp = UserDefaults.standard.double(forKey: "VTDefaultSharpness")
         sharpness = defSharp

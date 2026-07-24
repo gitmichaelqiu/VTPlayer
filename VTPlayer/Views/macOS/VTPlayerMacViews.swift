@@ -622,6 +622,8 @@ extension VTPlayerView {
                 Spacer()
                 
                 playbackSpeedControl
+
+                volumeControl
                 
                 Divider()
                     .frame(height: 16)
@@ -647,13 +649,14 @@ extension VTPlayerView {
         .onChange(of: showMotionBlurPopover) { _, _ in syncConfigurationPopoverVisibility() }
         .onChange(of: showDenoisePopover) { _, _ in syncConfigurationPopoverVisibility() }
         .onChange(of: showPlaybackSpeedPopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: showVolumePopover) { _, _ in syncConfigurationPopoverVisibility() }
         .onChange(of: viewModel.showAdjustmentsPopover) { _, _ in syncConfigurationPopoverVisibility() }
     }
 
     private func syncConfigurationPopoverVisibility() {
         let isPresented = showSuperResolutionPopover || showFrameInterpolationPopover ||
             showMotionBlurPopover || showDenoisePopover || showPlaybackSpeedPopover ||
-            viewModel.showAdjustmentsPopover
+            showVolumePopover || viewModel.showAdjustmentsPopover
         viewModel.isConfigurationPopoverPresented = isPresented
         if isPresented {
             viewModel.showControls = true
@@ -717,6 +720,49 @@ extension VTPlayerView {
             }
             .padding(16)
             .frame(width: 220)
+        }
+    }
+
+    @ViewBuilder
+    var volumeControl: some View {
+        Button(action: { showVolumePopover.toggle() }) {
+            HStack(spacing: 6) {
+                Image(systemName: volumeSymbolName)
+                Text("Volume: \(Int((viewModel.volume * 100).rounded()))%")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(viewModel.volume < 1 ? .primary : .secondary)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .background(viewModel.volume < 1 ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("Adjust volume (0% - 100%)")
+        .popover(isPresented: $showVolumePopover, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Volume: \(Int((viewModel.volume * 100).rounded()))%")
+                    .font(.headline)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.18), value: viewModel.volume)
+                Slider(value: Binding(
+                    get: { viewModel.volume },
+                    set: { newValue in
+                        withAnimation(.snappy(duration: 0.18)) { viewModel.volume = newValue }
+                    }
+                ), in: 0...1, step: 0.05)
+            }
+            .padding(16)
+            .frame(width: 220)
+        }
+    }
+
+    private var volumeSymbolName: String {
+        switch viewModel.volume {
+        case 0: return "speaker.slash.fill"
+        case 0..<0.5: return "speaker.wave.1.fill"
+        case 0..<0.8: return "speaker.wave.2.fill"
+        default: return "speaker.wave.3.fill"
         }
     }
 
