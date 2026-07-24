@@ -294,63 +294,49 @@ extension VTPlayerView {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
             Section {
-                VStack(alignment: .leading, spacing: 0) {
-                    Button {
-                        withAnimation(.snappy(duration: 0.3)) {
-                            isAboutCardExpanded.toggle()
+                DisclosureGroup(isExpanded: $isAboutCardExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Divider()
+                            .padding(.horizontal, -20)
+
+                        Text("Made by Michael Yicheng Qiu")
+                            .font(.subheadline.weight(.medium))
+
+                        Text("A real-time video player built with SwiftUI, Metal, and VideoToolbox.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        VStack(spacing: 0) {
+                            aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
+                            aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
+                            aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
+                            aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
                         }
-                    } label: {
-                        HStack(alignment: .center, spacing: 16) {
-                            aboutAppIcon
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("VTPlayer")
-                                    .font(.headline)
-                                    .bold()
-                                Text("Hardware-Accelerated AI Enhancer")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Text("Version 1.0")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: 8)
-
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(isAboutCardExpanded ? 180 : 0))
-                        }
-                        .frame(minHeight: 60)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                } label: {
+                    HStack(alignment: .center, spacing: 16) {
+                        aboutAppIcon
 
-                    if isAboutCardExpanded {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Divider()
-
-                            Text("Made by Michael Yicheng Qiu")
-                                .font(.subheadline.weight(.medium))
-
-                            Text("A real-time video player built with SwiftUI, Metal, and VideoToolbox.")
-                                .font(.footnote)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("VTPlayer")
+                                .font(.headline)
+                                .bold()
+                            Text("Hardware-Accelerated AI Enhancer")
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
-
-                            VStack(spacing: 0) {
-                                aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
-                                aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
-                                aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
-                                aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
-                            }
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Version 1.0")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .layoutPriority(1)
                     }
+                    .frame(minHeight: 60, alignment: .center)
                 }
-                .padding(.vertical, 4)
             }
             
             // Default Playback Settings Section
