@@ -298,10 +298,10 @@ extension VTPlayerView {
                     VStack(alignment: .leading, spacing: 12) {
                         Divider()
 
-                        Text("Made by Michael Yicheng Qiu")
+                        Text("Made by Michael Qiu.")
                             .font(.subheadline.weight(.medium))
 
-                        Text("A real-time video player built with SwiftUI, Metal, and VideoToolbox.")
+                        Text("A real-time video enhancer using hardware acceleration.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -324,7 +324,7 @@ extension VTPlayerView {
                             Text("VTPlayer")
                                 .font(.headline)
                                 .bold()
-                            Text("Hardware-Accelerated AI Enhancer")
+                            Text("Sharper. Smoother. Better.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
