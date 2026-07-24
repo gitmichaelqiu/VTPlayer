@@ -29,7 +29,7 @@ private struct AboutDisclosureGroupStyle: DisclosureGroupStyle {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeInOut(duration: 0.22)) {
-                    configuration.isExpanded.wrappedValue.toggle()
+                    configuration.isExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 12) {
@@ -40,7 +40,7 @@ private struct AboutDisclosureGroupStyle: DisclosureGroupStyle {
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(configuration.isExpanded.wrappedValue ? 180 : 0))
+                        .rotationEffect(.degrees(configuration.isExpanded ? 180 : 0))
                 }
                 .contentShape(Rectangle())
             }
@@ -54,7 +54,7 @@ private struct AboutDisclosureGroupStyle: DisclosureGroupStyle {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: configuration.isExpanded.wrappedValue)
+        .animation(.easeInOut(duration: 0.22), value: configuration.isExpanded)
     }
 }
 import VideoToolbox
