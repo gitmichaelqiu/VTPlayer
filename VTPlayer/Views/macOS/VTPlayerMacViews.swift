@@ -400,7 +400,7 @@ extension VTPlayerView {
             // controls that are useful while tuning playback.
             GeometryReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 8) {
                 // Play/Pause button
                 playPauseButton
                 
