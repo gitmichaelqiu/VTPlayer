@@ -296,6 +296,8 @@ extension VTPlayerView {
             Section {
                 DisclosureGroup(isExpanded: $isAboutCardExpanded) {
                     VStack(alignment: .leading, spacing: 12) {
+                        Divider()
+
                         Text("Made by Michael Yicheng Qiu")
                             .font(.subheadline.weight(.medium))
 
@@ -312,6 +314,7 @@ extension VTPlayerView {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, -20)
                     .padding(.top, 8)
                 } label: {
                     HStack(alignment: .center, spacing: 16) {
@@ -334,6 +337,7 @@ extension VTPlayerView {
                     }
                     .frame(minHeight: 60, alignment: .center)
                 }
+                .listRowSeparator(.hidden)
             }
             
             // Default Playback Settings Section
