@@ -13,7 +13,7 @@ private struct AnimatedIOSSettingValue: View {
 
     var body: some View {
         Text(displayedText)
-            .font(.caption.monospacedDigit())
+            .font(.body.monospacedDigit())
             .foregroundStyle(.secondary)
             .contentTransition(.numericText())
             .onChange(of: text) { _, newText in
