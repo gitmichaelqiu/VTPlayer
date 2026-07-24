@@ -4,7 +4,7 @@
   <p align="center">VTPlayer</p>
 </h1>
 <h3>
-<p align="center"><i>Magic Your Videos.</i></p>
+<p align="center"><i>Sharper. Smoother. Better.</i></p>
 </h3>
 
 VTPlayer uses Apple's VideoToolbox frame processing APIs to upscale, interpolate, denoise, and enhance video in real time on the Apple Neural Engine (ANE) and GPU.
