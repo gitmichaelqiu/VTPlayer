@@ -254,7 +254,7 @@ struct GeneralSettingsTab: View {
                     Divider()
 
                     SettingsRow(
-                        "Always dark when a video is playing",
+                        "Always use dark mode when playing",
                         helperText: "Force the application window to use dark mode styling during video playback, regardless of system theme."
                     ) {
                         Toggle("", isOn: $alwaysDarkOnPlayback)
