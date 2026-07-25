@@ -598,8 +598,8 @@ extension VTPlayerView {
             
             // Gallery Configuration Section
             Section("Display") {
-                Toggle("Always Use Dark Mode When Playing Video", isOn: $alwaysDarkOnPlayback)
-                Toggle("Show File Extensions", isOn: $showFileExtensions)
+                Toggle("Always use dark mode when playing", isOn: $alwaysDarkOnPlayback)
+                Toggle("Show file extensions", isOn: $showFileExtensions)
             }
         }
         .listStyle(.insetGrouped)
