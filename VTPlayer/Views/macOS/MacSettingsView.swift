@@ -278,20 +278,23 @@ struct GeneralSettingsTab: View {
                     }
 
                     if automaticallyChecksForUpdates {
-                        Divider()
+                        VStack(spacing: 0) {
+                            Divider()
 
-                        SettingsRow(
-                            "Automatically download updates",
-                            helperText: "Download new updates in the background when they are available."
-                        ) {
-                            Toggle("", isOn: $automaticallyDownloadsUpdates)
-                                .labelsHidden()
-                                .toggleStyle(.switch)
-                                .disabled(!VTPlayerUpdater.shared.isConfigured)
-                                .onChange(of: automaticallyDownloadsUpdates) { _, value in
-                                    VTPlayerUpdater.shared.automaticallyDownloadsUpdates = value
-                                }
+                            SettingsRow(
+                                "Automatically download updates",
+                                helperText: "Download new updates in the background when they are available."
+                            ) {
+                                Toggle("", isOn: $automaticallyDownloadsUpdates)
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                                    .disabled(!VTPlayerUpdater.shared.isConfigured)
+                                    .onChange(of: automaticallyDownloadsUpdates) { _, value in
+                                        VTPlayerUpdater.shared.automaticallyDownloadsUpdates = value
+                                    }
+                            }
                         }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
                     Divider()
@@ -308,6 +311,7 @@ struct GeneralSettingsTab: View {
                         .disabled(!VTPlayerUpdater.shared.isConfigured)
                     }
                 }
+                .animation(.easeInOut(duration: 0.2), value: automaticallyChecksForUpdates)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .onAppear {
