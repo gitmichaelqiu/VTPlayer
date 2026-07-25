@@ -337,6 +337,7 @@ extension VTPlayerView {
                     }
                     .frame(minHeight: 60, alignment: .center)
                 }
+                .buttonStyle(.plain)
                 .listRowSeparator(.hidden)
             }
             
@@ -447,10 +448,6 @@ extension VTPlayerView {
     private var appVersionLabel: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        let build = info?["CFBundleVersion"] as? String
-        if let build, !build.isEmpty, build != version {
-            return "Version \(version) (\(build))"
-        }
         return "Version \(version)"
     }
 
