@@ -240,25 +240,57 @@ private final class IOSPlayerLifecycleViewController: UIViewController {
     }
 
     func applyTabBarVisibility(animated: Bool) {
-        guard let tabBarController = containingTabBarController() else { return }
+        IOSPlayerTabBarController.setHidden(isTabBarHidden, animated: animated)
+    }
+}
+
+enum IOSPlayerTabBarController {
+    static func setHidden(_ hidden: Bool, animated: Bool) {
+        guard let tabBarController = activeTabBarController() else { return }
         let tabBar = tabBarController.tabBar
-        guard tabBar.isHidden != isTabBarHidden else { return }
-        if animated {
-            UIView.animate(withDuration: 0.25) {
-                tabBar.isHidden = self.isTabBarHidden
+        if hidden {
+            guard !tabBar.isHidden else { return }
+            if animated {
+                UIView.animate(withDuration: 0.25, animations: {
+                    tabBar.alpha = 0
+                }, completion: { _ in
+                    tabBar.isHidden = true
+                    tabBar.alpha = 1
+                })
+            } else {
+                tabBar.isHidden = true
             }
         } else {
-            tabBar.isHidden = isTabBarHidden
+            guard tabBar.isHidden || tabBar.alpha < 1 else { return }
+            tabBar.isHidden = false
+            if animated {
+                tabBar.alpha = 0
+                UIView.animate(withDuration: 0.25) {
+                    tabBar.alpha = 1
+                }
+            } else {
+                tabBar.alpha = 1
+            }
         }
     }
 
-    private func containingTabBarController() -> UITabBarController? {
-        var ancestor = parent
-        while let current = ancestor {
-            if let tabBarController = current as? UITabBarController {
-                return tabBarController
+    private static func activeTabBarController() -> UITabBarController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        for scene in scenes where scene.activationState != .unattached {
+            for window in scene.windows where window.isKeyWindow || window.windowLevel == .normal {
+                if let controller = findTabBarController(in: window.rootViewController) {
+                    return controller
+                }
             }
-            ancestor = current.parent
+        }
+        return nil
+    }
+
+    private static func findTabBarController(in controller: UIViewController?) -> UITabBarController? {
+        guard let controller else { return nil }
+        if let tabBarController = controller as? UITabBarController { return tabBarController }
+        for child in controller.children.reversed() {
+            if let tabBarController = findTabBarController(in: child) { return tabBarController }
         }
         return nil
     }
