@@ -264,11 +264,9 @@ struct VTPlayerView: View {
                 viewModel.showSidebar.toggle()
             }
         }
-        #if os(macOS)
         .onOpenURL { url in
             viewModel.openVideo(url)
         }
-        #endif
     }
 
     @ViewBuilder

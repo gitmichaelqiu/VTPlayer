@@ -39,9 +39,12 @@
 			</array>
 		</dict>
 	</array>
-	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/gitmichaelqiu/VTPlayer/refs/heads/main/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>e9YKamydRddgnYK6Kq41W0vPbwI4F9XJAhks/9rzT0w=</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+	<key>UILaunchScreen</key>
+	<dict/>
 </dict>
 </plist>
