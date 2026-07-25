@@ -37,6 +37,10 @@ private struct IOSMoreAppsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
+    private let primaryTextColor = Color(uiColor: .label)
+    private let secondaryTextColor = Color(uiColor: .secondaryLabel)
+    private let tertiaryTextColor = Color(uiColor: .tertiaryLabel)
+
     private let apps = [
         IOSMoreApp(id: "desktoprenamer", name: "DesktopRenamer", description: "Rename and organize your desktop spaces.", url: URL(string: "https://desktoprenamer.mqiu.dev")!, iconName: "DesktopRenamerIcon_Default"),
         IOSMoreApp(id: "optclicker", name: "OptClicker", description: "Right-click with the Option key.", url: URL(string: "https://optclicker.mqiu.dev")!, iconName: "OptClickerIcon_Default"),
@@ -49,7 +53,7 @@ private struct IOSMoreAppsSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("More apps for Apple platforms")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryTextColor)
 
                     ForEach(apps) { app in
                         Button {
@@ -61,21 +65,21 @@ private struct IOSMoreAppsSheet: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(app.name)
                                         .font(.headline)
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(primaryTextColor)
                                     Text(app.description)
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(secondaryTextColor)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
 
                                 Spacer(minLength: 4)
                                 Image(systemName: "arrow.up.right")
                                     .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(tertiaryTextColor)
                             }
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(primaryTextColor)
                             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -453,7 +457,7 @@ extension VTPlayerView {
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
                             aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
                             aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
-                            aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text", verticalPadding: 12) {
+                            aboutActionRow(title: "Acknowledgement", systemImage: "doc.text") {
                                 showAcknowledgementSheet = true
                             }
 
