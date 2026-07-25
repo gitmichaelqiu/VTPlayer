@@ -520,6 +520,13 @@ final class VTPlayerViewModel {
         availableQualitySuperResolutionScales.removeAll()
         readyQualitySuperResolutionScales.removeAll()
         useSequentialSRFIFallback = false
+        adaptiveSRFITiers.removeAll(keepingCapacity: true)
+        adaptiveSRFITierIndex = 0
+        adaptiveSRFIDeadlineMisses = 0
+        adaptiveSRFIHeadroomFrames = 0
+        adaptiveSRFICacheStarvations = 0
+        adaptiveSRFIHasPresentedFrame = false
+        adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
         let asset = AVURLAsset(url: url)
         let setupGeneration = playbackGeneration
         
