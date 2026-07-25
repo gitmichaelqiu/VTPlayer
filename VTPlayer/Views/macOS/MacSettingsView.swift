@@ -474,8 +474,8 @@ struct AboutSettingsTab: View {
                     VStack(alignment: .leading, spacing: 8) {
                         AboutLinkRow(title: "Report an issue", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
                         AboutLinkRow(title: "VTPlayer's GitHub", url: "https://github.com/gitmichaelqiu/VTPlayer")
-                        AboutLinkRow(title: "My website", url: "https://mqiu.dev")
-                        AboutLinkRow(title: "My GitHub", url: "https://github.com/gitmichaelqiu")
+                        AboutLinkRow(title: "Author's website", url: "https://mqiu.dev")
+                        AboutLinkRow(title: "Author's GitHub", url: "https://github.com/gitmichaelqiu")
                     }
                 }
                 .id("GitHub / Support")

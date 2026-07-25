@@ -481,8 +481,8 @@ extension VTPlayerView {
                         VStack(spacing: 0) {
                             aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
-                            aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
-                            aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                            aboutLinkRow(title: "Author's website", systemImage: "globe", url: "https://mqiu.dev")
+                            aboutLinkRow(title: "Author's GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
                             aboutActionRow(title: "Acknowledgement", systemImage: "doc.text") {
                                 showAcknowledgementSheet = true
                             }
