@@ -207,25 +207,60 @@ private final class IOSNavigationBarHostController: UIViewController {
 }
 
 struct IOSPlayerLifecycleObserver: UIViewControllerRepresentable {
+    let isTabBarHidden: Bool
     let onWillDisappear: () -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {
         let controller = IOSPlayerLifecycleViewController()
+        controller.isTabBarHidden = isTabBarHidden
         controller.onWillDisappear = onWillDisappear
         return controller
     }
 
     func updateUIViewController(_ controller: UIViewController, context: Context) {
-        (controller as? IOSPlayerLifecycleViewController)?.onWillDisappear = onWillDisappear
+        guard let controller = controller as? IOSPlayerLifecycleViewController else { return }
+        controller.isTabBarHidden = isTabBarHidden
+        controller.onWillDisappear = onWillDisappear
+        controller.applyTabBarVisibility(animated: true)
     }
 }
 
 private final class IOSPlayerLifecycleViewController: UIViewController {
+    var isTabBarHidden = false
     var onWillDisappear: (() -> Void)?
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        applyTabBarVisibility(animated: false)
+    }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         onWillDisappear?()
+    }
+
+    func applyTabBarVisibility(animated: Bool) {
+        guard let tabBarController = containingTabBarController() else { return }
+        let tabBar = tabBarController.tabBar
+        guard tabBar.isHidden != isTabBarHidden else { return }
+        if animated {
+            UIView.animate(withDuration: 0.25) {
+                tabBar.isHidden = self.isTabBarHidden
+            }
+        } else {
+            tabBar.isHidden = isTabBarHidden
+        }
+    }
+
+    private func containingTabBarController() -> UITabBarController? {
+        var ancestor = parent
+        while let current = ancestor {
+            if let tabBarController = current as? UITabBarController {
+                return tabBarController
+            }
+            ancestor = current.parent
+        }
+        return nil
     }
 }
 #endif
