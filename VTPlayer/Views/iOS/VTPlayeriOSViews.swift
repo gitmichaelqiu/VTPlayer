@@ -328,7 +328,7 @@ extension VTPlayerView {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text("Version 1.0")
+                            Text(appVersionLabel)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -442,6 +442,16 @@ extension VTPlayerView {
                 .background(Color(.secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    private var appVersionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let build = info?["CFBundleVersion"] as? String
+        if let build, !build.isEmpty, build != version {
+            return "Version \(version) (\(build))"
+        }
+        return "Version \(version)"
     }
 
     @ViewBuilder
