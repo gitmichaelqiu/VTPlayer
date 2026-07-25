@@ -129,7 +129,7 @@ extension VTPlayerViewModel {
 
         var digest = SHA256()
         let sampleSize = 1024 * 1024
-        let fileSize: Int64 = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        let fileSize: Int64 = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? Int64.zero
         digest.update(data: Data(String(fileSize).utf8))
 
         if let firstChunk = try? handle.read(upToCount: sampleSize) {
