@@ -135,8 +135,8 @@ extension VTPlayerViewModel {
         if let firstChunk = try? handle.read(upToCount: sampleSize) {
             digest.update(data: firstChunk)
         }
-        if fileSize > sampleSize {
-            try? handle.seek(toOffset: UInt64(max(0, fileSize - Int64(sampleSize))))
+        if fileSize > Int64(sampleSize) {
+            try? handle.seek(toOffset: UInt64(fileSize - Int64(sampleSize)))
             if let lastChunk = try? handle.read(upToCount: sampleSize) {
                 digest.update(data: lastChunk)
             }
