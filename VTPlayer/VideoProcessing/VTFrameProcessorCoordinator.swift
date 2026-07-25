@@ -270,12 +270,10 @@ public actor VTFrameProcessorCoordinator {
 
     func configureRendererTransferSession(_ session: VTPixelTransferSession) {
         configureTransferSession(session)
-        // Direct Y'CbCr rendering of processed SR/FI output can use a different
-        // chroma interpretation from native AVPlayer. Convert SDR output to a
-        // stable BT.709 presentation format. Never use it for native HDR:
-        // forcing BT.709 there discards its BT.2020 PQ/HLG characteristics.
-        VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DestinationColorPrimaries, value: kCVImageBufferColorPrimaries_ITU_R_709_2)
-        VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DestinationTransferFunction, value: kCVImageBufferTransferFunction_ITU_R_709_2)
+        // Do not force BT.709 here. The source track's primaries and transfer
+        // function are propagated onto each decoded frame, and VideoToolbox
+        // must use those values when converting processed output. A global
+        // BT.709 destination changes chroma for non-709 SDR and HDR sources.
     }
     #endif
 
