@@ -737,7 +737,7 @@ extension VTPlayerView {
             if viewModel.showControls {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        viewModel.pause()
+                        viewModel.stop()
                         IOSPlayerTabBarController.setHidden(false, animated: true)
                         withAnimation(.easeInOut(duration: 0.25)) {
                             isPlayerTabBarHidden = false
