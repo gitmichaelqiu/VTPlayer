@@ -930,6 +930,8 @@ final class VTPlayerViewModel {
             stop()
             videoURL = nil
         }
+
+        clearPersistedVideoHistory()
     }
     #endif
     

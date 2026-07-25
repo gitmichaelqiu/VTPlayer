@@ -208,7 +208,6 @@ struct VTPlayerView: View {
             Button("Cancel", role: .cancel) { }
             Button("Clear History", role: .destructive) {
                 pinnedVideos.removeAll()
-                UserDefaults.standard.set([], forKey: "VTPinnedVideos")
                 viewModel.clearRecentVideosMac()
             }
         } message: {

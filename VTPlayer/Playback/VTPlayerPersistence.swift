@@ -6,6 +6,50 @@ import VideoToolbox
 extension VTPlayerViewModel {
     // MARK: - Per-Video Settings Persistence
 
+    private static var videoHistoryKeyPrefixes: [String] {
+        [
+            "VTSettings_",
+            "VTVideoSettings_",
+            "VTPlaybackProgress_",
+            "VTLastSRLevel_",
+            "VTLastFILevel_",
+            "VTLastQSRLevel_",
+            "VTLastMBLevel_",
+            "VTLastDNLevel_",
+            "VTLastSharpness_",
+            "VTLastHDRBoost_",
+            "VTLastHDRColorfulness_",
+            "VTLastPosition_",
+            "VTSecurityScopedBookmarkMac."
+        ]
+    }
+
+    private static var videoHistoryKeys: [String] {
+        [
+            "VTRecentVideos",
+            "VTRecentVideosMac",
+            "VTRecentVideosDates",
+            "VTRecentVideosDatesMac",
+            "VTRecentVideosOpenedDates",
+            "VTRecentVideosOpenedDatesMac",
+            "VTRemovedRecentVideos",
+            "VTPinnedVideos",
+            "VTSecurityScopedBookmarksMac"
+        ]
+    }
+
+    func clearPersistedVideoHistory() {
+        let defaults = UserDefaults.standard
+        let keysToRemove = defaults.dictionaryRepresentation().keys.filter { key in
+            Self.videoHistoryKeys.contains(key) ||
+            Self.videoHistoryKeyPrefixes.contains { key.hasPrefix($0) }
+        }
+
+        for key in keysToRemove {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     static func videoSettingsKey(for path: String) -> String {
         return "VTSettings_\(path)"
     }
@@ -202,18 +246,16 @@ extension VTPlayerViewModel {
     }
 
     func clearRecentVideosIOS() {
-        for url in recentVideos {
-            deleteTempFile(for: url)
-        }
-        self.recentVideos.removeAll()
-        saveRecentVideosIOS()
-        UserDefaults.standard.removeObject(forKey: "VTRecentVideosDates")
-        UserDefaults.standard.removeObject(forKey: "VTRecentVideosOpenedDates")
-
         if videoURL != nil {
             stop()
             videoURL = nil
         }
+
+        for url in recentVideos {
+            deleteTempFile(for: url)
+        }
+        self.recentVideos.removeAll()
+        clearPersistedVideoHistory()
     }
 
     private func removeRecentDateEntries(for urls: [URL]) {

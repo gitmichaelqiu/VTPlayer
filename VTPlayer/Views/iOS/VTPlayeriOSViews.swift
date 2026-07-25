@@ -349,6 +349,7 @@ extension VTPlayerView {
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
+                pinnedVideos.removeAll()
                 viewModel.clearRecentVideosIOS()
             }
         } message: {
