@@ -966,21 +966,25 @@ final class VTPlayerViewModel {
         self.tempLocalURL = nil
         
         let tempDir = FileManager.default.temporaryDirectory
-        let destinationURL = tempDir.appendingPathComponent(url.lastPathComponent)
+        let fileExtension = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+        let destinationURL = tempDir
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(fileExtension)
         
         // Copy to sandbox temp so the file remains readable after any
-        // security-scoped grant is released.  When the URL already points
-        // to the temp directory (e.g. from Photos Library), skip the copy
-        // to avoid deleting the source file.
+        // security-scoped grant is released. When the URL already points to
+        // the temp directory (e.g. from Photos Library), skip the copy.
         do {
-            if url.standardizedFileURL != destinationURL.standardizedFileURL {
-                if FileManager.default.fileExists(atPath: destinationURL.path) {
-                    try? FileManager.default.removeItem(at: destinationURL)
-                }
+            let isAlreadyLocal = url.standardizedFileURL.path.hasPrefix(
+                tempDir.standardizedFileURL.path + "/"
+            )
+            if isAlreadyLocal {
+                targetURL = url
+            } else {
                 try FileManager.default.copyItem(at: url, to: destinationURL)
+                targetURL = destinationURL
             }
-            self.tempLocalURL = destinationURL
-            targetURL = destinationURL
+            self.tempLocalURL = targetURL
             print("Video ready at: \(targetURL.path)")
         } catch {
             print("Failed to copy video to sandbox: \(error.localizedDescription)")
