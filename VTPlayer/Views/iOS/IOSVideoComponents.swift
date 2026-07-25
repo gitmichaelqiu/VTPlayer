@@ -298,7 +298,12 @@ enum IOSPlayerTabBarController {
 #endif
 
 enum VideoPreviewGenerator {
-    private static let memoryCache = NSCache<NSString, CGImage>()
+    private static let memoryCache: NSCache<NSString, CGImage> = {
+        let cache = NSCache<NSString, CGImage>()
+        cache.countLimit = 32
+        cache.totalCostLimit = 8 * 1024 * 1024
+        return cache
+    }()
 
     static func image(for asset: AVAsset, maximumSize: CGSize) async -> CGImage? {
         let cacheKey = cacheKey(for: asset, maximumSize: maximumSize)
@@ -312,7 +317,8 @@ enum VideoPreviewGenerator {
 
         let image = await generateImage(for: asset, maximumSize: maximumSize)
         if let image {
-            memoryCache.setObject(image, forKey: cacheKey as NSString)
+            let cost = image.bytesPerRow * image.height
+            memoryCache.setObject(image, forKey: cacheKey as NSString, cost: cost)
             saveCachedImage(image, forKey: cacheKey)
         }
         return image

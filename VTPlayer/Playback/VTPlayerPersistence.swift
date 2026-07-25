@@ -138,10 +138,16 @@ extension VTPlayerViewModel {
     }
 
     func existingImportedVideo(matching sourceURL: URL) -> URL? {
+        let candidates = recentVideos.filter {
+            isManagedImportedVideo($0) && FileManager.default.fileExists(atPath: $0.path)
+        }
+        guard !candidates.isEmpty else { return nil }
         guard let sourceDigest = contentDigest(for: sourceURL) else { return nil }
+        let sourceSize = (try? sourceURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
 
-        for candidate in recentVideos where isManagedImportedVideo(candidate) {
-            guard FileManager.default.fileExists(atPath: candidate.path),
+        for candidate in candidates {
+            let candidateSize = (try? candidate.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+            guard sourceSize == candidateSize,
                   contentDigest(for: candidate) == sourceDigest else { continue }
             return candidate
         }

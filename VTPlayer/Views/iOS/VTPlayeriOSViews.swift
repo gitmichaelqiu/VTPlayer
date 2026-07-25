@@ -192,7 +192,6 @@ extension VTPlayerView {
         TabView(selection: $selectedTab) {
             NavigationStack {
                 iosGalleryView
-                    .navigationTitle("Gallery")
                     .navigationDestination(isPresented: $isPlayerPresented) {
                         iosPlayerView
                     }
@@ -240,6 +239,7 @@ extension VTPlayerView {
                             }
                         }
                     }
+                    .navigationTitle("Gallery")
             }
                 .tag(0)
                 .tabItem {
