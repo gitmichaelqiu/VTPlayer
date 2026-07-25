@@ -165,19 +165,66 @@ struct IOSNavigationBarVisibility: UIViewControllerRepresentable {
     let isHidden: Bool
 
     func makeUIViewController(context: Context) -> UIViewController {
-        UIViewController()
+        IOSNavigationBarHostController()
     }
 
     func updateUIViewController(_ controller: UIViewController, context: Context) {
+        guard let controller = controller as? IOSNavigationBarHostController else { return }
+        controller.isNavigationBarHidden = isHidden
         DispatchQueue.main.async {
-            guard let navigationController = controller.navigationController,
-                  navigationController.isNavigationBarHidden != isHidden else { return }
-            navigationController.setNavigationBarHidden(isHidden, animated: true)
+            controller.applyNavigationBarVisibility(animated: true)
         }
     }
 
     static func dismantleUIViewController(_ controller: UIViewController, coordinator: ()) {
-        controller.navigationController?.setNavigationBarHidden(false, animated: false)
+        guard let controller = controller as? IOSNavigationBarHostController else { return }
+        controller.isNavigationBarHidden = false
+        controller.applyNavigationBarVisibility(animated: false)
+    }
+}
+
+private final class IOSNavigationBarHostController: UIViewController {
+    var isNavigationBarHidden = false
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        applyNavigationBarVisibility(animated: false)
+    }
+
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        applyNavigationBarVisibility(animated: false)
+    }
+
+    func applyNavigationBarVisibility(animated: Bool) {
+        guard let navigationController = containingNavigationController() else { return }
+        guard navigationController.isNavigationBarHidden != isNavigationBarHidden else { return }
+        navigationController.setNavigationBarHidden(isNavigationBarHidden, animated: animated)
+    }
+
+    private func containingNavigationController() -> UINavigationController? {
+        var ancestor = parent
+        while let current = ancestor {
+            if let navigationController = current as? UINavigationController {
+                return navigationController
+            }
+            ancestor = current.parent
+        }
+
+        guard let windowRoot = viewIfLoaded?.window?.rootViewController else { return nil }
+        return findNavigationController(in: windowRoot)
+    }
+
+    private func findNavigationController(in controller: UIViewController) -> UINavigationController? {
+        if let navigationController = controller as? UINavigationController {
+            return navigationController
+        }
+        for child in controller.children.reversed() {
+            if let navigationController = findNavigationController(in: child) {
+                return navigationController
+            }
+        }
+        return nil
     }
 }
 #endif
