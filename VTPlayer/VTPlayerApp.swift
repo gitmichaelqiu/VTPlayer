@@ -29,7 +29,7 @@ struct VTPlayerApp: App {
                 Button("Check for Updates…") {
                     VTPlayerUpdater.shared.checkForUpdates()
                 }
-                .disabled(!VTPlayerUpdater.shared.canCheckForUpdates)
+                .disabled(!VTPlayerUpdater.shared.isConfigured)
             }
 
             CommandGroup(replacing: .appSettings) {

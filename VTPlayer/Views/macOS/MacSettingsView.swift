@@ -305,7 +305,7 @@ struct GeneralSettingsTab: View {
                         Button("Check Now") {
                             VTPlayerUpdater.shared.checkForUpdates()
                         }
-                        .disabled(!VTPlayerUpdater.shared.canCheckForUpdates)
+                        .disabled(!VTPlayerUpdater.shared.isConfigured)
                     }
                 }
             }
