@@ -29,9 +29,6 @@ import VideoToolbox
 import UIKit
 import QuartzCore
 #endif
-#if os(iOS)
-import PDFKit
-#endif
 #if canImport(PhotosUI)
 import PhotosUI
 import UniformTypeIdentifiers
@@ -417,31 +414,9 @@ extension VTPlayerView {
             Section("Display") {
                 Toggle("Show File Extensions", isOn: $showFileExtensions)
             }
-
-            Section("More") {
-                Button {
-                    showMoreAppsSheet = true
-                } label: {
-                    Label("Explore More Apps", systemImage: "square.grid.2x2")
-                }
-
-                Button {
-                    showAcknowledgementSheet = true
-                } label: {
-                    Label("Acknowledgement.pdf", systemImage: "doc.text")
-                }
-            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("About")
-        .sheet(isPresented: $showMoreAppsSheet) {
-            IOSMoreAppsSheet()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showAcknowledgementSheet) {
-            IOSAcknowledgementSheet()
-        }
         .onAppear {
             viewModel.checkGlobalModelStatus()
         }
@@ -659,177 +634,5 @@ extension VTPlayerView {
         return "Opened " + formatter.string(from: date)
     }
     #endif
+
 }
-
-#if os(iOS)
-private struct IOSMoreApp: Identifiable {
-    let id: String
-    let name: String
-    let description: String
-    let url: String
-    let iconName: String
-}
-
-private struct IOSMoreAppsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    private let apps = [
-        IOSMoreApp(
-            id: "desktoprenamer",
-            name: "DesktopRenamer",
-            description: "The essential tool for naming and organizing your desktop spaces.",
-            url: "https://desktoprenamer.mqiu.dev",
-            iconName: "DesktopRenamerIcon_Default"
-        ),
-        IOSMoreApp(
-            id: "optclicker",
-            name: "OptClicker",
-            description: "Let you right-click with the Option key.",
-            url: "https://optclicker.mqiu.dev",
-            iconName: "OptClickerIcon_Default"
-        ),
-        IOSMoreApp(
-            id: "spaceswitcher",
-            name: "SpaceSwitcher",
-            description: "Control which app and dock to show in each space.",
-            url: "https://spaceswitcher.mqiu.dev",
-            iconName: "SpaceSwitcherIcon_Default"
-        )
-    ]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    Text("A small collection of productivity tools for Apple platforms.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.bottom, 4)
-
-                    ForEach(apps) { app in
-                        IOSMoreAppCard(app: app)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("More Apps")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct IOSMoreAppCard: View {
-    let app: IOSMoreApp
-
-    var body: some View {
-        Link(destination: URL(string: app.url)!) {
-            HStack(spacing: 14) {
-                appIcon
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(app.name)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    Text(app.description)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 4)
-
-                Image(systemName: "arrow.up.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var appIcon: some View {
-        if let image = UIImage(named: app.iconName) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        } else {
-            Image(systemName: "app.dashed")
-                .font(.system(size: 32))
-                .foregroundStyle(.secondary)
-                .frame(width: 56, height: 56)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        }
-    }
-}
-
-private struct IOSAcknowledgementSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if let url = Bundle.main.url(forResource: "Acknowledgement", withExtension: "pdf") {
-                    IOSPDFView(url: url)
-                        .ignoresSafeArea(edges: .bottom)
-                } else {
-                    ContentUnavailableView(
-                        "Acknowledgement Unavailable",
-                        systemImage: "doc.badge.ellipsis",
-                        description: Text("The acknowledgement document could not be found in the app bundle.")
-                    )
-                }
-            }
-            .navigationTitle("Acknowledgements")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct IOSPDFView: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.displayMode = .singlePageContinuous
-        view.displayDirection = .vertical
-        view.backgroundColor = .systemGroupedBackground
-        view.document = PDFDocument(url: url)
-        return view
-    }
-
-    func updateUIView(_ view: PDFView, context: Context) {
-        if view.document?.documentURL != url {
-            view.document = PDFDocument(url: url)
-        }
-    }
-}
-#endif
