@@ -105,7 +105,6 @@ extension VTPlayerView {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
