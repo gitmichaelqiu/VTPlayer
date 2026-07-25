@@ -535,8 +535,8 @@ extension VTPlayerView {
             Section("Defaults") {
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
-                    Text("2x Interpolation").tag(2)
-                    Text("4x Interpolation").tag(4)
+                    Text("2x").tag(2)
+                    Text("4x").tag(4)
                 }
                 .tint(.secondary)
                 
