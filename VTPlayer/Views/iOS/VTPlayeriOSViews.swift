@@ -194,7 +194,8 @@ extension VTPlayerView {
                 ZStack {
                     iosGalleryView
                 }
-                .navigationBarTitleDisplayMode(.inline)
+                .navigationTitle("Gallery")
+                .navigationBarTitleDisplayMode(.large)
                     .navigationDestination(isPresented: $isPlayerPresented) {
                         iosPlayerView
                     }
@@ -240,10 +241,6 @@ extension VTPlayerView {
                                 Image(systemName: "plus")
                                     .font(.body.bold())
                             }
-                        }
-                        ToolbarItem(placement: .principal) {
-                            Text("Gallery")
-                                .font(.headline)
                         }
                     }
             }

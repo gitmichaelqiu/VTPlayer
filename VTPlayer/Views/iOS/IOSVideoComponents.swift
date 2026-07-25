@@ -232,6 +232,7 @@ private final class IOSPlayerLifecycleViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         applyTabBarVisibility(animated: false)
+        hideNavigationBackButton()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -241,6 +242,18 @@ private final class IOSPlayerLifecycleViewController: UIViewController {
 
     func applyTabBarVisibility(animated: Bool) {
         IOSPlayerTabBarController.setHidden(isTabBarHidden, animated: animated)
+        hideNavigationBackButton()
+    }
+
+    private func hideNavigationBackButton() {
+        var ancestor = parent
+        while let current = ancestor {
+            if let navigationController = current as? UINavigationController {
+                navigationController.topViewController?.navigationItem.hidesBackButton = true
+                return
+            }
+            ancestor = current.parent
+        }
     }
 }
 
