@@ -198,7 +198,6 @@ extension VTPlayerView {
                     Label("About", systemImage: "info.circle.fill")
                 }
         }
-        .navigationTitle(selectedTab == 0 ? "Gallery" : "About")
         .toolbar {
             if selectedTab == 0 {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -328,6 +327,7 @@ extension VTPlayerView {
         } message: {
             Text("This will clear your recent playback history. The original video files will not be deleted.")
         }
+        .navigationTitle("Gallery")
 
     }
 
@@ -582,6 +582,7 @@ extension VTPlayerView {
             }
         }
         .listStyle(.insetGrouped)
+        .navigationTitle("About")
         .sheet(isPresented: $showMoreAppsSheet) {
             IOSMoreAppsSheet()
         }
