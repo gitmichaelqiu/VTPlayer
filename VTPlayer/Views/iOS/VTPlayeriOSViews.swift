@@ -259,6 +259,8 @@ extension VTPlayerView {
         .onChange(of: viewModel.videoURL) { _, url in
             if url != nil {
                 isPlayerPresented = true
+            } else {
+                isPlayerPresented = false
             }
         }
         .onChange(of: isPlayerPresented) { _, presented in
@@ -750,11 +752,12 @@ extension VTPlayerView {
             if viewModel.showControls {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        // Stop immediately so a missed navigation transaction
-                        // cannot leave the player running behind the gallery.
-                        viewModel.stop()
+                        // Dismiss the navigation destination before tearing
+                        // down its native AVPlayerViewController. Stopping it
+                        // first can remove the toolbar before SwiftUI commits
+                        // the dismissal state.
+                        viewModel.player?.pause()
                         isPlayerPresented = false
-                        viewModel.videoURL = nil
                         IOSPlayerTabBarController.setHidden(false, animated: true)
                         withAnimation(.easeInOut(duration: 0.25)) {
                             isPlayerTabBarHidden = false

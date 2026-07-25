@@ -1120,6 +1120,8 @@ extension VTPlayerViewModel {
 
     /// Pauses/stops playback entirely.
     func stop() {
+        inactivityTask?.cancel()
+        inactivityTask = nil
         #if os(macOS)
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
