@@ -14,9 +14,22 @@
 		4668B15A2FE2CEDA002FF95C /* VTPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VTPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A1B2C3D4E5F60718293A4B5C /* Exceptions for "VTPlayer" folder in "VTPlayer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 4668B1592FE2CEDA002FF95C /* VTPlayer */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4668B15C2FE2CEDA002FF95C /* VTPlayer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1B2C3D4E5F60718293A4B5C /* Exceptions for "VTPlayer" folder in "VTPlayer" target */,
+			);
 			path = VTPlayer;
 			sourceTree = "<group>";
 		};
