@@ -122,10 +122,11 @@ struct PhotosMovie: Transferable {
                 }
             }
 
-            let fileExtension = fileURL.pathExtension.isEmpty ? "mov" : fileURL.pathExtension
-            let copy = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString)
-                .appendingPathExtension(fileExtension)
+            let stagingDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
+            let filename = fileURL.lastPathComponent.isEmpty ? "Video.mov" : fileURL.lastPathComponent
+            let copy = stagingDirectory.appendingPathComponent(filename)
             try FileManager.default.copyItem(at: fileURL, to: copy)
             return .init(url: copy)
         }

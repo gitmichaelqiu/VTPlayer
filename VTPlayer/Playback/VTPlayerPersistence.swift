@@ -121,10 +121,32 @@ extension VTPlayerViewModel {
     }
 
     #if os(iOS)
+    func importedVideosDirectoryURL() -> URL {
+        let applicationSupportDirectory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0]
+        let directory = applicationSupportDirectory.appendingPathComponent(
+            "VTPlayer/ImportedVideos",
+            isDirectory: true
+        )
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    func isManagedImportedVideo(_ url: URL) -> Bool {
+        url.standardizedFileURL.path.hasPrefix(importedVideosDirectoryURL().standardizedFileURL.path + "/")
+    }
+
     func deleteTempFile(for url: URL) {
         let tempDir = FileManager.default.temporaryDirectory
-        if url.standardizedFileURL.path.hasPrefix(tempDir.standardizedFileURL.path) {
+        let isTemporaryFile = url.standardizedFileURL.path.hasPrefix(tempDir.standardizedFileURL.path + "/")
+        let isManagedFile = isManagedImportedVideo(url)
+        if isTemporaryFile || isManagedFile {
             try? FileManager.default.removeItem(at: url)
+            if isManagedFile {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
         }
     }
 
@@ -139,13 +161,32 @@ extension VTPlayerViewModel {
                 let filename = url.lastPathComponent
                 return tempDir.appendingPathComponent(filename)
             }
+            if let markerRange = url.path.range(of: "/VTPlayer/ImportedVideos/") {
+                let relativePath = String(url.path[markerRange.upperBound...])
+                return importedVideosDirectoryURL().appendingPathComponent(relativePath)
+            }
             return url
         }
+
+        let activePaths = Set(loadedURLs.map { $0.standardizedFileURL.path })
         
         // Clean up temp directory files that are NOT in the recents list
         if let tempFiles = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) {
-            let activePaths = Set(loadedURLs.map { $0.standardizedFileURL.path })
             for fileURL in tempFiles {
+                if !activePaths.contains(fileURL.standardizedFileURL.path) {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+            }
+        }
+
+        let importedDirectory = importedVideosDirectoryURL()
+        if let importedFiles = FileManager.default.enumerator(
+            at: importedDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) {
+            for case let fileURL as URL in importedFiles {
+                let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey])
+                guard values?.isDirectory != true else { continue }
                 if !activePaths.contains(fileURL.standardizedFileURL.path) {
                     try? FileManager.default.removeItem(at: fileURL)
                 }
@@ -154,7 +195,8 @@ extension VTPlayerViewModel {
         
         // Filter out stale temp URLs whose files no longer exist
         self.recentVideos = loadedURLs.filter { url in
-            if url.standardizedFileURL.path.hasPrefix(tempDir.standardizedFileURL.path) {
+            if url.standardizedFileURL.path.hasPrefix(tempDir.standardizedFileURL.path + "/") ||
+                isManagedImportedVideo(url) {
                 return FileManager.default.fileExists(atPath: url.path)
             }
             return true // Keep external URLs if any

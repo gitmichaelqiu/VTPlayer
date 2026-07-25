@@ -1154,19 +1154,10 @@ extension VTPlayerViewModel {
             self.displayLink = nil
         }
         #endif
-        #if os(iOS)
-        let shouldKeepSourceScope = securityScopedURL != nil &&
-            videoURL.map { recentVideos.contains($0) } == true
-        if !shouldKeepSourceScope, let scoped = securityScopedURL {
-            scoped.stopAccessingSecurityScopedResource()
-            self.securityScopedURL = nil
-        }
-        #else
         if let scoped = securityScopedURL {
             scoped.stopAccessingSecurityScopedResource()
             self.securityScopedURL = nil
         }
-        #endif
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0

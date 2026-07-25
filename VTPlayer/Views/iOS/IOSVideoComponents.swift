@@ -391,7 +391,9 @@ enum VideoPreviewGenerator {
     }
 
     private static func loadCachedImage(forKey key: String) -> CGImage? {
-        guard let url = cacheURL(forKey: key), let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+        guard let url = cacheURL(forKey: key),
+              FileManager.default.fileExists(atPath: url.path),
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             return nil
         }
         return CGImageSourceCreateImageAtIndex(source, 0, nil)

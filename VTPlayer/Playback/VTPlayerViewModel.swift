@@ -774,11 +774,7 @@ final class VTPlayerViewModel {
             } catch {
                 print("Error loading video properties: \(error.localizedDescription)")
                 #if os(iOS)
-                // Only remove legacy sandbox copies that are definitely gone.
-                // External source URLs may be temporarily inaccessible while
-                // a file provider restores access and must remain in Recents.
-                let tempPath = FileManager.default.temporaryDirectory.standardizedFileURL.path
-                if url.standardizedFileURL.path.hasPrefix(tempPath + "/"),
+                if isManagedImportedVideo(url),
                    let idx = self.recentVideos.firstIndex(of: url) {
                     self.deleteRecentVideoIOS(at: IndexSet(integer: idx))
                 }
@@ -947,20 +943,12 @@ final class VTPlayerViewModel {
         var targetURL = url
         #endif
         
-        #if os(iOS)
-        let hasExistingSecurityScope = securityScopedURL?.standardizedFileURL == targetURL.standardizedFileURL
-        #else
-        let hasExistingSecurityScope = false
-        #endif
-
-        // Keep the active iOS scope when reopening the same recent video.
-        // The URL is otherwise valid only for the lifetime of its scope.
-        if let prev = securityScopedURL, !hasExistingSecurityScope {
+        if let prev = securityScopedURL {
             prev.stopAccessingSecurityScopedResource()
             self.securityScopedURL = nil
         }
 
-        let isSecurityScoped = hasExistingSecurityScope || targetURL.startAccessingSecurityScopedResource()
+        let isSecurityScoped = targetURL.startAccessingSecurityScopedResource()
         if isSecurityScoped {
             self.securityScopedURL = targetURL
         }
@@ -973,8 +961,34 @@ final class VTPlayerViewModel {
         #endif
         
         #if os(iOS)
-        // Keep the source URL so the Gallery retains the original filename
-        // and the app does not create a second copy of the video.
+        if !isManagedImportedVideo(targetURL) {
+            let importedDirectory = importedVideosDirectoryURL()
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let filename = targetURL.lastPathComponent.isEmpty ? "Video.mov" : targetURL.lastPathComponent
+            let destinationURL = importedDirectory.appendingPathComponent(filename)
+
+            do {
+                try FileManager.default.createDirectory(
+                    at: importedDirectory,
+                    withIntermediateDirectories: true
+                )
+                try FileManager.default.copyItem(at: targetURL, to: destinationURL)
+                if isSecurityScoped {
+                    targetURL.stopAccessingSecurityScopedResource()
+                    self.securityScopedURL = nil
+                }
+                deleteTempFile(for: url)
+                targetURL = destinationURL
+            } catch {
+                if isSecurityScoped {
+                    targetURL.stopAccessingSecurityScopedResource()
+                    self.securityScopedURL = nil
+                }
+                print("Failed to import video into the app: \(error.localizedDescription)")
+                return
+            }
+        }
+
         self.addToRecentVideosIOS(targetURL)
         #endif
         
@@ -1015,8 +1029,7 @@ final class VTPlayerViewModel {
         }
 
         guard isReadable else {
-            let tempPath = FileManager.default.temporaryDirectory.standardizedFileURL.path
-            if url.standardizedFileURL.path.hasPrefix(tempPath + "/"),
+            if isManagedImportedVideo(url),
                let idx = recentVideos.firstIndex(of: url) {
                 deleteRecentVideoIOS(at: IndexSet(integer: idx))
             }
