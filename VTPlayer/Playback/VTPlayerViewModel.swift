@@ -947,6 +947,10 @@ final class VTPlayerViewModel {
     #endif
     
     func openVideo(_ url: URL) {
+        openVideo(url, importIdentifier: nil)
+    }
+
+    func openVideo(_ url: URL, importIdentifier: String?) {
         self.stop()
 
         #if os(macOS)
@@ -974,7 +978,8 @@ final class VTPlayerViewModel {
         
         #if os(iOS)
         if !isManagedImportedVideo(targetURL) {
-            if let existingURL = existingImportedVideo(matching: targetURL) {
+            let sourceIdentifier = importIdentifier ?? targetURL.resolvingSymlinksInPath().standardizedFileURL.absoluteString
+            if let existingURL = existingImportedVideo(forIdentifier: sourceIdentifier) ?? existingImportedVideo(matching: targetURL) {
                 if isSecurityScoped {
                     targetURL.stopAccessingSecurityScopedResource()
                     self.securityScopedURL = nil
@@ -1010,7 +1015,11 @@ final class VTPlayerViewModel {
             }
         }
 
-        self.addToRecentVideosIOS(targetURL)
+        let sourceIdentifier: String? = {
+            guard !isManagedImportedVideo(url) else { return nil }
+            return importIdentifier ?? url.resolvingSymlinksInPath().standardizedFileURL.absoluteString
+        }()
+        self.addToRecentVideosIOS(targetURL, importIdentifier: sourceIdentifier)
         #endif
         
         self.videoURL = targetURL

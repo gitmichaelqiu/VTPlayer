@@ -33,6 +33,7 @@ extension VTPlayerViewModel {
             "VTRecentVideosDatesMac",
             "VTRecentVideosOpenedDates",
             "VTRecentVideosOpenedDatesMac",
+            "VTImportedVideoIdentifiers",
             "VTRemovedRecentVideos",
             "VTPinnedVideos",
             "VTSecurityScopedBookmarksMac"
@@ -122,19 +123,39 @@ extension VTPlayerViewModel {
     }
 
     #if os(iOS)
-    private func contentDigest(for url: URL) -> Data? {
+    private func contentFingerprint(for url: URL) -> Data? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
 
         var digest = SHA256()
-        while true {
-            guard let chunk = try? handle.read(upToCount: 1024 * 1024),
-                  !chunk.isEmpty else {
-                break
+        let sampleSize = 1024 * 1024
+        let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        digest.update(data: Data(String(fileSize).utf8))
+
+        if let firstChunk = try? handle.read(upToCount: sampleSize) {
+            digest.update(data: firstChunk)
+        }
+        if fileSize > sampleSize {
+            try? handle.seek(toOffset: UInt64(max(0, fileSize - Int64(sampleSize))))
+            if let lastChunk = try? handle.read(upToCount: sampleSize) {
+                digest.update(data: lastChunk)
             }
-            digest.update(data: chunk)
         }
         return Data(digest.finalize())
+    }
+
+    func existingImportedVideo(forIdentifier identifier: String) -> URL? {
+        guard let identifiers = UserDefaults.standard.dictionary(forKey: "VTImportedVideoIdentifiers") as? [String: String],
+              let path = identifiers[identifier] else { return nil }
+        let url = URL(fileURLWithPath: path)
+        guard isManagedImportedVideo(url), FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    private func saveImportedVideoIdentifier(_ identifier: String, for url: URL) {
+        var identifiers = UserDefaults.standard.dictionary(forKey: "VTImportedVideoIdentifiers") as? [String: String] ?? [:]
+        identifiers[identifier] = url.standardizedFileURL.path
+        UserDefaults.standard.set(identifiers, forKey: "VTImportedVideoIdentifiers")
     }
 
     func existingImportedVideo(matching sourceURL: URL) -> URL? {
@@ -142,13 +163,13 @@ extension VTPlayerViewModel {
             isManagedImportedVideo($0) && FileManager.default.fileExists(atPath: $0.path)
         }
         guard !candidates.isEmpty else { return nil }
-        guard let sourceDigest = contentDigest(for: sourceURL) else { return nil }
+        guard let sourceDigest = contentFingerprint(for: sourceURL) else { return nil }
         let sourceSize = (try? sourceURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
 
         for candidate in candidates {
             let candidateSize = (try? candidate.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
             guard sourceSize == candidateSize,
-                  contentDigest(for: candidate) == sourceDigest else { continue }
+                  contentFingerprint(for: candidate) == sourceDigest else { continue }
             return candidate
         }
         return nil
@@ -270,7 +291,7 @@ extension VTPlayerViewModel {
         }
     }
     
-    func addToRecentVideosIOS(_ url: URL) {
+    func addToRecentVideosIOS(_ url: URL, importIdentifier: String? = nil) {
         let standardURL = url.resolvingSymlinksInPath().standardizedFileURL
         var list = self.recentVideos.filter { item in
             item.resolvingSymlinksInPath().standardizedFileURL.absoluteString != standardURL.absoluteString
@@ -296,6 +317,9 @@ extension VTPlayerViewModel {
             list = Array(list.prefix(15))
         }
         self.recentVideos = list
+        if let importIdentifier {
+            saveImportedVideoIdentifier(importIdentifier, for: standardURL)
+        }
         saveRecentVideosIOS()
     }
     

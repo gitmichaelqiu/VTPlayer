@@ -239,8 +239,8 @@ extension VTPlayerView {
                             }
                         }
                     }
-                    .navigationTitle("Gallery")
             }
+            .navigationTitle("Gallery")
                 .tag(0)
                 .tabItem {
                     Label("Gallery", systemImage: "play.square.stack.fill")

@@ -232,7 +232,15 @@ struct VTPlayerView: View {
             guard let item = item else { return }
             Task {
                 if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
-                    viewModel.openVideo(movie.url)
+                    await MainActor.run {
+                        isPlayerTabBarHidden = true
+                        showPhotoPicker = false
+                    }
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        viewModel.openVideo(movie.url, importIdentifier: item.itemIdentifier)
+                    }
                 }
             }
         }
