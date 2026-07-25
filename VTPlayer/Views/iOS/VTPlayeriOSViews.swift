@@ -261,8 +261,10 @@ extension VTPlayerView {
         .toolbar(isPlayerTabBarHidden ? .hidden : .visible, for: .tabBar)
         .onChange(of: viewModel.videoURL) { _, url in
             if url != nil {
+                isPlayerNavigationReady = false
                 isPlayerPresented = true
             } else {
+                isPlayerNavigationReady = false
                 isPlayerPresented = false
             }
         }
@@ -753,7 +755,7 @@ extension VTPlayerView {
         // causes the player overlay to jump upward abruptly.
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
-            if viewModel.showControls {
+            if viewModel.showControls && isPlayerNavigationReady {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         isPlayerPresented = false
@@ -791,7 +793,11 @@ extension VTPlayerView {
         .toolbar(isPlayerTabBarHidden ? .hidden : .visible, for: .tabBar)
         .background(IOSPlayerLifecycleObserver(
             isTabBarHidden: isPlayerTabBarHidden,
+            onDidAppear: {
+                isPlayerNavigationReady = true
+            },
             onWillDisappear: {
+                isPlayerNavigationReady = false
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isPlayerTabBarHidden = false
                 }
@@ -806,6 +812,7 @@ extension VTPlayerView {
             iosDiagnosticsSheet
         }
         .onDisappear {
+            isPlayerNavigationReady = false
             withAnimation(.easeInOut(duration: 0.25)) {
                 isPlayerTabBarHidden = false
             }

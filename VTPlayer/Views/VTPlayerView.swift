@@ -124,6 +124,7 @@ struct VTPlayerView: View {
     @State var showAcknowledgementSheet = false
     @State var isPlayerTabBarHidden = false
     @State var isPlayerPresented = false
+    @State var isPlayerNavigationReady = false
     #endif
     @Environment(\.dismiss) var dismiss
     

@@ -208,11 +208,13 @@ private final class IOSNavigationBarHostController: UIViewController {
 
 struct IOSPlayerLifecycleObserver: UIViewControllerRepresentable {
     let isTabBarHidden: Bool
+    let onDidAppear: () -> Void
     let onWillDisappear: () -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {
         let controller = IOSPlayerLifecycleViewController()
         controller.isTabBarHidden = isTabBarHidden
+        controller.onDidAppear = onDidAppear
         controller.onWillDisappear = onWillDisappear
         return controller
     }
@@ -220,6 +222,7 @@ struct IOSPlayerLifecycleObserver: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIViewController, context: Context) {
         guard let controller = controller as? IOSPlayerLifecycleViewController else { return }
         controller.isTabBarHidden = isTabBarHidden
+        controller.onDidAppear = onDidAppear
         controller.onWillDisappear = onWillDisappear
         controller.applyTabBarVisibility(animated: true)
     }
@@ -227,6 +230,7 @@ struct IOSPlayerLifecycleObserver: UIViewControllerRepresentable {
 
 private final class IOSPlayerLifecycleViewController: UIViewController {
     var isTabBarHidden = false
+    var onDidAppear: (() -> Void)?
     var onWillDisappear: (() -> Void)?
 
     override func viewWillAppear(_ animated: Bool) {
@@ -238,6 +242,7 @@ private final class IOSPlayerLifecycleViewController: UIViewController {
         super.viewDidAppear(animated)
         applyTabBarVisibility(animated: false)
         hideNavigationBackButton()
+        onDidAppear?()
     }
 
     override func didMove(toParent parent: UIViewController?) {
