@@ -2,6 +2,8 @@ import SwiftUI
 import AVKit
 import AVFoundation
 import CoreGraphics
+import CryptoKit
+import Foundation
 import ImageIO
 
 #if os(iOS)
@@ -161,7 +163,27 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 #endif
 
 enum VideoPreviewGenerator {
+    private static let memoryCache = NSCache<NSString, CGImage>()
+
     static func image(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
+        let cacheKey = cacheKey(for: asset, maximumSize: maximumSize)
+        if let cached = memoryCache.object(forKey: cacheKey as NSString) {
+            return cached
+        }
+        if let cached = loadCachedImage(forKey: cacheKey) {
+            memoryCache.setObject(cached, forKey: cacheKey as NSString)
+            return cached
+        }
+
+        let image = generateImage(for: asset, maximumSize: maximumSize)
+        if let image {
+            memoryCache.setObject(image, forKey: cacheKey as NSString)
+            saveCachedImage(image, forKey: cacheKey)
+        }
+        return image
+    }
+
+    private static func generateImage(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
         if let artwork = artworkImage(for: asset, maximumSize: maximumSize) {
             return artwork
         }
@@ -187,6 +209,58 @@ enum VideoPreviewGenerator {
             }
         }
         return bestImage
+    }
+
+    private static func cacheKey(for asset: AVAsset, maximumSize: CGSize) -> String {
+        let url = (asset as? AVURLAsset)?.url.standardizedFileURL
+        let values = url.flatMap { try? $0.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) }
+        let path = url?.path ?? "asset"
+        let size = values?.fileSize ?? 0
+        let modificationDate = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+        return "\(path)|\(size)|\(modificationDate)|\(Int(maximumSize.width))x\(Int(maximumSize.height))"
+    }
+
+    private static var cacheDirectory: URL? {
+        guard let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let cacheDirectory = directory.appendingPathComponent("VTPlayer/VideoPreviews", isDirectory: true)
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        return cacheDirectory
+    }
+
+    private static func cacheURL(forKey key: String) -> URL? {
+        guard let cacheDirectory else { return nil }
+        let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        return cacheDirectory.appendingPathComponent(digest).appendingPathExtension("png")
+    }
+
+    private static func loadCachedImage(forKey key: String) -> CGImage? {
+        guard let url = cacheURL(forKey: key), let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            return nil
+        }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    private static func saveCachedImage(_ image: CGImage, forKey key: String) {
+        guard let url = cacheURL(forKey: key) else { return }
+        let temporaryURL = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString).appendingPathExtension("tmp")
+        guard let destination = CGImageDestinationCreateWithURL(temporaryURL as CFURL, "public.png" as CFString, 1, nil) else {
+            return
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            return
+        }
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
+        } else {
+            try? FileManager.default.moveItem(at: temporaryURL, to: url)
+        }
+        if FileManager.default.fileExists(atPath: temporaryURL.path) {
+            try? FileManager.default.removeItem(at: temporaryURL)
+        }
     }
 
     private static func candidateTimes(for duration: Double) -> [Double] {

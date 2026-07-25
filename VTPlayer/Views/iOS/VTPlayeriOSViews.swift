@@ -719,37 +719,59 @@ extension VTPlayerView {
                 ProgressView()
                     .tint(.white)
             }
-        }
-        .navigationTitle(viewModel.showControls ? displayTitle : "")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        // The navigation bar follows the native player's controls. It must
-        // disappear with them so playback uses the full screen.
-        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(!viewModel.showControls)
-        .toolbar {
-            if viewModel.showControls {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showSettingsSheet = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    .labelStyle(.iconOnly)
-                }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showDiagnosticsSheet = true
-                    } label: {
-                        Label("Diagnostics", systemImage: "chart.bar")
+            VStack {
+                HStack(spacing: 16) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.body.bold())
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
                     }
-                    .labelStyle(.iconOnly)
+
+                    Spacer()
+
+                    Text(displayTitle)
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.4))
+                        .cornerRadius(8)
+
+                    Spacer()
+
+                    Button { showSettingsSheet = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
+
+                    Button { showDiagnosticsSheet = true } label: {
+                        Image(systemName: "chart.bar")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
                 }
+                .padding(.horizontal)
+                .padding(.top, 12)
+
+                Spacer()
             }
+            .opacity(viewModel.showControls ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
