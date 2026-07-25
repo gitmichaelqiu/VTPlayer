@@ -259,7 +259,6 @@ extension VTPlayerView {
                     Label("About", systemImage: "info.circle.fill")
                 }
         }
-        .toolbar(viewModel.videoURL != nil ? .hidden : .visible, for: .tabBar)
     }
 
     @ViewBuilder
@@ -752,6 +751,7 @@ extension VTPlayerView {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
+        .toolbar(.hidden, for: .tabBar)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
