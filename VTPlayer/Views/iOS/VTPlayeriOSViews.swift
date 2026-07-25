@@ -721,12 +721,33 @@ extension VTPlayerView {
             }
 
         }
-        // AVPlayerViewController owns the native title and playback controls.
-        // Do not overlay or synchronize a second SwiftUI navigation bar with
-        // its private controls hierarchy.
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarHidden(true)
-        .navigationBarBackButtonHidden(true)
+        .navigationTitle(displayTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationBarBackButtonHidden(false)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showSettingsSheet = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .labelStyle(.iconOnly)
+            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showDiagnosticsSheet = true
+                } label: {
+                    Label("Diagnostics", systemImage: "chart.bar")
+                }
+                .labelStyle(.iconOnly)
+            }
+        }
+        .background(IOSNavigationBarVisibility(
+            isHidden: viewModel.isPlaying && !viewModel.isPaused
+        ))
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)

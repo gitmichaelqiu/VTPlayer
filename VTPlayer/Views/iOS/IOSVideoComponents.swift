@@ -160,6 +160,26 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         item.externalMetadata = [titleItem]
     }
 }
+
+struct IOSNavigationBarVisibility: UIViewControllerRepresentable {
+    let isHidden: Bool
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(_ controller: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            guard let navigationController = controller.navigationController,
+                  navigationController.isNavigationBarHidden != isHidden else { return }
+            navigationController.setNavigationBarHidden(isHidden, animated: true)
+        }
+    }
+
+    static func dismantleUIViewController(_ controller: UIViewController, coordinator: ()) {
+        controller.navigationController?.setNavigationBarHidden(false, animated: false)
+    }
+}
 #endif
 
 enum VideoPreviewGenerator {
