@@ -746,7 +746,7 @@ extension VTPlayerView {
             }
         }
         .background(IOSNavigationBarVisibility(
-            isHidden: viewModel.isPlaying && !viewModel.isPaused
+            isHidden: !viewModel.showControls
         ))
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
