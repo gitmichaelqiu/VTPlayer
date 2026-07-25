@@ -237,6 +237,11 @@ public actor VTFrameProcessorCoordinator {
         for key in colorKeys {
             if let value = CVBufferCopyAttachment(source, key, nil) {
                 CVBufferSetAttachment(destination, key, value, .shouldPropagate)
+            } else {
+                // VideoToolbox may attach its own transfer function or matrix
+                // to FI destinations. Do not let that metadata survive when
+                // the source has no corresponding attachment.
+                CVBufferRemoveAttachment(destination, key)
             }
         }
 
