@@ -20,11 +20,13 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         startTimer()
+        setNavigationBarHidden(false, animated: false)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopTimer()
+        setNavigationBarHidden(false, animated: false)
     }
 
     override func viewDidLayoutSubviews() {
@@ -74,11 +76,43 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
             if visible != lastKnownVisibility {
                 lastKnownVisibility = visible
                 onControlsVisibilityChange?(visible)
+                setNavigationBarHidden(!visible, animated: true)
             }
         } else if !lastKnownVisibility {
             lastKnownVisibility = true
             onControlsVisibilityChange?(true)
+            setNavigationBarHidden(false, animated: true)
         }
+    }
+
+    private func setNavigationBarHidden(_ hidden: Bool, animated: Bool) {
+        guard let navigationController = containingNavigationController(),
+              navigationController.isNavigationBarHidden != hidden else { return }
+        navigationController.setNavigationBarHidden(hidden, animated: animated)
+    }
+
+    private func containingNavigationController() -> UINavigationController? {
+        var ancestor = parent
+        while let current = ancestor {
+            if let navigationController = current as? UINavigationController {
+                return navigationController
+            }
+            ancestor = current.parent
+        }
+        guard let root = viewIfLoaded?.window?.rootViewController else { return nil }
+        return findNavigationController(in: root)
+    }
+
+    private func findNavigationController(in controller: UIViewController) -> UINavigationController? {
+        if let navigationController = controller as? UINavigationController {
+            return navigationController
+        }
+        for child in controller.children.reversed() {
+            if let navigationController = findNavigationController(in: child) {
+                return navigationController
+            }
+        }
+        return nil
     }
 
     private func findControlsView(in view: UIView) -> UIView? {
