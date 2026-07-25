@@ -36,6 +36,20 @@ final class VTPlayerUpdater: NSObject {
         controller?.updater.canCheckForUpdates ?? false
     }
 
+    var isConfigured: Bool {
+        controller != nil
+    }
+
+    var automaticallyChecksForUpdates: Bool {
+        get { controller?.updater.automaticallyChecksForUpdates ?? false }
+        set { controller?.updater.automaticallyChecksForUpdates = newValue }
+    }
+
+    var automaticallyDownloadsUpdates: Bool {
+        get { controller?.updater.automaticallyDownloadsUpdates ?? false }
+        set { controller?.updater.automaticallyDownloadsUpdates = newValue }
+    }
+
     func checkForUpdates() {
         controller?.checkForUpdates(nil)
     }

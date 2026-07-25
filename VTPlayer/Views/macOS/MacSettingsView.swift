@@ -235,6 +235,8 @@ struct MacSettingsView: View {
 struct GeneralSettingsTab: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     @AppStorage("VTAlwaysDarkOnPlayback") private var alwaysDarkOnPlayback = false
+    @State private var automaticallyChecksForUpdates = false
+    @State private var automaticallyDownloadsUpdates = false
 
     var body: some View {
         SettingsContainer(.general) {
@@ -260,8 +262,58 @@ struct GeneralSettingsTab: View {
                             .labelsHidden()
                     }
                 }
+
+                SettingsSection("Updates") {
+                    SettingsRow(
+                        "Automatically check for updates",
+                        helperText: "Check for new VTPlayer releases automatically."
+                    ) {
+                        Toggle("", isOn: $automaticallyChecksForUpdates)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .disabled(!VTPlayerUpdater.shared.isConfigured)
+                            .onChange(of: automaticallyChecksForUpdates) { _, value in
+                                VTPlayerUpdater.shared.automaticallyChecksForUpdates = value
+                            }
+                    }
+
+                    if automaticallyChecksForUpdates {
+                        Divider()
+
+                        SettingsRow(
+                            "Automatically download updates",
+                            helperText: "Download new updates in the background when they are available."
+                        ) {
+                            Toggle("", isOn: $automaticallyDownloadsUpdates)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .disabled(!VTPlayerUpdater.shared.isConfigured)
+                                .onChange(of: automaticallyDownloadsUpdates) { _, value in
+                                    VTPlayerUpdater.shared.automaticallyDownloadsUpdates = value
+                                }
+                        }
+                    }
+
+                    Divider()
+
+                    SettingsRow(
+                        "Check for updates",
+                        helperText: VTPlayerUpdater.shared.isConfigured
+                            ? "Check for a new VTPlayer release now."
+                            : "Update checking will be available once Sparkle is configured for a release build."
+                    ) {
+                        Button("Check Now") {
+                            VTPlayerUpdater.shared.checkForUpdates()
+                        }
+                        .disabled(!VTPlayerUpdater.shared.canCheckForUpdates)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onAppear {
+                automaticallyChecksForUpdates = VTPlayerUpdater.shared.automaticallyChecksForUpdates
+                automaticallyDownloadsUpdates = VTPlayerUpdater.shared.automaticallyDownloadsUpdates
+            }
         }
     }
 }
