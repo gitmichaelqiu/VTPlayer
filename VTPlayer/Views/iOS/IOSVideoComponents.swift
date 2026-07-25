@@ -14,34 +14,24 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
             applyPipelinePresentationIfNeeded()
         }
     }
+    private var lastKnownVisibility = true
     private var checkTimer: Timer?
-    private var lastInteractionTime = CACurrentMediaTime()
-    private var reportedControlsVisible = true
-    private lazy var activityRecognizer: UITapGestureRecognizer = {
-        let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleActivity))
-        recognizer.cancelsTouchesInView = false
-        return recognizer
-    }()
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        view.addGestureRecognizer(activityRecognizer)
-        lastInteractionTime = CACurrentMediaTime()
-        reportControlsVisibility(true)
         startTimer()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopTimer()
-        view.removeGestureRecognizer(activityRecognizer)
-        setNavigationBarHidden(false, animated: false)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         disableFullscreenButton(in: view)
         applyPipelinePresentation()
+        checkControlsVisibility()
     }
 
     private func applyPipelinePresentationIfNeeded() {
@@ -68,7 +58,7 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     private func startTimer() {
         checkTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
-            updateControlsVisibility()
+            checkControlsVisibility()
             disableFullscreenButton(in: view)
         }
     }
@@ -78,53 +68,26 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
         checkTimer = nil
     }
 
-    @objc private func handleActivity() {
-        lastInteractionTime = CACurrentMediaTime()
-        reportControlsVisibility(true)
-    }
-
-    private func updateControlsVisibility() {
-        guard player?.rate ?? 0 > 0 else {
-            reportControlsVisibility(true)
-            return
-        }
-        let shouldShow = CACurrentMediaTime() - lastInteractionTime < 3.0
-        reportControlsVisibility(shouldShow)
-    }
-
-    private func reportControlsVisibility(_ visible: Bool) {
-        guard visible != reportedControlsVisible else { return }
-        reportedControlsVisible = visible
-        onControlsVisibilityChange?(visible)
-        setNavigationBarHidden(!visible, animated: true)
-    }
-
-    private func setNavigationBarHidden(_ hidden: Bool, animated: Bool) {
-        guard let navigationController = containingNavigationController(),
-              navigationController.isNavigationBarHidden != hidden else { return }
-        navigationController.setNavigationBarHidden(hidden, animated: animated)
-    }
-
-    private func containingNavigationController() -> UINavigationController? {
-        var ancestor = parent
-        while let current = ancestor {
-            if let navigationController = current as? UINavigationController {
-                return navigationController
+    private func checkControlsVisibility() {
+        if let controls = findControlsView(in: view) {
+            let visible = !controls.isHidden && controls.alpha > 0.1 && controls.superview != nil
+            if visible != lastKnownVisibility {
+                lastKnownVisibility = visible
+                onControlsVisibilityChange?(visible)
             }
-            ancestor = current.parent
+        } else if !lastKnownVisibility {
+            lastKnownVisibility = true
+            onControlsVisibilityChange?(true)
         }
-        guard let root = viewIfLoaded?.window?.rootViewController else { return nil }
-        return findNavigationController(in: root)
     }
 
-    private func findNavigationController(in controller: UIViewController) -> UINavigationController? {
-        if let navigationController = controller as? UINavigationController {
-            return navigationController
+    private func findControlsView(in view: UIView) -> UIView? {
+        let className = String(describing: type(of: view))
+        if className.contains("PlaybackControls") || className.contains("ControlsContainer") || className.contains("TransportBar") {
+            return view
         }
-        for child in controller.children.reversed() {
-            if let navigationController = findNavigationController(in: child) {
-                return navigationController
-            }
+        for subview in view.subviews {
+            if let found = findControlsView(in: subview) { return found }
         }
         return nil
     }
@@ -195,28 +158,6 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
         titleItem.identifier = .commonIdentifierTitle
         titleItem.value = title as NSString
         item.externalMetadata = [titleItem]
-    }
-}
-
-struct IOSNavigationBarVisibility: UIViewControllerRepresentable {
-    let isHidden: Bool
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        IOSNavigationBarHostController()
-    }
-
-    func updateUIViewController(_ controller: UIViewController, context: Context) {
-        guard let controller = controller as? IOSNavigationBarHostController else { return }
-        controller.isNavigationBarHidden = isHidden
-        DispatchQueue.main.async {
-            controller.applyNavigationBarVisibility(animated: true)
-        }
-    }
-
-    static func dismantleUIViewController(_ controller: UIViewController, coordinator: ()) {
-        guard let controller = controller as? IOSNavigationBarHostController else { return }
-        controller.isNavigationBarHidden = false
-        controller.applyNavigationBarVisibility(animated: false)
     }
 }
 

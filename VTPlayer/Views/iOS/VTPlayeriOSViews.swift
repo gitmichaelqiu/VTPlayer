@@ -721,30 +721,36 @@ extension VTPlayerView {
             }
 
         }
-        .navigationTitle(displayTitle)
+        .navigationTitle(viewModel.showControls ? displayTitle : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .navigationBarBackButtonHidden(false)
+        // Keep toolbar visible so the frame never collapses — collapsing
+        // causes the player overlay to jump upward abruptly.
+        .toolbar(.visible, for: .navigationBar)
+        .navigationBarBackButtonHidden(!viewModel.showControls)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showSettingsSheet = true
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
+            if viewModel.showControls {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showSettingsSheet = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .labelStyle(.iconOnly)
-            }
 
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showDiagnosticsSheet = true
-                } label: {
-                    Label("Diagnostics", systemImage: "chart.bar")
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showDiagnosticsSheet = true
+                    } label: {
+                        Label("Diagnostics", systemImage: "chart.bar")
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .labelStyle(.iconOnly)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
