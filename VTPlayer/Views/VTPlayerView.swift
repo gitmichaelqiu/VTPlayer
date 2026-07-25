@@ -247,7 +247,8 @@ struct VTPlayerView: View {
                         isPlayerTabBarHidden = true
                         showPhotoPicker = false
                     }
-                    try? await Task.sleep(for: .milliseconds(250))
+                    await Task.yield()
+                    await Task.yield()
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
                         viewModel.openVideo(movie.url, importIdentifier: item.itemIdentifier)

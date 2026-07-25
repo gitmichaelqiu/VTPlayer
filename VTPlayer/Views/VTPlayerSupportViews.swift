@@ -133,7 +133,11 @@ struct PhotosMovie: Transferable {
             try FileManager.default.createDirectory(at: importedDirectory, withIntermediateDirectories: true)
             let filename = fileURL.lastPathComponent.isEmpty ? "Video.mov" : fileURL.lastPathComponent
             let destination = importedDirectory.appendingPathComponent(filename)
-            try FileManager.default.copyItem(at: fileURL, to: destination)
+            do {
+                try FileManager.default.moveItem(at: fileURL, to: destination)
+            } catch {
+                try FileManager.default.copyItem(at: fileURL, to: destination)
+            }
             return .init(url: destination)
             #else
             let stagingDirectory = FileManager.default.temporaryDirectory
