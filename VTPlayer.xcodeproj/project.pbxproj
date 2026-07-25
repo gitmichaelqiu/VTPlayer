@@ -271,7 +271,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/gitmichaelqiu/VTPlayer/main/appcast.xml";
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/gitmichaelqiu/VTPlayer/refs/heads/main/appcast.xml";
 				INFOPLIST_KEY_SUPublicEDKey = "e9YKamydRddgnYK6Kq41W0vPbwI4F9XJAhks/9rzT0w=";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -320,7 +320,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/gitmichaelqiu/VTPlayer/main/appcast.xml";
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/gitmichaelqiu/VTPlayer/refs/heads/main/appcast.xml";
 				INFOPLIST_KEY_SUPublicEDKey = "e9YKamydRddgnYK6Kq41W0vPbwI4F9XJAhks/9rzT0w=";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
