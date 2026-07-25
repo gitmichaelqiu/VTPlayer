@@ -729,11 +729,23 @@ extension VTPlayerView {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         // Keep toolbar visible so the frame never collapses — collapsing
         // causes the player overlay to jump upward abruptly.
         .toolbar(.visible, for: .navigationBar)
-        .navigationBarBackButtonHidden(!viewModel.showControls)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isPlayerTabBarHidden = false
+                    }
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .accessibilityLabel("Exit player")
+            }
+
             if viewModel.showControls {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
