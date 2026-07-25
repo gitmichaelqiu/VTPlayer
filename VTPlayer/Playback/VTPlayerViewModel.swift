@@ -116,6 +116,49 @@ final class VTPlayerViewModel {
     @ObservationIgnored var adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
     /// Set only after the combined LL2 SR/FI processor rejects this video.
     @ObservationIgnored var useSequentialSRFIFallback = false
+
+    #if os(iOS)
+    func iosSecurityScopedBookmarkKey(for url: URL) -> String {
+        "VTSecurityScopedBookmarkIOS.\(url.standardizedFileURL.absoluteString)"
+    }
+
+    private func saveIOSSecurityScopedBookmark(for url: URL) {
+        guard url.isFileURL else { return }
+        do {
+            let bookmark = try url.bookmarkData(
+                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            UserDefaults.standard.set(bookmark, forKey: iosSecurityScopedBookmarkKey(for: url))
+        } catch {
+            print("Failed to save iOS security-scoped bookmark: \(error.localizedDescription)")
+        }
+    }
+
+    private func resolveIOSSecurityScopedBookmark(for url: URL) -> URL {
+        guard let bookmark = UserDefaults.standard.data(forKey: iosSecurityScopedBookmarkKey(for: url)) else {
+            return url
+        }
+
+        var isStale = false
+        do {
+            let resolved = try URL(
+                resolvingBookmarkData: bookmark,
+                options: [.withSecurityScope, .withoutUI],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            if isStale {
+                UserDefaults.standard.removeObject(forKey: iosSecurityScopedBookmarkKey(for: url))
+            }
+            return resolved
+        } catch {
+            print("Failed to resolve iOS security-scoped bookmark: \(error.localizedDescription)")
+            return url
+        }
+    }
+    #endif
     
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false
@@ -342,9 +385,6 @@ final class VTPlayerViewModel {
         return 1.0 / (sourceFrameRate * multiplier)
     }
     var securityScopedURL: URL?
-    #if os(iOS)
-    var tempLocalURL: URL?
-    #endif
     var lastPulledTime: CMTime = .zero
     var playerItemObserver: Any?
     var timeJumpedObserver: Any?
@@ -965,44 +1005,12 @@ final class VTPlayerViewModel {
         #endif
         
         #if os(iOS)
-        self.tempLocalURL = nil
-        
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileExtension = url.pathExtension.isEmpty ? "mov" : url.pathExtension
-        let destinationURL = tempDir
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(fileExtension)
-        
-        // Copy to sandbox temp so the file remains readable after any
-        // security-scoped grant is released. When the URL already points to
-        // the temp directory (e.g. from Photos Library), skip the copy.
-        do {
-            let isAlreadyLocal = url.standardizedFileURL.path.hasPrefix(
-                tempDir.standardizedFileURL.path + "/"
-            )
-            if isAlreadyLocal {
-                targetURL = url
-            } else {
-                try FileManager.default.copyItem(at: url, to: destinationURL)
-                targetURL = destinationURL
-            }
-            self.tempLocalURL = targetURL
-            print("Video ready at: \(targetURL.path)")
-        } catch {
-            print("Failed to copy video to sandbox: \(error.localizedDescription)")
-            // Fall back to using the original URL directly
-            targetURL = url
-        }
-        
-        // Release security-scoped access now that the copy is complete,
-        // UNLESS we failed to copy and fell back to the original URL.
+        // Keep the source URL so the Gallery retains the original filename
+        // and the app does not create a second copy of the video.
         if isSecurityScoped {
-            if targetURL.standardizedFileURL != url.standardizedFileURL {
-                url.stopAccessingSecurityScopedResource()
-                self.securityScopedURL = nil
-            }
+            saveIOSSecurityScopedBookmark(for: targetURL)
         }
-        
+
         self.addToRecentVideosIOS(targetURL)
         #endif
         
@@ -1036,12 +1044,20 @@ final class VTPlayerViewModel {
         openVideo(resolvedURL)
         return
         #elseif os(iOS)
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        let resolvedURL = resolveIOSSecurityScopedBookmark(for: url)
+        let hasScope = resolvedURL.startAccessingSecurityScopedResource()
+        let isReadable = FileManager.default.isReadableFile(atPath: resolvedURL.path)
+        if hasScope {
+            resolvedURL.stopAccessingSecurityScopedResource()
+        }
+
+        guard isReadable else {
             if let idx = recentVideos.firstIndex(of: url) {
                 deleteRecentVideoIOS(at: IndexSet(integer: idx))
             }
             return
         }
+        openVideo(resolvedURL)
         #else
         self.openVideo(url)
         #endif

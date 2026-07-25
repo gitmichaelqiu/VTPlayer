@@ -1154,9 +1154,6 @@ extension VTPlayerViewModel {
             self.displayLink = nil
         }
         #endif
-        #if os(iOS)
-        self.tempLocalURL = nil
-        #endif
         if let scoped = securityScopedURL {
             scoped.stopAccessingSecurityScopedResource()
             self.securityScopedURL = nil

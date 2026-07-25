@@ -20,7 +20,8 @@ extension VTPlayerViewModel {
             "VTLastHDRBoost_",
             "VTLastHDRColorfulness_",
             "VTLastPosition_",
-            "VTSecurityScopedBookmarkMac."
+            "VTSecurityScopedBookmarkMac.",
+            "VTSecurityScopedBookmarkIOS."
         ]
     }
 
@@ -239,6 +240,9 @@ extension VTPlayerViewModel {
         }
         saveRecentVideosIOS()
         removeRecentDateEntries(for: removedURLs)
+        for url in removedURLs {
+            removeIOSSecurityScopedBookmark(for: url)
+        }
 
         if let selectedURL = videoURL,
            removedURLs.contains(where: { $0 == selectedURL }) {
@@ -261,6 +265,12 @@ extension VTPlayerViewModel {
         }
         clearPersistedVideoHistory()
     }
+
+    #if os(iOS)
+    func removeIOSSecurityScopedBookmark(for url: URL) {
+        UserDefaults.standard.removeObject(forKey: iosSecurityScopedBookmarkKey(for: url))
+    }
+    #endif
 
     private func removeRecentDateEntries(for urls: [URL]) {
         let names = Set(urls.map { $0.lastPathComponent })
