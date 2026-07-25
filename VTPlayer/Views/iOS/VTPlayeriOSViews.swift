@@ -194,7 +194,7 @@ extension VTPlayerView {
                 ZStack {
                     iosGalleryView
                 }
-                .navigationTitle("Gallery")
+                .navigationBarTitleDisplayMode(.inline)
                     .navigationDestination(isPresented: $isPlayerPresented) {
                         iosPlayerView
                     }
@@ -240,6 +240,10 @@ extension VTPlayerView {
                                 Image(systemName: "plus")
                                     .font(.body.bold())
                             }
+                        }
+                        ToolbarItem(placement: .principal) {
+                            Text("Gallery")
+                                .font(.headline)
                         }
                     }
             }
@@ -296,7 +300,6 @@ extension VTPlayerView {
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(.systemGroupedBackground))
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
                 let sortedVideos: [URL] = {
                     let pinnedList = viewModel.recentVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
@@ -347,10 +350,8 @@ extension VTPlayerView {
                     }
                 }
                 .listStyle(.insetGrouped)
-                .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.recentVideos.isEmpty)
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
@@ -750,11 +751,26 @@ extension VTPlayerView {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         // Keep toolbar visible so the frame never collapses — collapsing
         // causes the player overlay to jump upward abruptly.
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
             if viewModel.showControls {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        isPlayerPresented = false
+                        viewModel.player?.pause()
+                        IOSPlayerTabBarController.setHidden(false, animated: true)
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isPlayerTabBarHidden = false
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .accessibilityLabel("Exit player")
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showSettingsSheet = true
