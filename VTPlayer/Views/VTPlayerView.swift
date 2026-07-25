@@ -121,6 +121,7 @@ struct VTPlayerView: View {
     #if os(iOS)
     @State var showMoreAppsSheet = false
     @State var showAcknowledgementSheet = false
+    @State var isPlayerTabBarHidden = false
     #endif
     @Environment(\.dismiss) var dismiss
     

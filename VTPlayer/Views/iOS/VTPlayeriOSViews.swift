@@ -193,6 +193,9 @@ extension VTPlayerView {
                         get: { viewModel.videoURL != nil },
                         set: { show in
                             if !show {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isPlayerTabBarHidden = false
+                                }
                                 viewModel.stop()
                                 viewModel.videoURL = nil
                             }
@@ -259,6 +262,7 @@ extension VTPlayerView {
                     Label("About", systemImage: "info.circle.fill")
                 }
         }
+        .toolbar(isPlayerTabBarHidden ? .hidden : .visible, for: .tabBar)
     }
 
     @ViewBuilder
@@ -751,7 +755,6 @@ extension VTPlayerView {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
-        .toolbar(.hidden, for: .tabBar)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)
@@ -761,8 +764,16 @@ extension VTPlayerView {
             iosDiagnosticsSheet
         }
         .onDisappear {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isPlayerTabBarHidden = false
+            }
             viewModel.stop()
             viewModel.videoURL = nil
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isPlayerTabBarHidden = true
+            }
         }
     }
 
