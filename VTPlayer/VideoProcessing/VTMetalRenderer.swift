@@ -188,12 +188,13 @@ public final class VTMetalRenderer: MTKView {
             }
             #endif
         } else {
-            // Preserve the renderer's original SDR drawable configuration.
-            // Forcing sRGB here changes Core Image's YUV conversion and can
-            // wash out unenhanced video frames.
-            colorPixelFormat = .bgra8Unorm
-            metalLayer.pixelFormat = .bgra8Unorm
-            metalLayer.colorspace = nil
+            // Keep the drawable's transfer function aligned with the SDR
+            // color space used by Core Image below. An untagged linear BGRA
+            // layer can display the same sRGB values with excessive chroma on
+            // wide-gamut displays.
+            colorPixelFormat = .bgra8Unorm_srgb
+            metalLayer.pixelFormat = .bgra8Unorm_srgb
+            metalLayer.colorspace = standardDisplayColorSpace
             metalLayer.wantsExtendedDynamicRangeContent = false
             #if os(iOS)
             if #available(iOS 26.0, *) {
