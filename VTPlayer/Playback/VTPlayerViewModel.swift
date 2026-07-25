@@ -1016,8 +1016,9 @@ final class VTPlayerViewModel {
         }
 
         let sourceIdentifier: String? = {
+            if let importIdentifier { return importIdentifier }
             guard !isManagedImportedVideo(url) else { return nil }
-            return importIdentifier ?? url.resolvingSymlinksInPath().standardizedFileURL.absoluteString
+            return url.resolvingSymlinksInPath().standardizedFileURL.absoluteString
         }()
         self.addToRecentVideosIOS(targetURL, importIdentifier: sourceIdentifier)
         #endif

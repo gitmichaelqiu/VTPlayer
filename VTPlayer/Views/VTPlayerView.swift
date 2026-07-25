@@ -231,6 +231,17 @@ struct VTPlayerView: View {
         .onChange(of: selectedPhotoItem) { _, item in
             guard let item = item else { return }
             Task {
+                #if os(iOS)
+                if let identifier = item.itemIdentifier,
+                   let existingURL = viewModel.existingImportedVideo(forIdentifier: identifier) {
+                    await MainActor.run {
+                        isPlayerTabBarHidden = true
+                        showPhotoPicker = false
+                        viewModel.openVideo(existingURL)
+                    }
+                    return
+                }
+                #endif
                 if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
                     await MainActor.run {
                         isPlayerTabBarHidden = true

@@ -122,6 +122,20 @@ struct PhotosMovie: Transferable {
                 }
             }
 
+            #if os(iOS)
+            let applicationSupportDirectory = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            )[0]
+            let importedDirectory = applicationSupportDirectory
+                .appendingPathComponent("VTPlayer/ImportedVideos", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: importedDirectory, withIntermediateDirectories: true)
+            let filename = fileURL.lastPathComponent.isEmpty ? "Video.mov" : fileURL.lastPathComponent
+            let destination = importedDirectory.appendingPathComponent(filename)
+            try FileManager.default.copyItem(at: fileURL, to: destination)
+            return .init(url: destination)
+            #else
             let stagingDirectory = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
             try FileManager.default.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
@@ -129,6 +143,7 @@ struct PhotosMovie: Transferable {
             let copy = stagingDirectory.appendingPathComponent(filename)
             try FileManager.default.copyItem(at: fileURL, to: copy)
             return .init(url: copy)
+            #endif
         }
     }
 }
