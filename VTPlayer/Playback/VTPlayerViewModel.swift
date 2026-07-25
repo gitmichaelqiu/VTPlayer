@@ -267,12 +267,7 @@ final class VTPlayerViewModel {
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let asset = AVURLAsset(url: url)
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 600, height: 600)
-            let previewTime = CMTime(seconds: 1, preferredTimescale: 600)
-            let image = (try? generator.copyCGImage(at: previewTime, actualTime: nil))
-                ?? (try? generator.copyCGImage(at: .zero, actualTime: nil))
+            let image = VideoPreviewGenerator.image(for: asset, maximumSize: CGSize(width: 600, height: 600))
             guard let image else { return }
             let artwork = MPMediaItemArtwork(boundsSize: CGSize(width: image.width, height: image.height)) { _ in
                 UIImage(cgImage: image)

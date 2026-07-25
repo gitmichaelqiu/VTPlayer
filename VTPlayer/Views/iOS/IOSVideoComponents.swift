@@ -1,6 +1,8 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import CoreGraphics
+import ImageIO
 
 #if os(iOS)
 final class CustomAVPlayerViewController: AVPlayerViewController {
@@ -158,6 +160,100 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 }
 #endif
 
+enum VideoPreviewGenerator {
+    static func image(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
+        if let artwork = artworkImage(for: asset, maximumSize: maximumSize) {
+            return artwork
+        }
+
+        let duration = CMTimeGetSeconds(asset.duration)
+        let durationSeconds = duration.isFinite && duration > 0 ? duration : 0
+        let candidateSeconds = candidateTimes(for: durationSeconds)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = maximumSize
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+
+        var bestImage: CGImage?
+        var bestScore = -Double.infinity
+        for seconds in candidateSeconds {
+            let time = CMTime(seconds: seconds, preferredTimescale: 600)
+            guard let image = try? generator.copyCGImage(at: time, actualTime: nil) else { continue }
+            let score = visualScore(for: image)
+            if score > bestScore {
+                bestScore = score
+                bestImage = image
+            }
+        }
+        return bestImage
+    }
+
+    private static func candidateTimes(for duration: Double) -> [Double] {
+        guard duration > 0 else { return [0] }
+        let candidates = [
+            0.0,
+            min(0.5, duration * 0.02),
+            min(1.0, duration * 0.05),
+            min(3.0, duration * 0.10),
+            duration * 0.25,
+            duration * 0.50
+        ]
+        return Array(Set(candidates.filter { $0 >= 0 && $0 < duration }))
+            .sorted()
+    }
+
+    private static func artworkImage(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
+        guard let item = asset.commonMetadata.first(where: {
+            $0.commonKey?.rawValue == "artwork" || $0.identifier?.rawValue.contains("artwork") == true
+        }), let data = item.dataValue else {
+            return nil
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(maximumSize.width, maximumSize.height)
+        ]
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
+    private static func visualScore(for image: CGImage) -> Double {
+        let width = 64
+        let height = 64
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: height * bytesPerRow)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 0
+        }
+
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let luminances = stride(from: 0, to: pixels.count, by: 4).map { index in
+            0.2126 * Double(pixels[index]) +
+                0.7152 * Double(pixels[index + 1]) +
+                0.0722 * Double(pixels[index + 2])
+        }
+        let mean = luminances.reduce(0, +) / Double(luminances.count)
+        let variance = luminances.reduce(0) { partial, luminance in
+            partial + (luminance - mean) * (luminance - mean)
+        } / Double(luminances.count)
+        let visibleRatio = Double(luminances.filter { $0 > 12 }.count) / Double(luminances.count)
+        let contrastScore = min(sqrt(variance) / 64.0, 1.0)
+        return visibleRatio * 0.7 + contrastScore * 0.3
+    }
+}
+
 struct VideoThumbnailView: View {
     let url: URL
     var width: CGFloat = 90
@@ -217,12 +313,7 @@ struct VideoThumbnailView: View {
                     }
                 }
             }
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 180, height: 120)
-            let previewTime = CMTime(seconds: 1, preferredTimescale: 600)
-            let image = (try? generator.copyCGImage(at: previewTime, actualTime: nil))
-                ?? (try? generator.copyCGImage(at: .zero, actualTime: nil))
+            let image = VideoPreviewGenerator.image(for: asset, maximumSize: CGSize(width: 180, height: 120))
             if let image {
                 DispatchQueue.main.async { thumbnail = Image(decorative: image, scale: 1) }
             }
