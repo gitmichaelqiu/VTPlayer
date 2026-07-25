@@ -7,23 +7,63 @@
 <p align="center"><i>Sharper. Smoother. Better.</i></p>
 </h3>
 
-VTPlayer uses Apple's VideoToolbox frame processing APIs to upscale, interpolate, denoise, and enhance video in real time on the Apple Neural Engine (ANE) and GPU.
+VTPlayer uses Apple's native APIs to upscale, interpolate, denoise, and enhance video in real time.
 
 App available for all Apple platforms.
 
-## Features
+## 🪄 Features
 
-| Enhancement | Range | Description |
-|-------------|-------|-------------|
-| **Super Resolution** | Off, 2x, 4x | Low-latency spatial upscaling via `VTLowLatencySuperResolutionScaler`. 4x cascades two 2x stages with `VTPixelTransferSession` fallback. |
-| **Quality SR** | Off, 2x, 4x | Higher-quality ML-based upscaling via `VTSuperResolutionScaler` (requires model download). |
-| **Frame Interpolation** | Off, 2x, 4x | Temporal interpolation via `VTLowLatencyFrameInterpolation`. Increases perceived framerate. |
-| **Combined Mode** | SR2 + FI2 | Single-pass 2x spatial + 2x temporal via `VTLowLatencyFrameInterpolationConfiguration(spatialScaleFactor:)`. |
-| **Motion Blur** | Off, 1–30 | Post-process cinematic motion blur via `VTMotionBlur`. |
-| **Denoise** | Off, 0.0–1.0 | Temporal noise filter via `VTTemporalNoiseFilter` using 2 previous reference frames. |
-| **Sharpness** | Off, 0.0–2.0 | `CIUnsharpMask` applied in the Metal renderer (radius 0.5). Interpolated frames receive boosted sharpness. |
-| **SDR-to-HDR Boost** | Off, 0.0–2.0 | `CIExposureAdjust` + `CIColorControls` push luminance into display EDR headroom. |
+| Enhancement | Range |
+|-------------|-------|
+| **Super Resolution** | Hardware dependent |
+| **Frame Interpolation** | Off, 2x, 4x |
+| **Motion Blur** | Off, 1–30 |
+| **Denoise** | Off, 0.0–1.0 |
+| **Sharpness** | Off, 0.0–2.0 |
+| **SDR-to-HDR Boost** | Off, 0.0–2.0 |
 
-## License
+## 📦 Installation
 
-VTPlayer is licensed under [MIT License](LICENSE).
+### Direct Download
+
+Your macOS must be at least **macOS 14.0 Sonoma**. All you need to do is:
+
+1. Download the package from [Releases](https://github.com/gitmichaelqiu/VTPlayer/releases/)
+2. Drag the app to the *Applications* folder
+3. All set!
+
+<!-- ### Homebrew
+
+You can also choose to download it from Homebrew:
+
+```bash
+brew install --cask gitmichaelqiu/tap/vtplayer
+``` -->
+
+### Open App
+
+Because I do **NOT** have an Apple developer account for the app releases, you may receive alerts such as "Developer is not verified".
+
+To resolve this, go to System Settings → the bottom of Privacy & Security → Open VTPlayer.
+
+## ⚠️ Issues
+
+You are welcome to create issues/suggestions in [GitHub Issues](https://github.com/gitmichaelqiu/VTPlayer/issues).
+
+If you are curious what I am doing on the project, go to the Issues page. The pinned issues are what I am focusing.
+
+## 🙏 Acknowlegements
+
+This app uses the following packages:
+
+- [Sparkle by @sparkle-project](https://github.com/sparkle-project/Sparkle)
+
+Many thanks to all of these wonderful developers!
+
+See [Acknowledgements.pdf](https://github.com/gitmichaelqiu/VTPlayer/blob/main/VTPlayer/Resources/Acknowledgements/Acknowledgements.pdf) for licenses.
+
+## ⭐ Support This Project
+
+You can simply click on the **Star** to support this project for free. Thank you for your support!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=gitmichaelqiu/VTPlayer&type=date&legend=top-left)](https://www.star-history.com/#gitmichaelqiu/VTPlayer&type=date&legend=top-left)
