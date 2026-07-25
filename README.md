@@ -26,7 +26,7 @@ App available for all Apple platforms.
 
 ### Direct Download
 
-Your macOS must be at least **macOS 14.0 Sonoma**. All you need to do is:
+Your Apple device must be at least **OS 26.0**. All you need to do is:
 
 1. Download the package from [Releases](https://github.com/gitmichaelqiu/VTPlayer/releases/)
 2. Drag the app to the *Applications* folder
