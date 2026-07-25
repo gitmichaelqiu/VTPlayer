@@ -243,8 +243,8 @@ struct GeneralSettingsTab: View {
             VStack(alignment: .leading, spacing: 20) {
                 SettingsSection("User Interface") {
                     SettingsRow(
-                        "Show file extensions in sidebar",
-                        helperText: "Toggle whether file extensions (e.g. .mp4, .mkv) are visible in the recent files list."
+                        "Show file extensions",
+                        helperText: "Toggle visibility of file extensions (e.g. .mp4, .mkv)."
                     ) {
                         Toggle("", isOn: $showFileExtensions)
                             .toggleStyle(.switch)
