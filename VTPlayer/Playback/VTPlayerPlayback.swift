@@ -733,6 +733,10 @@ extension VTPlayerViewModel {
                     player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 } else {
                     player.pause()
+                    if resumeTime <= .zero, let url = self.videoURL,
+                       let firstFrame = await self.readSingleFrame(from: url, at: .zero) {
+                        self.renderer.render(pixelBuffer: firstFrame.buffer)
+                    }
                 }
             } else {
                 self.isInitializingPipeline = false
