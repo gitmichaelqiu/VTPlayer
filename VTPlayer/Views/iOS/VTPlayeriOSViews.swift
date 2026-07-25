@@ -189,18 +189,7 @@ extension VTPlayerView {
             NavigationStack {
                 iosGalleryView
                     .navigationTitle("Gallery")
-                    .navigationDestination(isPresented: Binding(
-                        get: { viewModel.videoURL != nil },
-                        set: { show in
-                            if !show {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    isPlayerTabBarHidden = false
-                                }
-                                viewModel.stop()
-                                viewModel.videoURL = nil
-                            }
-                        }
-                    )) {
+                    .navigationDestination(isPresented: $isPlayerPresented) {
                         iosPlayerView
                     }
                     .toolbar {
@@ -263,6 +252,22 @@ extension VTPlayerView {
                 }
         }
         .toolbar(isPlayerTabBarHidden ? .hidden : .visible, for: .tabBar)
+        .onChange(of: viewModel.videoURL) { _, url in
+            if url != nil {
+                isPlayerPresented = true
+            }
+        }
+        .onChange(of: isPlayerPresented) { _, presented in
+            guard !presented, viewModel.videoURL != nil else { return }
+
+            // Dismiss through the navigation destination's state first. The
+            // URL is playback state, not the presentation mechanism.
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isPlayerTabBarHidden = false
+            }
+            viewModel.stop()
+            viewModel.videoURL = nil
+        }
     }
 
     @ViewBuilder
@@ -738,6 +743,10 @@ extension VTPlayerView {
             if viewModel.showControls {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
+                        // Stop immediately so a missed navigation transaction
+                        // cannot leave the player running behind the gallery.
+                        viewModel.stop()
+                        isPlayerPresented = false
                         viewModel.videoURL = nil
                         IOSPlayerTabBarController.setHidden(false, animated: true)
                         withAnimation(.easeInOut(duration: 0.25)) {
