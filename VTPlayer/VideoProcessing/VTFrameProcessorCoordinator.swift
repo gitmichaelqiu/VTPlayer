@@ -56,6 +56,10 @@ public actor VTFrameProcessorCoordinator {
             frameHeight: height,
             scaleFactor: scale
         )
+        guard !configuration.sourcePixelBufferAttributes.isEmpty,
+              !configuration.destinationPixelBufferAttributes.isEmpty else {
+            return false
+        }
         let processor = VTFrameProcessor()
         do {
             try processor.startSession(configuration: configuration)
@@ -396,7 +400,6 @@ public actor VTFrameProcessorCoordinator {
                     frameHeight: currentHeight,
                     scaleFactor: 2.0
                 )
-                #if os(macOS)
                 guard !config1.sourcePixelBufferAttributes.isEmpty,
                       !config1.destinationPixelBufferAttributes.isEmpty else {
                     throw NSError(
@@ -405,7 +408,6 @@ public actor VTFrameProcessorCoordinator {
                         userInfo: [NSLocalizedDescriptionKey: "Low Latency SR returned no pixel buffer requirements"]
                     )
                 }
-                #endif
                 let proc1 = VTFrameProcessor()
                 try proc1.startSession(configuration: config1)
                 let pool1 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: config1.destinationPixelBufferAttributes)
