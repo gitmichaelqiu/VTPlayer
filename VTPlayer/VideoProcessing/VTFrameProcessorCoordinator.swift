@@ -164,7 +164,7 @@ public actor VTFrameProcessorCoordinator {
     var fallbackTransferSession: VTPixelTransferSession?
 
     #if os(macOS)
-    // Convert enhanced Y'CbCr output before handing it to Core Image/Metal.
+    // Convert processed Y'CbCr output before handing it to Core Image/Metal.
     var rendererTransferSession: VTPixelTransferSession?
     var rendererPixelBufferPool: CVPixelBufferPool?
     #endif
@@ -270,10 +270,10 @@ public actor VTFrameProcessorCoordinator {
 
     func configureRendererTransferSession(_ session: VTPixelTransferSession) {
         configureTransferSession(session)
-        // This conversion exists for SDR SR output, where direct Y'CbCr
-        // rendering has known macOS compatibility problems. Never use it for
-        // native HDR: forcing BT.709 here discards its BT.2020 PQ/HLG transfer
-        // characteristics before the renderer can present them as EDR.
+        // Direct Y'CbCr rendering of processed SR/FI output can use a different
+        // chroma interpretation from native AVPlayer. Convert SDR output to a
+        // stable BT.709 presentation format. Never use it for native HDR:
+        // forcing BT.709 there discards its BT.2020 PQ/HLG characteristics.
         VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DestinationColorPrimaries, value: kCVImageBufferColorPrimaries_ITU_R_709_2)
         VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_DestinationTransferFunction, value: kCVImageBufferTransferFunction_ITU_R_709_2)
     }
@@ -560,11 +560,11 @@ public actor VTFrameProcessorCoordinator {
         self.targetHeight = currentHeight
 
         #if os(macOS)
-        if hasQualitySR || hasLLSR {
+        if hasQualitySR || hasLLSR || frameInterpolationLevel > 0 {
             var transferSession: VTPixelTransferSession?
             guard VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession) == kCVReturnSuccess,
                   let transferSession else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create SR presentation transfer session"])
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create presentation transfer session"])
             }
             configureRendererTransferSession(transferSession)
             guard let rendererPool = makePool(width: currentWidth, height: currentHeight, from: [
@@ -572,7 +572,7 @@ public actor VTFrameProcessorCoordinator {
                 kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]
             ]) else {
                 VTPixelTransferSessionInvalidate(transferSession)
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create SR presentation pool"])
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create presentation pool"])
             }
             rendererTransferSession = transferSession
             rendererPixelBufferPool = rendererPool
