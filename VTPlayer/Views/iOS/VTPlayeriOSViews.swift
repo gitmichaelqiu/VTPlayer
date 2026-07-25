@@ -737,12 +737,11 @@ extension VTPlayerView {
             if viewModel.showControls {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        viewModel.stop()
+                        viewModel.videoURL = nil
                         IOSPlayerTabBarController.setHidden(false, animated: true)
                         withAnimation(.easeInOut(duration: 0.25)) {
                             isPlayerTabBarHidden = false
                         }
-                        viewModel.videoURL = nil
                     } label: {
                         Image(systemName: "chevron.left")
                     }

@@ -891,6 +891,7 @@ extension VTPlayerViewModel {
             await coordinator.endSession()
             if self.playbackGeneration == gen {
                 self.activeCoordinator = nil
+                self.producerTask = nil
             }
         }
         
