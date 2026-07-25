@@ -260,6 +260,11 @@ extension VTPlayerViewModel {
             self.recentVideos.removeAll()
         }
         clearPersistedVideoHistory()
+
+        if let scoped = securityScopedURL {
+            scoped.stopAccessingSecurityScopedResource()
+            self.securityScopedURL = nil
+        }
     }
 
     private func removeRecentDateEntries(for urls: [URL]) {

@@ -774,8 +774,12 @@ final class VTPlayerViewModel {
             } catch {
                 print("Error loading video properties: \(error.localizedDescription)")
                 #if os(iOS)
-                // Remove stale URL from recents so it won't be retried
-                if let idx = self.recentVideos.firstIndex(of: url) {
+                // Only remove legacy sandbox copies that are definitely gone.
+                // External source URLs may be temporarily inaccessible while
+                // a file provider restores access and must remain in Recents.
+                let tempPath = FileManager.default.temporaryDirectory.standardizedFileURL.path
+                if url.standardizedFileURL.path.hasPrefix(tempPath + "/"),
+                   let idx = self.recentVideos.firstIndex(of: url) {
                     self.deleteRecentVideoIOS(at: IndexSet(integer: idx))
                 }
                 #endif
@@ -943,13 +947,20 @@ final class VTPlayerViewModel {
         var targetURL = url
         #endif
         
-        // Release any previously held security-scoped resource
-        if let prev = securityScopedURL {
+        #if os(iOS)
+        let hasExistingSecurityScope = securityScopedURL?.standardizedFileURL == targetURL.standardizedFileURL
+        #else
+        let hasExistingSecurityScope = false
+        #endif
+
+        // Keep the active iOS scope when reopening the same recent video.
+        // The URL is otherwise valid only for the lifetime of its scope.
+        if let prev = securityScopedURL, !hasExistingSecurityScope {
             prev.stopAccessingSecurityScopedResource()
             self.securityScopedURL = nil
         }
-        
-        let isSecurityScoped = targetURL.startAccessingSecurityScopedResource()
+
+        let isSecurityScoped = hasExistingSecurityScope || targetURL.startAccessingSecurityScopedResource()
         if isSecurityScoped {
             self.securityScopedURL = targetURL
         }
@@ -1004,7 +1015,9 @@ final class VTPlayerViewModel {
         }
 
         guard isReadable else {
-            if let idx = recentVideos.firstIndex(of: url) {
+            let tempPath = FileManager.default.temporaryDirectory.standardizedFileURL.path
+            if url.standardizedFileURL.path.hasPrefix(tempPath + "/"),
+               let idx = recentVideos.firstIndex(of: url) {
                 deleteRecentVideoIOS(at: IndexSet(integer: idx))
             }
             return
