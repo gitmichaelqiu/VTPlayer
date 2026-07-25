@@ -193,6 +193,7 @@ extension VTPlayerView {
                 }
 
             iosAboutView
+                .id(selectedTab)
                 .tag(1)
                 .tabItem {
                     Label("About", systemImage: "info.circle.fill")
