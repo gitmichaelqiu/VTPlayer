@@ -244,6 +244,7 @@ extension VTPlayerView {
                             }
                         }
                     }
+                    .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
             }
                 .tag(0)
                 .tabItem {
