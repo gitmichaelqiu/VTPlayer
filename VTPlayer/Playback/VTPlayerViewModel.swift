@@ -505,8 +505,32 @@ final class VTPlayerViewModel {
         #endif
     }
     
+    #if os(iOS)
+    private func configureAudioSessionForPlayback() {
+        // Audio-session activation can block while negotiating the route. Do
+        // not perform it on the main actor during video setup.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let audioSession = AVAudioSession.sharedInstance()
 
-    
+            do {
+                try audioSession.setCategory(.playback, mode: .moviePlayback, options: [])
+
+                if #available(iOS 27.0, *) {
+                    audioSession.activate(options: [], completionHandler: { activated, error in
+                        if !activated, let error {
+                            print("Failed to activate playback audio session: \(error.localizedDescription)")
+                        }
+                    })
+                } else {
+                    try audioSession.setActive(true)
+                }
+            } catch {
+                print("Failed to configure playback audio session: \(error.localizedDescription)")
+            }
+        }
+    }
+    #endif
+
     func setupPlayer(with url: URL) {
         // Capability probing is asynchronous. Clear the previous video's
         // scale set immediately so its enabled menu items cannot leak into
@@ -637,13 +661,7 @@ final class VTPlayerViewModel {
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
                 #if os(iOS)
-                do {
-                    let audioSession = AVAudioSession.sharedInstance()
-                    try audioSession.setCategory(.playback, mode: .moviePlayback, options: [])
-                    try audioSession.setActive(true)
-                } catch {
-                    print("Failed to configure playback audio session: \(error.localizedDescription)")
-                }
+                configureAudioSessionForPlayback()
                 #endif
                 
                 // Update properties on @MainActor
