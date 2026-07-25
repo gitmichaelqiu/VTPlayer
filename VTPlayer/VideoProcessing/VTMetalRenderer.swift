@@ -68,6 +68,7 @@ public final class VTMetalRenderer: MTKView {
     public private(set) var isExtendedDynamicRangeActive = false
 
     private let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
+    private let standardDisplayColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
 
     private var nativeHDRColorSpace: CGColorSpace? {
         switch nativeHDRTransfer {
@@ -504,7 +505,7 @@ public final class VTMetalRenderer: MTKView {
             bounds: targetRect,
             colorSpace: isExtendedDynamicRangeActive
                 ? (nativeHDRColorSpace ?? extendedLinearDisplayP3ColorSpace)
-                : CGColorSpaceCreateDeviceRGB()
+                : standardDisplayColorSpace
         )
         
         commandBuffer.present(drawable)
