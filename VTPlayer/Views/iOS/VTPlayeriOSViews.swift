@@ -720,57 +720,12 @@ extension VTPlayerView {
                     .tint(.white)
             }
 
-            VStack {
-                HStack(spacing: 16) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.body.bold())
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-
-                    Spacer()
-
-                    Text(displayTitle)
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.4))
-                        .cornerRadius(8)
-
-                    Spacer()
-
-                    Button { showSettingsSheet = true } label: {
-                        Image(systemName: "gearshape")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-
-                    Button { showDiagnosticsSheet = true } label: {
-                        Image(systemName: "chart.bar")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
-
-                Spacer()
-            }
-            .opacity(viewModel.showControls ? 1.0 : 0.0)
-            .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         }
+        // AVPlayerViewController owns the native title and playback controls.
+        // Do not overlay or synchronize a second SwiftUI navigation bar with
+        // its private controls hierarchy.
         .toolbar(.hidden, for: .navigationBar)
+        .navigationBarHidden(true)
         .navigationBarBackButtonHidden(true)
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
