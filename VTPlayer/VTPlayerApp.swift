@@ -23,6 +23,13 @@ struct VTPlayerApp: App {
                 Button("About VTPlayer") {
                     SettingsWindowManager.shared.showSettings(tab: .about)
                 }
+
+                Divider()
+
+                Button("Check for Updates…") {
+                    VTPlayerUpdater.shared.checkForUpdates()
+                }
+                .disabled(!VTPlayerUpdater.shared.canCheckForUpdates)
             }
 
             CommandGroup(replacing: .appSettings) {
