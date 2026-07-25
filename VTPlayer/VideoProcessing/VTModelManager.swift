@@ -31,6 +31,7 @@ public final class VTModelManager {
 
     /// Tracks whether the asynchronous download has completed (success or failure).
     private var downloadCompleted = false
+    private var progressTask: Task<Void, Never>?
 
     public init() {}
     
@@ -87,19 +88,16 @@ public final class VTModelManager {
             }
         }
 
-        // Start a timer to poll progress while downloading.
-        // The timer stops overriding status once downloadCompleted is set (e.g. after failure).
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self, srConfig] timer in
-            Task { @MainActor in
-                guard let self = self else {
-                    timer.invalidate()
-                    return
-                }
-
-                if self.downloadCompleted {
-                    timer.invalidate()
-                    return
-                }
+        // Poll on the main actor without capturing Timer in a concurrently
+        // executing closure. The task ends when the download completion handler
+        // updates downloadCompleted or when the model manager starts another
+        // download.
+        progressTask?.cancel()
+        progressTask = Task { @MainActor [weak self, srConfig] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                guard !Task.isCancelled, let self else { return }
+                guard !self.downloadCompleted else { return }
 
                 switch srConfig.configurationModelStatus {
                 case .downloading:
@@ -107,15 +105,13 @@ public final class VTModelManager {
                     self.status = .downloading(progress: Double(progress))
                 case .ready:
                     self.status = .ready
-                    timer.invalidate()
+                    return
                 case .downloadRequired:
-                    // Download not yet in progress or already failed — keep showing
-                    // the previous status (e.g. .downloading or .failed) instead of
-                    // reverting to .downloadRequired. The completion handler will
-                    // set the final status.
+                    // Keep the downloading state until the completion handler
+                    // reports a final result.
                     break
                 @unknown default:
-                    timer.invalidate()
+                    return
                 }
             }
         }

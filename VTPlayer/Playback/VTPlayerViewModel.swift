@@ -256,7 +256,7 @@ final class VTPlayerViewModel {
         let title = UserDefaults.standard.bool(forKey: "VTShowFileExtensions")
             ? url.lastPathComponent
             : url.deletingPathExtension().lastPathComponent
-        var info: [String: Any] = [
+        let info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
             MPMediaItemPropertyPlaybackDuration: duration,
@@ -598,7 +598,7 @@ final class VTPlayerViewModel {
                     .canStartLowLatencyPipeline(width: width, height: height, scale: 2)
                 let ll4SessionSupported: Bool
                 if ll2SessionSupported {
-                    ll4SessionSupported = await VTFrameProcessorCoordinator
+                    ll4SessionSupported = VTFrameProcessorCoordinator
                         .isLowLatencySuperResolutionSupported(width: width * 2, height: height * 2, scale: 2.0)
                 } else {
                     ll4SessionSupported = false
@@ -619,7 +619,7 @@ final class VTPlayerViewModel {
                     // dimensions. A machine can expose the processor while a
                     // particular resolution still cannot create a session.
                     for scale in VTSuperResolutionScalerConfiguration.supportedScaleFactors where scale == 2 || scale == 4 {
-                        if await VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(
+                        if VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(
                             width: width, height: height, scale: scale
                         ) {
                             availableQualityScales.insert(scale)
@@ -695,7 +695,6 @@ final class VTPlayerViewModel {
                         forInterval: CMTime(value: 1, timescale: 30),
                         queue: .main
                     ) { [weak self] time in
-                        guard let self else { return }
                         let seconds = CMTimeGetSeconds(time)
                         guard seconds.isFinite else { return }
                         Task { @MainActor [weak self] in
@@ -712,8 +711,8 @@ final class VTPlayerViewModel {
                         object: item,
                         queue: .main
                     ) { [weak self] _ in
-                        guard let self = self else { return }
-                        Task { @MainActor in
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
                             self.pause()
                             self.seek(to: 0)
                             self.startPlaybackLoop()
@@ -727,8 +726,8 @@ final class VTPlayerViewModel {
                         object: item,
                         queue: .main
                     ) { [weak self] _ in
-                        guard let self = self else { return }
-                        Task { @MainActor in
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
                             self.handleTimeJump()
                         }
                     }
@@ -736,8 +735,8 @@ final class VTPlayerViewModel {
                     
                     // Observe AVPlayer's timeControlStatus to sync player state with isPaused
                     self.rateObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, change in
-                        guard let self = self else { return }
-                        Task { @MainActor in
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
                             switch player.timeControlStatus {
                             case .paused:
                                 if !self.isInitializingPipeline {
@@ -1241,13 +1240,13 @@ final class VTPlayerViewModel {
     /// Decodes a single frame away from the main actor so seeking remains responsive.
     func readSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
         await Task.detached(priority: .userInitiated) {
-            Self.decodeSingleFrame(from: url, at: time)
+            await Self.decodeSingleFrame(from: url, at: time)
         }.value
     }
 
-    nonisolated static func decodeSingleFrame(from url: URL, at time: CMTime) -> VTFrame? {
+    nonisolated static func decodeSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
         let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .video).first else { return nil }
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
         guard let reader = try? AVAssetReader(asset: asset) else { return nil }
         reader.timeRange = CMTimeRange(start: time, duration: CMTime(value: 1, timescale: 30))
         let settings: [String: Any] = [

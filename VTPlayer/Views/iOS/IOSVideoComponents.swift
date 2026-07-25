@@ -389,7 +389,7 @@ enum VideoPreviewGenerator {
             return
         }
         if FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
+            _ = try? FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
         } else {
             try? FileManager.default.moveItem(at: temporaryURL, to: url)
         }

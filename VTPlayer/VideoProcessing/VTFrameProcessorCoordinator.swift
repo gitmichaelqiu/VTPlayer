@@ -295,8 +295,6 @@ public actor VTFrameProcessorCoordinator {
 
         var currentWidth = width
         var currentHeight = height
-        var buildError: Error?
-
         // A configuration can be accepted by VideoToolbox and still fail
         // when a later stage session is started. Keep partial resources
         // reclaimable so a failed restart cannot poison the next pipeline.
