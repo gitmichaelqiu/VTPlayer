@@ -25,7 +25,7 @@ public enum PipelineStage: Int, Comparable, CaseIterable {
 }
 
 /// A live processor instance at a specific pipeline stage.
-struct StageInstance {
+nonisolated struct StageInstance {
     let stage: PipelineStage
     let processor: VTFrameProcessor
     let pixelBufferPool: CVPixelBufferPool?
