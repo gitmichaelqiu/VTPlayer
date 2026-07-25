@@ -747,7 +747,7 @@ extension VTPlayerView {
         .navigationBarBackButtonHidden(true)
         // Keep toolbar visible so the frame never collapses — collapsing
         // causes the player overlay to jump upward abruptly.
-        .toolbar(.visible, for: .navigationBar)
+        .toolbar(viewModel.showControls ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
@@ -764,8 +764,6 @@ extension VTPlayerView {
                     Image(systemName: "chevron.left")
                 }
                 .accessibilityLabel("Exit player")
-                .opacity(viewModel.showControls ? 1 : 0)
-                .allowsHitTesting(viewModel.showControls)
             }
 
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -775,8 +773,6 @@ extension VTPlayerView {
                     Label("Settings", systemImage: "gearshape")
                 }
                 .labelStyle(.iconOnly)
-                .opacity(viewModel.showControls ? 1 : 0)
-                .allowsHitTesting(viewModel.showControls)
             }
 
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -786,8 +782,6 @@ extension VTPlayerView {
                     Label("Diagnostics", systemImage: "chart.bar")
                 }
                 .labelStyle(.iconOnly)
-                .opacity(viewModel.showControls ? 1 : 0)
-                .allowsHitTesting(viewModel.showControls)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
