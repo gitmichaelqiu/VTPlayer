@@ -756,6 +756,11 @@ extension VTPlayerView {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
         .toolbar(isPlayerTabBarHidden ? .hidden : .visible, for: .tabBar)
+        .background(IOSPlayerLifecycleObserver {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isPlayerTabBarHidden = false
+            }
+        })
         .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showSettingsSheet) {
             PlaybackSettingsView(viewModel: viewModel)

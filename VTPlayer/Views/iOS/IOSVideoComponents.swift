@@ -205,6 +205,29 @@ private final class IOSNavigationBarHostController: UIViewController {
         return nil
     }
 }
+
+struct IOSPlayerLifecycleObserver: UIViewControllerRepresentable {
+    let onWillDisappear: () -> Void
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = IOSPlayerLifecycleViewController()
+        controller.onWillDisappear = onWillDisappear
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIViewController, context: Context) {
+        (controller as? IOSPlayerLifecycleViewController)?.onWillDisappear = onWillDisappear
+    }
+}
+
+private final class IOSPlayerLifecycleViewController: UIViewController {
+    var onWillDisappear: (() -> Void)?
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        onWillDisappear?()
+    }
+}
 #endif
 
 enum VideoPreviewGenerator {
