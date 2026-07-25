@@ -9,11 +9,6 @@ import ImageIO
 #if os(iOS)
 final class CustomAVPlayerViewController: AVPlayerViewController {
     var onControlsVisibilityChange: ((Bool) -> Void)?
-    var shouldHideNavigationBar = false {
-        didSet {
-            updateNavigationBarVisibility(animated: true)
-        }
-    }
     var isPipelineActive = false {
         didSet {
             applyPipelinePresentationIfNeeded()
@@ -25,13 +20,11 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         startTimer()
-        updateNavigationBarVisibility(animated: false)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopTimer()
-        setNavigationBarHidden(false, animated: false)
     }
 
     override func viewDidLayoutSubviews() {
@@ -88,40 +81,6 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
         }
     }
 
-    private func updateNavigationBarVisibility(animated: Bool) {
-        setNavigationBarHidden(shouldHideNavigationBar, animated: animated)
-    }
-
-    private func setNavigationBarHidden(_ hidden: Bool, animated: Bool) {
-        guard let navigationController = containingNavigationController(),
-              navigationController.isNavigationBarHidden != hidden else { return }
-        navigationController.setNavigationBarHidden(hidden, animated: animated)
-    }
-
-    private func containingNavigationController() -> UINavigationController? {
-        var ancestor = parent
-        while let current = ancestor {
-            if let navigationController = current as? UINavigationController {
-                return navigationController
-            }
-            ancestor = current.parent
-        }
-        guard let root = viewIfLoaded?.window?.rootViewController else { return nil }
-        return findNavigationController(in: root)
-    }
-
-    private func findNavigationController(in controller: UIViewController) -> UINavigationController? {
-        if let navigationController = controller as? UINavigationController {
-            return navigationController
-        }
-        for child in controller.children.reversed() {
-            if let navigationController = findNavigationController(in: child) {
-                return navigationController
-            }
-        }
-        return nil
-    }
-
     private func findControlsView(in view: UIView) -> UIView? {
         let className = String(describing: type(of: view))
         if className.contains("PlaybackControls") || className.contains("ControlsContainer") || className.contains("TransportBar") {
@@ -170,14 +129,12 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     let player: AVPlayer
     let title: String
     let isPipelineActive: Bool
-    let shouldHideNavigationBar: Bool
     @Binding var showControls: Bool
 
     func makeUIViewController(context: Context) -> CustomAVPlayerViewController {
         let controller = CustomAVPlayerViewController()
         controller.player = player
         controller.isPipelineActive = isPipelineActive
-        controller.shouldHideNavigationBar = shouldHideNavigationBar
         controller.showsPlaybackControls = true
         applyTitle(to: player.currentItem)
         controller.onControlsVisibilityChange = { visible in
@@ -192,7 +149,6 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: CustomAVPlayerViewController, context: Context) {
         controller.isPipelineActive = isPipelineActive
-        controller.shouldHideNavigationBar = shouldHideNavigationBar
         if let item = player.currentItem, item.externalMetadata.isEmpty { applyTitle(to: item) }
     }
 

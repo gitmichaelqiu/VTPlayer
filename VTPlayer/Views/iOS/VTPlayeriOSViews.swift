@@ -259,6 +259,7 @@ extension VTPlayerView {
                     Label("About", systemImage: "info.circle.fill")
                 }
         }
+        .toolbar(viewModel.videoURL != nil ? .hidden : .visible, for: .tabBar)
     }
 
     @ViewBuilder
@@ -711,7 +712,6 @@ extension VTPlayerView {
                     player: player,
                     title: displayTitle,
                     isPipelineActive: viewModel.isPipelineActive,
-                    shouldHideNavigationBar: viewModel.isPlaying && !viewModel.isPaused,
                     showControls: $viewModel.showControls
                 )
                 .ignoresSafeArea()
