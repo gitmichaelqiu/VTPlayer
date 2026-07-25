@@ -452,8 +452,9 @@ extension VTPlayerViewModel {
             guard combinedMode || videoWidth > 1280 || videoHeight > 720 else { return nil }
             // Combined 2x SR + 2x FI is the heaviest real-time mode. When
             // possible, feed it a smaller source so the processor has enough
-            // headroom to produce every output phase on time. Keep the normal
-            // FI cap for pure interpolation.
+            // headroom to produce every output phase on time. Pure FI keeps
+            // the native source resolution so interpolation never becomes an
+            // implicit quality downgrade.
             if combinedMode {
                 // Probe the actual temporal-first configuration. A combined
                 // FI+spatial initializer may accept 480×270 while the pure
@@ -487,10 +488,7 @@ extension VTPlayerViewModel {
                 }
                 return nil
             }
-            let scale = min(1280.0 / Double(videoWidth), 720.0 / Double(videoHeight))
-            let candidate = CGSize(width: ceil(Double(videoWidth) * scale / 16) * 16,
-                                   height: ceil(Double(videoHeight) * scale / 16) * 16)
-            return candidate
+            return nil
         }()
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
         let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
