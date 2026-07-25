@@ -331,19 +331,22 @@ struct VTPlayerView: View {
     #if os(iOS)
     @ViewBuilder
     var iphoneLayout: some View {
-        NavigationStack {
-            iosHomeView
-                .navigationDestination(isPresented: Binding(
-                    get: { viewModel.videoURL != nil },
-                    set: { show in
-                        if !show {
-                            viewModel.stop()
-                            viewModel.videoURL = nil
+        GeometryReader { proxy in
+            NavigationStack {
+                iosHomeView
+                    .navigationDestination(isPresented: Binding(
+                        get: { viewModel.videoURL != nil },
+                        set: { show in
+                            if !show {
+                                viewModel.stop()
+                                viewModel.videoURL = nil
+                            }
                         }
+                    )) {
+                        iosPlayerView
                     }
-                )) {
-                    iosPlayerView
-                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
     #endif
