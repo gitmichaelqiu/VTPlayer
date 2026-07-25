@@ -698,6 +698,7 @@ final class VTPlayerViewModel {
                         Task { @MainActor in
                             self.pause()
                             self.seek(to: 0)
+                            self.startPlaybackLoop()
                         }
                     }
                     self.playerItemObserver = observer
