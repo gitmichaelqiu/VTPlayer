@@ -442,17 +442,10 @@ final class VTPlayerViewModel {
 
     func appIcon(for colorScheme: ColorScheme) -> Image? {
         #if os(iOS)
-        if let icons = Bundle.main.infoDictionary?["CFBundleIcons"] as? [String: Any],
-           let primaryIcon = icons["CFBundlePrimaryIcon"] as? [String: Any],
-           let iconFiles = primaryIcon["CFBundleIconFiles"] as? [String],
-           let lastIcon = iconFiles.last,
-           let uiImage = UIImage(
-                named: lastIcon,
-                in: .main,
-                compatibleWith: UITraitCollection(
-                    userInterfaceStyle: colorScheme == .dark ? .dark : .light
-                )
-           ) {
+        let traits = UITraitCollection(
+            userInterfaceStyle: colorScheme == .dark ? .dark : .light
+        )
+        if let uiImage = UIImage(named: "VTPlayer", in: .main, compatibleWith: traits) {
             return Image(uiImage: uiImage)
         }
         #elseif os(macOS)
