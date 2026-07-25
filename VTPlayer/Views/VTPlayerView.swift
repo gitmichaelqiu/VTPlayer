@@ -119,7 +119,6 @@ struct VTPlayerView: View {
     @State var showVolumePopover = false
     @State var isAboutCardExpanded = false
     @Environment(\.dismiss) var dismiss
-    @Environment(\.colorScheme) var colorScheme
     
     enum SortOption: String, CaseIterable, Identifiable {
         case dateAdded = "Date Added"

@@ -424,7 +424,7 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var aboutAppIcon: some View {
-        if let icon = viewModel.appIcon(for: colorScheme) {
+        if let icon = viewModel.appIcon {
             icon
                 .resizable()
                 .aspectRatio(contentMode: .fit)

@@ -440,12 +440,13 @@ final class VTPlayerViewModel {
     let modelManager = VTModelManager()
     var activeCoordinator: VTFrameProcessorCoordinator?
 
-    func appIcon(for colorScheme: ColorScheme) -> Image? {
+    var appIcon: Image? {
         #if os(iOS)
-        let traits = UITraitCollection(
-            userInterfaceStyle: colorScheme == .dark ? .dark : .light
-        )
-        if let uiImage = UIImage(named: "VTPlayer", in: .main, compatibleWith: traits) {
+        if let icons = Bundle.main.infoDictionary?["CFBundleIcons"] as? [String: Any],
+           let primaryIcon = icons["CFBundlePrimaryIcon"] as? [String: Any],
+           let iconFiles = primaryIcon["CFBundleIconFiles"] as? [String],
+           let lastIcon = iconFiles.last,
+           let uiImage = UIImage(named: lastIcon) {
             return Image(uiImage: uiImage)
         }
         #elseif os(macOS)
