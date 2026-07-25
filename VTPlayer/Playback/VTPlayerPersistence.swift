@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import SwiftUI
 import AVFoundation
 import VideoToolbox
@@ -121,6 +122,33 @@ extension VTPlayerViewModel {
     }
 
     #if os(iOS)
+    private func contentDigest(for url: URL) -> Data? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        var digest = SHA256()
+        while true {
+            guard let chunk = try? handle.read(upToCount: 1024 * 1024),
+                  let chunk,
+                  !chunk.isEmpty else {
+                break
+            }
+            digest.update(data: chunk)
+        }
+        return Data(digest.finalize())
+    }
+
+    func existingImportedVideo(matching sourceURL: URL) -> URL? {
+        guard let sourceDigest = contentDigest(for: sourceURL) else { return nil }
+
+        for candidate in recentVideos where isManagedImportedVideo(candidate) {
+            guard FileManager.default.fileExists(atPath: candidate.path),
+                  contentDigest(for: candidate) == sourceDigest else { continue }
+            return candidate
+        }
+        return nil
+    }
+
     func importedVideosDirectoryURL() -> URL {
         let applicationSupportDirectory = FileManager.default.urls(
             for: .applicationSupportDirectory,

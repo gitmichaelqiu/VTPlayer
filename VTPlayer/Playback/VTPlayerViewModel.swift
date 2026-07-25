@@ -962,30 +962,39 @@ final class VTPlayerViewModel {
         
         #if os(iOS)
         if !isManagedImportedVideo(targetURL) {
-            let importedDirectory = importedVideosDirectoryURL()
-                .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            let filename = targetURL.lastPathComponent.isEmpty ? "Video.mov" : targetURL.lastPathComponent
-            let destinationURL = importedDirectory.appendingPathComponent(filename)
-
-            do {
-                try FileManager.default.createDirectory(
-                    at: importedDirectory,
-                    withIntermediateDirectories: true
-                )
-                try FileManager.default.copyItem(at: targetURL, to: destinationURL)
+            if let existingURL = existingImportedVideo(matching: targetURL) {
                 if isSecurityScoped {
                     targetURL.stopAccessingSecurityScopedResource()
                     self.securityScopedURL = nil
                 }
                 deleteTempFile(for: url)
-                targetURL = destinationURL
-            } catch {
-                if isSecurityScoped {
-                    targetURL.stopAccessingSecurityScopedResource()
-                    self.securityScopedURL = nil
+                targetURL = existingURL
+            } else {
+                let importedDirectory = importedVideosDirectoryURL()
+                    .appendingPathComponent(UUID().uuidString, isDirectory: true)
+                let filename = targetURL.lastPathComponent.isEmpty ? "Video.mov" : targetURL.lastPathComponent
+                let destinationURL = importedDirectory.appendingPathComponent(filename)
+
+                do {
+                    try FileManager.default.createDirectory(
+                        at: importedDirectory,
+                        withIntermediateDirectories: true
+                    )
+                    try FileManager.default.copyItem(at: targetURL, to: destinationURL)
+                    if isSecurityScoped {
+                        targetURL.stopAccessingSecurityScopedResource()
+                        self.securityScopedURL = nil
+                    }
+                    deleteTempFile(for: url)
+                    targetURL = destinationURL
+                } catch {
+                    if isSecurityScoped {
+                        targetURL.stopAccessingSecurityScopedResource()
+                        self.securityScopedURL = nil
+                    }
+                    print("Failed to import video into the app: \(error.localizedDescription)")
+                    return
                 }
-                print("Failed to import video into the app: \(error.localizedDescription)")
-                return
             }
         }
 
@@ -995,7 +1004,7 @@ final class VTPlayerViewModel {
         self.videoURL = targetURL
         self.setupPlayer(with: targetURL)
     }
-    
+
     func openRecentVideo(_ url: URL) {
         #if os(macOS)
         let resolvedURL = resolveSecurityScopedBookmark(for: url)
