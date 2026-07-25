@@ -36,6 +36,7 @@ private struct IOSMoreApp: Identifiable {
 private struct IOSMoreAppsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
 
     private let primaryTextColor = Color(uiColor: .label)
     private let secondaryTextColor = Color(uiColor: .secondaryLabel)
@@ -107,7 +108,10 @@ private struct IOSMoreAppsSheet: View {
 
     @ViewBuilder
     private func appIcon(for app: IOSMoreApp) -> some View {
-        if let image = UIImage(named: app.iconName) {
+        let iconName = colorScheme == .dark
+            ? app.iconName.replacingOccurrences(of: "_Default", with: "_Dark")
+            : app.iconName
+        if let image = UIImage(named: iconName) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
@@ -616,7 +620,10 @@ extension VTPlayerView {
 
     @ViewBuilder
     private var aboutAppIcon: some View {
-        if let icon = viewModel.appIcon {
+        let icon = colorScheme == .dark
+            ? UIImage(named: "VTPlayerIcon_Dark").map(Image.init(uiImage:))
+            : viewModel.appIcon
+        if let icon {
             icon
                 .resizable()
                 .aspectRatio(contentMode: .fit)

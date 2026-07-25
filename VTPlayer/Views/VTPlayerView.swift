@@ -118,6 +118,7 @@ struct VTPlayerView: View {
     @State var showPlaybackSpeedPopover = false
     @State var showVolumePopover = false
     @State var isAboutCardExpanded = false
+    @Environment(\.colorScheme) var colorScheme
     #if os(iOS)
     @State var showMoreAppsSheet = false
     @State var showAcknowledgementSheet = false

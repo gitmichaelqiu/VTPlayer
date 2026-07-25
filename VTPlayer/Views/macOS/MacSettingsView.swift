@@ -488,6 +488,7 @@ struct AboutSettingsTab: View {
                     VStack(spacing: 12) {
                         OtherAppRow(
                             imageName: "DesktopRenamerIcon_Default",
+                            darkImageName: "DesktopRenamerIcon_Dark",
                             appName: "DesktopRenamer",
                             description: "The essential tool for naming and organizing your desktop spaces.",
                             url: "https://desktoprenamer.mqiu.dev"
@@ -495,6 +496,7 @@ struct AboutSettingsTab: View {
 
                         OtherAppRow(
                             imageName: "OptClickerIcon_Default",
+                            darkImageName: "OptClickerIcon_Dark",
                             appName: "OptClicker",
                             description: "Let you right-click with the Option key.",
                             url: "https://optclicker.mqiu.dev"
@@ -502,6 +504,7 @@ struct AboutSettingsTab: View {
 
                         OtherAppRow(
                             imageName: "SpaceSwitcherIcon_Default",
+                            darkImageName: "SpaceSwitcherIcon_Dark",
                             appName: "SpaceSwitcher",
                             description: "Control which app and dock to show in each space.",
                             url: "https://spaceswitcher.mqiu.dev"
@@ -610,17 +613,20 @@ struct AboutButtonRow: View {
 
 struct OtherAppRow: View {
     let imageName: String
+    let darkImageName: String
     let appName: String
     let description: String
     let url: String
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
 
     var body: some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 16) {
                 ZStack {
-                    if let nsImage = NSImage(named: imageName) {
+                    let selectedImageName = colorScheme == .dark ? darkImageName : imageName
+                    if let nsImage = NSImage(named: selectedImageName) {
                         Image(nsImage: nsImage)
                             .resizable()
                             .aspectRatio(contentMode: .fit)

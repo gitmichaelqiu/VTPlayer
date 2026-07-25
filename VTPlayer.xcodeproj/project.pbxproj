@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		46CADF293014388F0081BCD5 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = 46CADF283014388F0081BCD5 /* Sparkle */; };
+		9F99D8700000000000000001 /* VTPlayerIcon_Dark.png in Resources */ = {isa = PBXBuildFile; fileRef = 9F99D8710000000000000001 /* VTPlayerIcon_Dark.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		4668B15A2FE2CEDA002FF95C /* VTPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VTPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F99D8710000000000000001 /* VTPlayerIcon_Dark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = VTPlayerIcon_Dark.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -38,6 +40,7 @@
 			isa = PBXGroup;
 			children = (
 				4668B15C2FE2CEDA002FF95C /* VTPlayer */,
+				9F99D8710000000000000001 /* VTPlayerIcon_Dark.png */,
 				4668B15B2FE2CEDA002FF95C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -118,6 +121,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9F99D8700000000000000001 /* VTPlayerIcon_Dark.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
