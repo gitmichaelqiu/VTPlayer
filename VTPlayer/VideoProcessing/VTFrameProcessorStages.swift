@@ -165,10 +165,6 @@ extension VTFrameProcessorCoordinator {
 
         #if os(macOS)
         let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
-        #else
-        let isCombined = false
-        #endif
-
         if isCombined {
             // Combined 2x spatial + 2x temporal
             var buf1: CVPixelBuffer?
@@ -209,65 +205,66 @@ extension VTFrameProcessorCoordinator {
                 VTFrame(buffer: outBuf1, presentationTimeStamp: midPTS, isInterpolated: true),
                 VTFrame(buffer: outBuf2, presentationTimeStamp: sourcePTS, isInterpolated: frame.isInterpolated)
             ]
-        } else {
-            // Pure temporal interpolation
-            let numInterpolated = frameInterpolationLevel == 4 ? 3 : 1
-
-            var destBufs: [CVPixelBuffer] = []
-            for _ in 0..<numInterpolated {
-                var buf: CVPixelBuffer?
-                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf) == kCVReturnSuccess,
-                      let b = buf else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                        userInfo: [NSLocalizedDescriptionKey: "FI pool allocation failed"])
-                }
-                destBufs.append(b)
-            }
-
-            let diff = CMTimeSubtract(sourcePTS, prevSourceFP.presentationTimeStamp)
-            var phases: [Float] = []
-            var interpPTSList: [CMTime] = []
-            if numInterpolated == 3 {
-                phases = [0.25, 0.5, 0.75]
-                for m in [0.25, 0.5, 0.75] {
-                    interpPTSList.append(CMTimeAdd(prevSourceFP.presentationTimeStamp,
-                        CMTimeMultiplyByFloat64(diff, multiplier: m)))
-                }
-            } else {
-                phases = [0.5]
-                interpPTSList.append(CMTimeAdd(prevSourceFP.presentationTimeStamp,
-                    CMTimeMultiplyByFloat64(diff, multiplier: 0.5)))
-            }
-
-            let destFrames = destBufs.enumerated().compactMap { (i, buf) in
-                VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: interpPTSList[i])
-            }
-            guard destFrames.count == numInterpolated else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
-            }
-            guard let params = VTLowLatencyFrameInterpolationParameters(
-                sourceFrame: sourceFP,
-                previousFrame: prevSourceFP,
-                interpolationPhase: phases,
-                destinationFrames: destFrames
-            ) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create low-latency FI params"])
-            }
-            _ = try await instance.processor.process(parameters: params)
-
-            var outputFrames: [VTFrame] = []
-            for (i, buf) in destBufs.enumerated() {
-                outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i], isInterpolated: true))
-            }
-            // Low-latency FI outputs only the requested in-between phases.
-            // The current source frame completes the 2x/4x presentation cadence.
-            outputFrames.append(frame)
-
-
-            return outputFrames
         }
+        #endif
+
+        // Pure temporal interpolation
+        let numInterpolated = frameInterpolationLevel == 4 ? 3 : 1
+
+        var destBufs: [CVPixelBuffer] = []
+        for _ in 0..<numInterpolated {
+            var buf: CVPixelBuffer?
+            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf) == kCVReturnSuccess,
+                  let b = buf else {
+                throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                    userInfo: [NSLocalizedDescriptionKey: "FI pool allocation failed"])
+            }
+            destBufs.append(b)
+        }
+
+        let diff = CMTimeSubtract(sourcePTS, prevSourceFP.presentationTimeStamp)
+        var phases: [Float] = []
+        var interpPTSList: [CMTime] = []
+        if numInterpolated == 3 {
+            phases = [0.25, 0.5, 0.75]
+            for m in [0.25, 0.5, 0.75] {
+                interpPTSList.append(CMTimeAdd(prevSourceFP.presentationTimeStamp,
+                    CMTimeMultiplyByFloat64(diff, multiplier: m)))
+            }
+        } else {
+            phases = [0.5]
+            interpPTSList.append(CMTimeAdd(prevSourceFP.presentationTimeStamp,
+                CMTimeMultiplyByFloat64(diff, multiplier: 0.5)))
+        }
+
+        let destFrames = destBufs.enumerated().compactMap { (i, buf) in
+            VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: interpPTSList[i])
+        }
+        guard destFrames.count == numInterpolated else {
+            throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
+        }
+        guard let params = VTLowLatencyFrameInterpolationParameters(
+            sourceFrame: sourceFP,
+            previousFrame: prevSourceFP,
+            interpolationPhase: phases,
+            destinationFrames: destFrames
+        ) else {
+            throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to create low-latency FI params"])
+        }
+        _ = try await instance.processor.process(parameters: params)
+
+        var outputFrames: [VTFrame] = []
+        for (i, buf) in destBufs.enumerated() {
+            outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i], isInterpolated: true))
+        }
+        // Low-latency FI outputs only the requested in-between phases.
+        // The current source frame completes the 2x/4x presentation cadence.
+        outputFrames.append(frame)
+
+
+        return outputFrames
     }
 
     func processSpatial(instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {
