@@ -354,6 +354,7 @@ extension VTPlayerViewModel {
             adaptiveSRFIHeadroomFrames = 0
             adaptiveSRFICacheStarvations = 0
             adaptiveSRFIHasPresentedFrame = false
+            adaptiveSRFILastTransition = .now()
         }
         guard !tiers.isEmpty else { return nil }
         adaptiveSRFITierIndex = min(adaptiveSRFITierIndex, tiers.count - 1)

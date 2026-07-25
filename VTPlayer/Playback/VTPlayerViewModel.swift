@@ -526,7 +526,7 @@ final class VTPlayerViewModel {
         adaptiveSRFIHeadroomFrames = 0
         adaptiveSRFICacheStarvations = 0
         adaptiveSRFIHasPresentedFrame = false
-        adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
+        adaptiveSRFILastTransition = .now()
         let asset = AVURLAsset(url: url)
         let setupGeneration = playbackGeneration
         
