@@ -734,19 +734,19 @@ extension VTPlayerView {
         // causes the player overlay to jump upward abruptly.
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isPlayerTabBarHidden = false
-                    }
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .accessibilityLabel("Exit player")
-            }
-
             if viewModel.showControls {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isPlayerTabBarHidden = false
+                        }
+                        viewModel.videoURL = nil
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .accessibilityLabel("Exit player")
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showSettingsSheet = true
