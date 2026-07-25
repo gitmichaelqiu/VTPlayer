@@ -35,6 +35,7 @@ private struct IOSMoreApp: Identifiable {
 
 private struct IOSMoreAppsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     private let apps = [
         IOSMoreApp(id: "desktoprenamer", name: "DesktopRenamer", description: "Rename and organize your desktop spaces.", url: URL(string: "https://desktoprenamer.mqiu.dev")!, iconName: "DesktopRenamerIcon_Default"),
@@ -46,12 +47,14 @@ private struct IOSMoreAppsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("More tools for Apple platforms.")
+                    Text("More apps for Apple platforms")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     ForEach(apps) { app in
-                        Link(destination: app.url) {
+                        Button {
+                            openURL(app.url)
+                        } label: {
                             HStack(spacing: 14) {
                                 appIcon(for: app)
 
@@ -72,14 +75,21 @@ private struct IOSMoreAppsSheet: View {
                             }
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .foregroundStyle(.primary)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                            }
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("More Apps")
+            .scrollIndicators(.hidden)
+            .navigationTitle("More apps")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -443,9 +453,15 @@ extension VTPlayerView {
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
                             aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
                             aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
-                            aboutActionRow(title: "Explore More Apps", systemImage: "square.grid.2x2") {
+                            Button {
                                 showMoreAppsSheet = true
+                            } label: {
+                                Label("Explore more apps", systemImage: "square.grid.2x2")
+                                    .frame(maxWidth: .infinity)
                             }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+
                             aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text") {
                                 showAcknowledgementSheet = true
                             }
