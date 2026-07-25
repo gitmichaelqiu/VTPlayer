@@ -294,6 +294,7 @@ extension VTPlayerView {
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(.systemGroupedBackground))
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
                 let sortedVideos: [URL] = {
                     let pinnedList = viewModel.recentVideos.filter { pinnedVideos.contains($0.lastPathComponent) }
@@ -344,8 +345,10 @@ extension VTPlayerView {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.recentVideos.isEmpty)
         .alert("Clear All Videos?", isPresented: $showClearAllAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {

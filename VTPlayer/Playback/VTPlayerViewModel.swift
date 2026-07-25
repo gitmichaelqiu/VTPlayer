@@ -920,7 +920,9 @@ final class VTPlayerViewModel {
         #if os(macOS)
         NSDocumentController.shared.clearRecentDocuments(nil)
         #endif
-        self.recentVideos.removeAll()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            self.recentVideos.removeAll()
+        }
         UserDefaults.standard.removeObject(forKey: "VTRecentVideosMac")
         UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
         UserDefaults.standard.removeObject(forKey: "VTRecentVideosDatesMac")

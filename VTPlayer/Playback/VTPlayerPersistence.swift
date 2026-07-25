@@ -234,7 +234,9 @@ extension VTPlayerViewModel {
                 deleteTempFile(for: recentVideos[idx])
             }
         }
-        self.recentVideos.remove(atOffsets: indexSet)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            self.recentVideos.remove(atOffsets: indexSet)
+        }
         saveRecentVideosIOS()
         removeRecentDateEntries(for: removedURLs)
 
@@ -254,7 +256,9 @@ extension VTPlayerViewModel {
         for url in recentVideos {
             deleteTempFile(for: url)
         }
-        self.recentVideos.removeAll()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            self.recentVideos.removeAll()
+        }
         clearPersistedVideoHistory()
     }
 
