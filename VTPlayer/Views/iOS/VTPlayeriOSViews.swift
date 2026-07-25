@@ -453,19 +453,19 @@ extension VTPlayerView {
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
                             aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
                             aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
-                            aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text") {
+                            aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text", verticalPadding: 12) {
                                 showAcknowledgementSheet = true
                             }
 
                             Button {
                                 showMoreAppsSheet = true
                             } label: {
-                                Label("Explore more apps", systemImage: "square.grid.2x2")
+                                Text("Explore more apps")
                                     .font(.subheadline.weight(.medium))
                                     .foregroundStyle(.primary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
-                                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                                             .stroke(Color.primary.opacity(0.1), lineWidth: 1)
@@ -645,7 +645,7 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    private func aboutActionRow(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func aboutActionRow(title: String, systemImage: String, verticalPadding: CGFloat = 8, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
@@ -662,7 +662,7 @@ extension VTPlayerView {
                     .foregroundStyle(.secondary)
             }
             .font(.subheadline)
-            .padding(.vertical, 8)
+            .padding(.vertical, verticalPadding)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
