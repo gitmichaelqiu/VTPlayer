@@ -118,6 +118,10 @@ struct VTPlayerView: View {
     @State var showPlaybackSpeedPopover = false
     @State var showVolumePopover = false
     @State var isAboutCardExpanded = false
+    #if os(iOS)
+    @State var showMoreAppsSheet = false
+    @State var showAcknowledgementSheet = false
+    #endif
     @Environment(\.dismiss) var dismiss
     
     enum SortOption: String, CaseIterable, Identifiable {
