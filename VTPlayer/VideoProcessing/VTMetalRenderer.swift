@@ -188,13 +188,12 @@ public final class VTMetalRenderer: MTKView {
             }
             #endif
         } else {
-            // Keep the drawable's transfer function aligned with the SDR
-            // color space used by Core Image below. An untagged linear BGRA
-            // layer can display the same sRGB values with excessive chroma on
-            // wide-gamut displays.
-            colorPixelFormat = .bgra8Unorm_srgb
-            metalLayer.pixelFormat = .bgra8Unorm_srgb
-            metalLayer.colorspace = standardDisplayColorSpace
+            // Preserve the renderer's untagged SDR drawable configuration.
+            // The Core Image presentation color space is selected at render
+            // time, while the drawable remains in its native BGRA format.
+            colorPixelFormat = .bgra8Unorm
+            metalLayer.pixelFormat = .bgra8Unorm
+            metalLayer.colorspace = nil
             metalLayer.wantsExtendedDynamicRangeContent = false
             #if os(iOS)
             if #available(iOS 26.0, *) {
