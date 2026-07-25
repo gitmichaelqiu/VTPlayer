@@ -129,7 +129,6 @@ extension VTPlayerViewModel {
         var digest = SHA256()
         while true {
             guard let chunk = try? handle.read(upToCount: 1024 * 1024),
-                  let chunk,
                   !chunk.isEmpty else {
                 break
             }
