@@ -18,7 +18,7 @@
 		A1B2C3D4E5F60718293A4B5C /* Exceptions for "VTPlayer" folder in "VTPlayer" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				Info-macOS.plist,
 			);
 			target = 4668B1592FE2CEDA002FF95C /* VTPlayer */;
 		};
@@ -281,10 +281,11 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = VTPlayer/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				"INFOPLIST_FILE[sdk=macosx*]" = VTPlayer/Info-macOS.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -329,10 +330,11 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = VTPlayer/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				"INFOPLIST_FILE[sdk=macosx*]" = VTPlayer/Info-macOS.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
