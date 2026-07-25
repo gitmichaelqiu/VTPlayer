@@ -9,6 +9,11 @@ import ImageIO
 #if os(iOS)
 final class CustomAVPlayerViewController: AVPlayerViewController {
     var onControlsVisibilityChange: ((Bool) -> Void)?
+    var shouldHideNavigationBar = false {
+        didSet {
+            updateNavigationBarVisibility(animated: true)
+        }
+    }
     var isPipelineActive = false {
         didSet {
             applyPipelinePresentationIfNeeded()
@@ -20,7 +25,7 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         startTimer()
-        setNavigationBarHidden(false, animated: false)
+        updateNavigationBarVisibility(animated: false)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -76,13 +81,15 @@ final class CustomAVPlayerViewController: AVPlayerViewController {
             if visible != lastKnownVisibility {
                 lastKnownVisibility = visible
                 onControlsVisibilityChange?(visible)
-                setNavigationBarHidden(!visible, animated: true)
             }
         } else if !lastKnownVisibility {
             lastKnownVisibility = true
             onControlsVisibilityChange?(true)
-            setNavigationBarHidden(false, animated: true)
         }
+    }
+
+    private func updateNavigationBarVisibility(animated: Bool) {
+        setNavigationBarHidden(shouldHideNavigationBar, animated: animated)
     }
 
     private func setNavigationBarHidden(_ hidden: Bool, animated: Bool) {
@@ -163,12 +170,14 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
     let player: AVPlayer
     let title: String
     let isPipelineActive: Bool
+    let shouldHideNavigationBar: Bool
     @Binding var showControls: Bool
 
     func makeUIViewController(context: Context) -> CustomAVPlayerViewController {
         let controller = CustomAVPlayerViewController()
         controller.player = player
         controller.isPipelineActive = isPipelineActive
+        controller.shouldHideNavigationBar = shouldHideNavigationBar
         controller.showsPlaybackControls = true
         applyTitle(to: player.currentItem)
         controller.onControlsVisibilityChange = { visible in
@@ -183,6 +192,7 @@ struct NativeVideoPlayer: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: CustomAVPlayerViewController, context: Context) {
         controller.isPipelineActive = isPipelineActive
+        controller.shouldHideNavigationBar = shouldHideNavigationBar
         if let item = player.currentItem, item.externalMetadata.isEmpty { applyTitle(to: item) }
     }
 

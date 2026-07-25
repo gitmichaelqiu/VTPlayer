@@ -711,6 +711,7 @@ extension VTPlayerView {
                     player: player,
                     title: displayTitle,
                     isPipelineActive: viewModel.isPipelineActive,
+                    shouldHideNavigationBar: viewModel.isPlaying && !viewModel.isPaused,
                     showControls: $viewModel.showControls
                 )
                 .ignoresSafeArea()
