@@ -13,7 +13,7 @@ private struct AnimatedIOSSettingValue: View {
 
     var body: some View {
         Text(displayedText)
-            .font(.caption.monospacedDigit())
+            .font(.body.monospacedDigit())
             .foregroundStyle(.secondary)
             .contentTransition(.numericText())
             .onChange(of: text) { _, newText in
@@ -23,6 +23,7 @@ private struct AnimatedIOSSettingValue: View {
             }
     }
 }
+
 import VideoToolbox
 #if canImport(UIKit)
 import UIKit
@@ -293,44 +294,55 @@ extension VTPlayerView {
         List {
             // App Identity Header section (Apple left-oriented HIG style)
             Section {
-                HStack(spacing: 16) {
-                    if let icon = viewModel.appIcon {
-                        icon
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 60, height: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                            )
-                            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                    } else {
-                        Image(systemName: "cpu.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.blue)
-                            .frame(width: 60, height: 60)
-                            .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
+                DisclosureGroup(isExpanded: $isAboutCardExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Divider()
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("VTPlayer")
-                            .font(.headline)
-                            .bold()
-                        Text("Hardware-Accelerated AI Enhancer")
-                            .font(.subheadline)
+                        Text("Made by Michael Qiu.")
+                            .font(.subheadline.weight(.medium))
+
+                        Text("A real-time video enhancer using hardware acceleration.")
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
-                        Text("Version 1.0")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        VStack(spacing: 0) {
+                            aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
+                            aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
+                            aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
+                            aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, -20)
+                    .padding(.top, -15)
+                } label: {
+                    HStack(alignment: .center, spacing: 16) {
+                        aboutAppIcon
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("VTPlayer")
+                                .font(.headline)
+                                .bold()
+                            Text("Sharper. Smoother. Better.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(appVersionLabel)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(1)
+                    }
+                    .frame(minHeight: 60, alignment: .center)
                 }
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
+                .listRowSeparator(.hidden)
             }
             
             // Default Playback Settings Section
-            Section("Default Playback Configuration") {
+            Section("Defaults") {
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
                     Text("2x Interpolation").tag(2)
@@ -399,27 +411,75 @@ extension VTPlayerView {
             .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
             
             // Gallery Configuration Section
-            Section("Gallery Configuration") {
+            Section("Display") {
                 Toggle("Show File Extensions", isOn: $showFileExtensions)
             }
-
-            // Copyright Row
-            Section {
-                HStack {
-                    Spacer()
-                    Text("Copyright © 2026 Michael Qiu. All rights reserved.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }
-            .listRowBackground(Color.clear)
         }
         .listStyle(.insetGrouped)
         .navigationTitle("About")
         .onAppear {
             viewModel.checkGlobalModelStatus()
         }
+    }
+
+    @ViewBuilder
+    private var aboutAppIcon: some View {
+        if let icon = viewModel.appIcon {
+            icon
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        } else {
+            Image(systemName: "cpu.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(.blue)
+                .frame(width: 60, height: 60)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private var appVersionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        return "Version \(version)"
+    }
+
+    @ViewBuilder
+    private func aboutLinkRow(title: String, systemImage: String, url: String) -> some View {
+        Button {
+            openExternalURL(url)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .frame(width: 20)
+                    .foregroundStyle(.secondary)
+
+                Text(title)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openExternalURL(_ string: String) {
+        guard let url = URL(string: string), UIApplication.shared.canOpenURL(url) else { return }
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
     #endif
 

@@ -235,6 +235,8 @@ struct MacSettingsView: View {
 struct GeneralSettingsTab: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     @AppStorage("VTAlwaysDarkOnPlayback") private var alwaysDarkOnPlayback = false
+    @State private var automaticallyChecksForUpdates = false
+    @State private var automaticallyDownloadsUpdates = false
 
     var body: some View {
         SettingsContainer(.general) {
@@ -260,8 +262,62 @@ struct GeneralSettingsTab: View {
                             .labelsHidden()
                     }
                 }
+
+                SettingsSection("Updates") {
+                    SettingsRow(
+                        "Automatically check for updates",
+                        helperText: "Check for new VTPlayer releases automatically."
+                    ) {
+                        Toggle("", isOn: $automaticallyChecksForUpdates)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .disabled(!VTPlayerUpdater.shared.isConfigured)
+                            .onChange(of: automaticallyChecksForUpdates) { _, value in
+                                VTPlayerUpdater.shared.automaticallyChecksForUpdates = value
+                            }
+                    }
+
+                    if automaticallyChecksForUpdates {
+                        VStack(spacing: 0) {
+                            Divider()
+
+                            SettingsRow(
+                                "Automatically download updates",
+                                helperText: "Download new updates in the background when they are available."
+                            ) {
+                                Toggle("", isOn: $automaticallyDownloadsUpdates)
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                                    .disabled(!VTPlayerUpdater.shared.isConfigured)
+                                    .onChange(of: automaticallyDownloadsUpdates) { _, value in
+                                        VTPlayerUpdater.shared.automaticallyDownloadsUpdates = value
+                                    }
+                            }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    Divider()
+
+                    SettingsRow(
+                        "Check for updates",
+                        helperText: VTPlayerUpdater.shared.isConfigured
+                            ? "Check for a new VTPlayer release now."
+                            : "Update checking will be available once Sparkle is configured for a release build."
+                    ) {
+                        Button("Check Now") {
+                            VTPlayerUpdater.shared.checkForUpdates()
+                        }
+                        .disabled(!VTPlayerUpdater.shared.isConfigured)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: automaticallyChecksForUpdates)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onAppear {
+                automaticallyChecksForUpdates = VTPlayerUpdater.shared.automaticallyChecksForUpdates
+                automaticallyDownloadsUpdates = VTPlayerUpdater.shared.automaticallyDownloadsUpdates
+            }
         }
     }
 }
@@ -423,15 +479,66 @@ struct AboutSettingsTab: View {
                     }
                 }
                 .id("GitHub / Support")
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("More Apps")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    VStack(spacing: 12) {
+                        OtherAppRow(
+                            imageName: "DesktopRenamerIcon_Default",
+                            appName: "DesktopRenamer",
+                            description: "The essential tool for naming and organizing your desktop spaces.",
+                            url: "https://desktoprenamer.mqiu.dev"
+                        )
+
+                        OtherAppRow(
+                            imageName: "OptClickerIcon_Default",
+                            appName: "OptClicker",
+                            description: "Let you right-click with the Option key.",
+                            url: "https://optclicker.mqiu.dev"
+                        )
+
+                        OtherAppRow(
+                            imageName: "SpaceSwitcherIcon_Default",
+                            appName: "SpaceSwitcher",
+                            description: "Control which app and dock to show in each space.",
+                            url: "https://spaceswitcher.mqiu.dev"
+                        )
+                    }
+                }
+                .id("More Apps")
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Acknowledgements")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    AboutButtonRow(title: "Acknowledgement.pdf", action: openAcknowledgements)
+                }
+                .id("Acknowledgements")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear {
-            navigationState.register(title: "GitHub / Support", tab: .about, keywords: ["github", "website", "developer", "contact", "support"])
+            navigationState.register(
+                title: "GitHub / Support",
+                tab: .about,
+                keywords: ["github", "website", "developer", "contact", "support", "apps", "acknowledgements"]
+            )
         }
         .onDisappear {
             navigationState.unregister(title: "GitHub / Support", tab: .about)
         }
+    }
+
+    private func openAcknowledgements() {
+        guard let url = Bundle.main.url(forResource: "Acknowledgement", withExtension: "pdf") else {
+            return
+        }
+
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -457,6 +564,112 @@ struct AboutLinkRow: View {
         .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.1)) {
+                isHovering = hovering
+            }
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+}
+
+struct AboutButtonRow: View {
+    let title: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .foregroundColor(isHovering ? .accentColor : .secondary)
+                Spacer()
+                Image(systemName: "doc.fill")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isHovering = hovering
+            }
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+}
+
+struct OtherAppRow: View {
+    let imageName: String
+    let appName: String
+    let description: String
+    let url: String
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 16) {
+                ZStack {
+                    if let nsImage = NSImage(named: imageName) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 44, height: 44)
+                    } else {
+                        Image(systemName: "app.dashed")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 40, height: 40)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .shadow(color: .black.opacity(isHovering ? 0.2 : 0.1), radius: isHovering ? 6 : 2, x: 0, y: 2)
+                .scaleEffect(isHovering ? 1.05 : 1.0)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appName)
+                        .font(.custom("Syncopate-Bold", size: 17))
+                        .foregroundColor(.primary)
+
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                if isHovering {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isHovering ? Color.accentColor.opacity(0.05) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isHovering ? Color.accentColor.opacity(0.2) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
                 isHovering = hovering
             }
             if hovering {
