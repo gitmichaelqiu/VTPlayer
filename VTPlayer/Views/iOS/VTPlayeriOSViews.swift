@@ -749,42 +749,45 @@ extension VTPlayerView {
         // causes the player overlay to jump upward abruptly.
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
-            if viewModel.showControls {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        // Dismiss the navigation destination before tearing
-                        // down its native AVPlayerViewController. Stopping it
-                        // first can remove the toolbar before SwiftUI commits
-                        // the dismissal state.
-                        viewModel.player?.pause()
-                        isPlayerPresented = false
-                        IOSPlayerTabBarController.setHidden(false, animated: true)
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isPlayerTabBarHidden = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    // Change the navigation state first. Pausing before this
+                    // can cause AVPlayerViewController to rebuild the toolbar
+                    // during the same event and swallow the dismissal.
+                    isPlayerPresented = false
+                    viewModel.player?.pause()
+                    IOSPlayerTabBarController.setHidden(false, animated: true)
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isPlayerTabBarHidden = false
                     }
-                    .accessibilityLabel("Exit player")
+                } label: {
+                    Image(systemName: "chevron.left")
                 }
+                .accessibilityLabel("Exit player")
+                .opacity(viewModel.showControls ? 1 : 0)
+                .allowsHitTesting(viewModel.showControls)
+            }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showSettingsSheet = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    .labelStyle(.iconOnly)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showSettingsSheet = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
                 }
+                .labelStyle(.iconOnly)
+                .opacity(viewModel.showControls ? 1 : 0)
+                .allowsHitTesting(viewModel.showControls)
+            }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showDiagnosticsSheet = true
-                    } label: {
-                        Label("Diagnostics", systemImage: "chart.bar")
-                    }
-                    .labelStyle(.iconOnly)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showDiagnosticsSheet = true
+                } label: {
+                    Label("Diagnostics", systemImage: "chart.bar")
                 }
+                .labelStyle(.iconOnly)
+                .opacity(viewModel.showControls ? 1 : 0)
+                .allowsHitTesting(viewModel.showControls)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.showControls)
