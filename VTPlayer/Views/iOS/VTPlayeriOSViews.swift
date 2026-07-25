@@ -191,7 +191,10 @@ extension VTPlayerView {
     var iosHomeView: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                iosGalleryView
+                ZStack {
+                    iosGalleryView
+                }
+                .navigationTitle("Gallery")
                     .navigationDestination(isPresented: $isPlayerPresented) {
                         iosPlayerView
                     }
@@ -240,7 +243,6 @@ extension VTPlayerView {
                         }
                     }
             }
-            .navigationTitle("Gallery")
                 .tag(0)
                 .tabItem {
                     Label("Gallery", systemImage: "play.square.stack.fill")
@@ -748,30 +750,11 @@ extension VTPlayerView {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
         // Keep toolbar visible so the frame never collapses — collapsing
         // causes the player overlay to jump upward abruptly.
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
             if viewModel.showControls {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        // Change the navigation state first. Pausing before
-                        // this can cause AVPlayerViewController to rebuild
-                        // the toolbar during the same event and swallow the
-                        // dismissal.
-                        isPlayerPresented = false
-                        viewModel.player?.pause()
-                        IOSPlayerTabBarController.setHidden(false, animated: true)
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isPlayerTabBarHidden = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .accessibilityLabel("Exit player")
-                }
-
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showSettingsSheet = true
