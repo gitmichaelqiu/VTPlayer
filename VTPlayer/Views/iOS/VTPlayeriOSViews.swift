@@ -476,6 +476,7 @@ extension VTPlayerView {
                                     }
                             }
                             .buttonStyle(.plain)
+                            .padding(.top, 12)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -581,7 +582,6 @@ extension VTPlayerView {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("About")
         .sheet(isPresented: $showMoreAppsSheet) {
             IOSMoreAppsSheet()
         }
