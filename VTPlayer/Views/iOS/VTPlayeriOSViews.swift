@@ -453,18 +453,25 @@ extension VTPlayerView {
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
                             aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
                             aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                            aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text") {
+                                showAcknowledgementSheet = true
+                            }
+
                             Button {
                                 showMoreAppsSheet = true
                             } label: {
                                 Label("Explore more apps", systemImage: "square.grid.2x2")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.primary)
                                     .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                    }
                             }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.regular)
-
-                            aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text") {
-                                showAcknowledgementSheet = true
-                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
