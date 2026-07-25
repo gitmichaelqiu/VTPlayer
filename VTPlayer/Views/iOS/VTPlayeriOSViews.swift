@@ -24,10 +24,142 @@ private struct AnimatedIOSSettingValue: View {
     }
 }
 
+#if os(iOS)
+private struct IOSMoreApp: Identifiable {
+    let id: String
+    let name: String
+    let description: String
+    let url: URL
+    let iconName: String
+}
+
+private struct IOSMoreAppsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private let apps = [
+        IOSMoreApp(id: "desktoprenamer", name: "DesktopRenamer", description: "Rename and organize your desktop spaces.", url: URL(string: "https://desktoprenamer.mqiu.dev")!, iconName: "DesktopRenamerIcon_Default"),
+        IOSMoreApp(id: "optclicker", name: "OptClicker", description: "Right-click with the Option key.", url: URL(string: "https://optclicker.mqiu.dev")!, iconName: "OptClickerIcon_Default"),
+        IOSMoreApp(id: "spaceswitcher", name: "SpaceSwitcher", description: "Control apps and docks across spaces.", url: URL(string: "https://spaceswitcher.mqiu.dev")!, iconName: "SpaceSwitcherIcon_Default")
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("More tools for Apple platforms.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(apps) { app in
+                        Link(destination: app.url) {
+                            HStack(spacing: 14) {
+                                appIcon(for: app)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(app.name)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text(app.description)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Spacer(minLength: 4)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("More Apps")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private func appIcon(for app: IOSMoreApp) -> some View {
+        if let image = UIImage(named: app.iconName) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        } else {
+            Image(systemName: "app.dashed")
+                .font(.system(size: 30))
+                .foregroundStyle(.secondary)
+                .frame(width: 56, height: 56)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+    }
+}
+
+private struct IOSAcknowledgementSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let url = Bundle.main.url(forResource: "Acknowledgement", withExtension: "pdf") {
+                    IOSPDFView(url: url)
+                } else {
+                    ContentUnavailableView("Acknowledgement Unavailable", systemImage: "doc.badge.ellipsis")
+                }
+            }
+            .navigationTitle("Acknowledgements")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct IOSPDFView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.displayDirection = .vertical
+        view.backgroundColor = .systemGroupedBackground
+        view.document = PDFDocument(url: url)
+        return view
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {
+        if view.document?.documentURL != url {
+            view.document = PDFDocument(url: url)
+        }
+    }
+}
+#endif
+
 import VideoToolbox
 #if canImport(UIKit)
 import UIKit
 import QuartzCore
+#endif
+#if os(iOS)
+import PDFKit
 #endif
 #if canImport(PhotosUI)
 import PhotosUI
@@ -311,6 +443,12 @@ extension VTPlayerView {
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
                             aboutLinkRow(title: "My website", systemImage: "globe", url: "https://mqiu.dev")
                             aboutLinkRow(title: "My GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")
+                            aboutActionRow(title: "Explore More Apps", systemImage: "square.grid.2x2") {
+                                showMoreAppsSheet = true
+                            }
+                            aboutActionRow(title: "Acknowledgement.pdf", systemImage: "doc.text") {
+                                showAcknowledgementSheet = true
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -417,6 +555,12 @@ extension VTPlayerView {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("About")
+        .sheet(isPresented: $showMoreAppsSheet) {
+            IOSMoreAppsSheet()
+        }
+        .sheet(isPresented: $showAcknowledgementSheet) {
+            IOSAcknowledgementSheet()
+        }
         .onAppear {
             viewModel.checkGlobalModelStatus()
         }
@@ -467,6 +611,30 @@ extension VTPlayerView {
                 Spacer()
 
                 Image(systemName: "arrow.up.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func aboutActionRow(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .frame(width: 20)
+                    .foregroundStyle(.secondary)
+
+                Text(title)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
