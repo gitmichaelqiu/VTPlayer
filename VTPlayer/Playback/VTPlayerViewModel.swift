@@ -117,49 +117,6 @@ final class VTPlayerViewModel {
     /// Set only after the combined LL2 SR/FI processor rejects this video.
     @ObservationIgnored var useSequentialSRFIFallback = false
 
-    #if os(iOS)
-    func iosSecurityScopedBookmarkKey(for url: URL) -> String {
-        "VTSecurityScopedBookmarkIOS.\(url.standardizedFileURL.absoluteString)"
-    }
-
-    private func saveIOSSecurityScopedBookmark(for url: URL) {
-        guard url.isFileURL else { return }
-        do {
-            let bookmark = try url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
-            UserDefaults.standard.set(bookmark, forKey: iosSecurityScopedBookmarkKey(for: url))
-        } catch {
-            print("Failed to save iOS security-scoped bookmark: \(error.localizedDescription)")
-        }
-    }
-
-    private func resolveIOSSecurityScopedBookmark(for url: URL) -> URL {
-        guard let bookmark = UserDefaults.standard.data(forKey: iosSecurityScopedBookmarkKey(for: url)) else {
-            return url
-        }
-
-        var isStale = false
-        do {
-            let resolved = try URL(
-                resolvingBookmarkData: bookmark,
-                options: [.withSecurityScope, .withoutUI],
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            if isStale {
-                UserDefaults.standard.removeObject(forKey: iosSecurityScopedBookmarkKey(for: url))
-            }
-            return resolved
-        } catch {
-            print("Failed to resolve iOS security-scoped bookmark: \(error.localizedDescription)")
-            return url
-        }
-    }
-    #endif
-    
     // Detailed SR Diagnostics
     var srIsSupported: Bool = false
     var srSupportedScales: String = "None"
@@ -1007,10 +964,6 @@ final class VTPlayerViewModel {
         #if os(iOS)
         // Keep the source URL so the Gallery retains the original filename
         // and the app does not create a second copy of the video.
-        if isSecurityScoped {
-            saveIOSSecurityScopedBookmark(for: targetURL)
-        }
-
         self.addToRecentVideosIOS(targetURL)
         #endif
         
@@ -1044,11 +997,10 @@ final class VTPlayerViewModel {
         openVideo(resolvedURL)
         return
         #elseif os(iOS)
-        let resolvedURL = resolveIOSSecurityScopedBookmark(for: url)
-        let hasScope = resolvedURL.startAccessingSecurityScopedResource()
-        let isReadable = FileManager.default.isReadableFile(atPath: resolvedURL.path)
+        let hasScope = url.startAccessingSecurityScopedResource()
+        let isReadable = FileManager.default.isReadableFile(atPath: url.path)
         if hasScope {
-            resolvedURL.stopAccessingSecurityScopedResource()
+            url.stopAccessingSecurityScopedResource()
         }
 
         guard isReadable else {
@@ -1057,7 +1009,7 @@ final class VTPlayerViewModel {
             }
             return
         }
-        openVideo(resolvedURL)
+        openVideo(url)
         #else
         self.openVideo(url)
         #endif
