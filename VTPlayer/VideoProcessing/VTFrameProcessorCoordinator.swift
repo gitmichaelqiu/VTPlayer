@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import VideoToolbox
+@preconcurrency import VideoToolbox
 import CoreMedia
-import CoreVideo
+@preconcurrency import CoreVideo
 
 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
 

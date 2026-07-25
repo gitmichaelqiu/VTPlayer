@@ -265,19 +265,17 @@ final class VTPlayerViewModel {
         ]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        Task { [weak self] in
             let asset = AVURLAsset(url: url)
-            let image = VideoPreviewGenerator.image(for: asset, maximumSize: CGSize(width: 600, height: 600))
+            let image = await VideoPreviewGenerator.image(for: asset, maximumSize: CGSize(width: 600, height: 600))
             guard let image else { return }
             let artwork = MPMediaItemArtwork(boundsSize: CGSize(width: image.width, height: image.height)) { _ in
                 UIImage(cgImage: image)
             }
-            DispatchQueue.main.async {
-                guard let self, self.videoURL == url else { return }
-                var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? info
-                updated[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
-            }
+            guard let self, self.videoURL == url else { return }
+            var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? info
+            updated[MPMediaItemPropertyArtwork] = artwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
         }
     }
 
@@ -694,7 +692,7 @@ final class VTPlayerViewModel {
                     let timeObserver = newPlayer.addPeriodicTimeObserver(
                         forInterval: CMTime(value: 1, timescale: 30),
                         queue: .main
-                    ) { [weak self] time in
+                    ) { [self] time in
                         let seconds = CMTimeGetSeconds(time)
                         guard seconds.isFinite else { return }
                         Task { @MainActor [weak self] in
@@ -710,7 +708,7 @@ final class VTPlayerViewModel {
                         forName: .AVPlayerItemDidPlayToEndTime,
                         object: item,
                         queue: .main
-                    ) { [weak self] _ in
+                    ) { [self] _ in
                         Task { @MainActor [weak self] in
                             guard let self else { return }
                             self.pause()
@@ -725,7 +723,7 @@ final class VTPlayerViewModel {
                         forName: .AVPlayerItemTimeJumped,
                         object: item,
                         queue: .main
-                    ) { [weak self] _ in
+                    ) { [self] _ in
                         Task { @MainActor [weak self] in
                             guard let self else { return }
                             self.handleTimeJump()
@@ -734,7 +732,7 @@ final class VTPlayerViewModel {
                     self.timeJumpedObserver = jumpObserver
                     
                     // Observe AVPlayer's timeControlStatus to sync player state with isPaused
-                    self.rateObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, change in
+                    self.rateObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [self] player, change in
                         Task { @MainActor [weak self] in
                             guard let self else { return }
                             switch player.timeControlStatus {

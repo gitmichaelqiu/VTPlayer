@@ -300,7 +300,7 @@ enum IOSPlayerTabBarController {
 enum VideoPreviewGenerator {
     private static let memoryCache = NSCache<NSString, CGImage>()
 
-    static func image(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
+    static func image(for asset: AVAsset, maximumSize: CGSize) async -> CGImage? {
         let cacheKey = cacheKey(for: asset, maximumSize: maximumSize)
         if let cached = memoryCache.object(forKey: cacheKey as NSString) {
             return cached
@@ -310,7 +310,7 @@ enum VideoPreviewGenerator {
             return cached
         }
 
-        let image = generateImage(for: asset, maximumSize: maximumSize)
+        let image = await generateImage(for: asset, maximumSize: maximumSize)
         if let image {
             memoryCache.setObject(image, forKey: cacheKey as NSString)
             saveCachedImage(image, forKey: cacheKey)
@@ -318,12 +318,13 @@ enum VideoPreviewGenerator {
         return image
     }
 
-    private static func generateImage(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
-        if let artwork = artworkImage(for: asset, maximumSize: maximumSize) {
+    private static func generateImage(for asset: AVAsset, maximumSize: CGSize) async -> CGImage? {
+        if let artwork = await artworkImage(for: asset, maximumSize: maximumSize) {
             return artwork
         }
 
-        let duration = CMTimeGetSeconds(asset.duration)
+        guard let durationTime = try? await asset.load(.duration) else { return nil }
+        let duration = CMTimeGetSeconds(durationTime)
         let durationSeconds = duration.isFinite && duration > 0 ? duration : 0
         let candidateSeconds = candidateTimes(for: durationSeconds)
         let generator = AVAssetImageGenerator(asset: asset)
@@ -336,7 +337,7 @@ enum VideoPreviewGenerator {
         var bestScore = -Double.infinity
         for seconds in candidateSeconds {
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
-            guard let image = try? generator.copyCGImage(at: time, actualTime: nil) else { continue }
+            guard let image = try? await generateImage(generator, at: time) else { continue }
             let score = visualScore(for: image)
             if score > bestScore {
                 bestScore = score
@@ -344,6 +345,25 @@ enum VideoPreviewGenerator {
             }
         }
         return bestImage
+    }
+
+    private static func generateImage(
+        _ generator: AVAssetImageGenerator,
+        at time: CMTime
+    ) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            generator.generateCGImageAsynchronously(for: time) { image, _, error in
+                if let image {
+                    continuation.resume(returning: image)
+                } else {
+                    continuation.resume(throwing: error ?? NSError(
+                        domain: "VTPlayer.VideoPreviewGenerator",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Preview image generation failed"]
+                    ))
+                }
+            }
+        }
     }
 
     private static func cacheKey(for asset: AVAsset, maximumSize: CGSize) -> String {
@@ -412,10 +432,11 @@ enum VideoPreviewGenerator {
             .sorted()
     }
 
-    private static func artworkImage(for asset: AVAsset, maximumSize: CGSize) -> CGImage? {
-        guard let item = asset.commonMetadata.first(where: {
+    private static func artworkImage(for asset: AVAsset, maximumSize: CGSize) async -> CGImage? {
+        guard let metadata = try? await asset.load(.commonMetadata),
+              let item = metadata.first(where: {
             $0.commonKey?.rawValue == "artwork" || $0.identifier?.rawValue.contains("artwork") == true
-        }), let data = item.dataValue else {
+        }), let data = try? await item.load(.dataValue) else {
             return nil
         }
 
@@ -496,7 +517,7 @@ struct VideoThumbnailView: View {
     }
 
     private func loadMetadata() {
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) { [url] in
             let hasSecurityScope = url.startAccessingSecurityScopedResource()
             defer {
                 if hasSecurityScope {
@@ -504,27 +525,27 @@ struct VideoThumbnailView: View {
                 }
             }
             let asset = AVURLAsset(url: url)
-            Task {
-                if let duration = try? await asset.load(.duration) {
+            let duration = try? await asset.load(.duration)
+            let image = await VideoPreviewGenerator.image(for: asset, maximumSize: CGSize(width: 180, height: 120))
+
+            await MainActor.run {
+                if let duration {
                     let seconds = CMTimeGetSeconds(duration)
                     if seconds.isFinite {
                         let totalSeconds = Int(seconds)
                         let hours = totalSeconds / 3600
                         let mins = (totalSeconds % 3600) / 60
                         let secs = totalSeconds % 60
-                        await MainActor.run {
-                            if hours > 0 {
-                                durationString = String(format: "%02d:%02d:%02d", hours, mins, secs)
-                            } else {
-                                durationString = String(format: "%d:%02d", mins, secs)
-                            }
+                        if hours > 0 {
+                            durationString = String(format: "%02d:%02d:%02d", hours, mins, secs)
+                        } else {
+                            durationString = String(format: "%d:%02d", mins, secs)
                         }
                     }
                 }
-            }
-            let image = VideoPreviewGenerator.image(for: asset, maximumSize: CGSize(width: 180, height: 120))
-            if let image {
-                DispatchQueue.main.async { thumbnail = Image(decorative: image, scale: 1) }
+                if let image {
+                    thumbnail = Image(decorative: image, scale: 1)
+                }
             }
         }
     }
