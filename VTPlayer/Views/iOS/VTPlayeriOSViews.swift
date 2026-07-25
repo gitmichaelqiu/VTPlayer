@@ -186,68 +186,78 @@ extension VTPlayerView {
     @ViewBuilder
     var iosHomeView: some View {
         TabView(selection: $selectedTab) {
-            iosGalleryView
+            NavigationStack {
+                iosGalleryView
+                    .navigationTitle("Gallery")
+                    .navigationDestination(isPresented: Binding(
+                        get: { viewModel.videoURL != nil },
+                        set: { show in
+                            if !show {
+                                viewModel.stop()
+                                viewModel.videoURL = nil
+                            }
+                        }
+                    )) {
+                        iosPlayerView
+                    }
+                    .toolbar {
+                        ToolbarItemGroup(placement: .navigationBarTrailing) {
+                            if !viewModel.recentVideos.isEmpty {
+                                Button(action: { showClearAllAlert = true }) {
+                                    Image(systemName: "trash")
+                                        .foregroundStyle(.red)
+                                }
+
+                                Menu {
+                                    Picker("Sort By", selection: Binding(
+                                        get: { sortBy },
+                                        set: { newValue in
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                                sortBy = newValue
+                                            }
+                                        }
+                                    )) {
+                                        Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
+                                        Label("Date Opened", systemImage: "clock.arrow.circlepath").tag(SortOption.dateOpened)
+                                        Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
+                                    }
+                                } label: {
+                                    Image(systemName: "arrow.up.arrow.down")
+                                }
+                            }
+
+                            Menu {
+                                Button(action: { showFileImporter = true }) {
+                                    Label("Browse Files", systemImage: "folder")
+                                }
+
+                                #if canImport(PhotosUI)
+                                Button {
+                                    showPhotoPicker = true
+                                } label: {
+                                    Label("Photos Library", systemImage: "photo")
+                                }
+                                #endif
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.body.bold())
+                            }
+                        }
+                    }
+            }
                 .tag(0)
                 .tabItem {
                     Label("Gallery", systemImage: "play.square.stack.fill")
                 }
 
-            iosAboutView
-                .id(selectedTab)
+            NavigationStack {
+                iosAboutView
+                    .navigationTitle("About")
+            }
                 .tag(1)
                 .tabItem {
                     Label("About", systemImage: "info.circle.fill")
                 }
-        }
-        .navigationTitle(selectedTab == 0 ? "Gallery" : "About")
-        .toolbar {
-            if selectedTab == 0 {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    // Clear all button (only shown/enabled when list is not empty)
-                    if !viewModel.recentVideos.isEmpty {
-                        Button(action: { showClearAllAlert = true }) {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                        
-                        // Sort option menu
-                        Menu {
-                            Picker("Sort By", selection: Binding(
-                                get: { sortBy },
-                                set: { newValue in
-                                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                        sortBy = newValue
-                                    }
-                                }
-                            )) {
-                                Label("Date Added", systemImage: "calendar").tag(SortOption.dateAdded)
-                                Label("Date Opened", systemImage: "clock.arrow.circlepath").tag(SortOption.dateOpened)
-                                Label("Name", systemImage: "textformat.abc").tag(SortOption.name)
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up.arrow.down")
-                        }
-                    }
-                    
-                    // Native Plus button (aggregated selection menu)
-                    Menu {
-                        Button(action: { showFileImporter = true }) {
-                            Label("Browse Files", systemImage: "folder")
-                        }
-                        
-                        #if canImport(PhotosUI)
-                        Button {
-                            showPhotoPicker = true
-                        } label: {
-                            Label("Photos Library", systemImage: "photo")
-                        }
-                        #endif
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.body.bold())
-                    }
-                }
-            }
         }
     }
 

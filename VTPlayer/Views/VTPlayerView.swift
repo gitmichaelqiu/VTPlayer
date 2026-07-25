@@ -331,20 +331,7 @@ struct VTPlayerView: View {
     #if os(iOS)
     @ViewBuilder
     var iphoneLayout: some View {
-        NavigationStack {
-            iosHomeView
-                .navigationDestination(isPresented: Binding(
-                    get: { viewModel.videoURL != nil },
-                    set: { show in
-                        if !show {
-                            viewModel.stop()
-                            viewModel.videoURL = nil
-                        }
-                    }
-                )) {
-                    iosPlayerView
-                }
-        }
+        iosHomeView
     }
     #endif
 
