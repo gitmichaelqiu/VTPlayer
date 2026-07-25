@@ -62,6 +62,7 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
         private actor StateLock {
             private var reader: AVAssetReader?
             private var trackOutput: AVAssetReaderTrackOutput?
+            private var sourceColorAttachments: [(CFString, CFPropertyList)] = []
             private var isInitialized = false
             
             func next(url: URL, startTime: CMTime, outputSize: CGSize?) async throws -> VTFrame? {
@@ -71,6 +72,28 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     guard let videoTrack = tracks.first else {
                         isInitialized = true
                         return nil
+                    }
+
+                    // AVAssetReader does not consistently copy the color
+                    // extensions from the track format description onto each
+                    // decoded pixel buffer. Preserve them here so the first
+                    // frame of a newly-started FI pipeline is presented with
+                    // the same transfer function and matrix as native AVPlayer.
+                    if let formatDescription = try await videoTrack.load(.formatDescriptions).first {
+                        let colorKeys: [(CFString, CFString)] = [
+                            (kCVImageBufferColorPrimariesKey, kCMFormatDescriptionExtension_ColorPrimaries),
+                            (kCVImageBufferTransferFunctionKey, kCMFormatDescriptionExtension_TransferFunction),
+                            (kCVImageBufferYCbCrMatrixKey, kCMFormatDescriptionExtension_YCbCrMatrix)
+                        ]
+                        sourceColorAttachments = colorKeys.compactMap { pixelBufferKey, extensionKey in
+                            guard let value = CMFormatDescriptionGetExtension(
+                                formatDescription,
+                                extensionKey: extensionKey
+                            ) else {
+                                return nil
+                            }
+                            return (pixelBufferKey, value)
+                        }
                     }
                     
                     let reader = try AVAssetReader(asset: asset)
@@ -123,6 +146,9 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                         }
                         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
                             return nil
+                        }
+                        for (key, value) in sourceColorAttachments {
+                            CVBufferSetAttachment(pixelBuffer, key, value, .shouldPropagate)
                         }
                         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                         return VTFrame(buffer: pixelBuffer, presentationTimeStamp: pts)
