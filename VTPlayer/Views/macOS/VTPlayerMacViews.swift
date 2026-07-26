@@ -226,6 +226,22 @@ extension VTPlayerView {
                         .monospacedDigit()
                         .foregroundStyle(viewModel.displayRate1PercentLow > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
                 }
+                LabeledContent("Rendered Timeline") {
+                    if viewModel.renderedTimelineSampleDuration > 0 {
+                        Text(String(
+                            format: "%.2f× (%.0f%%)",
+                            viewModel.renderedTimelineRate,
+                            viewModel.renderedTimelineRatio * 100
+                        ))
+                        .monospacedDigit()
+                        .foregroundStyle(
+                            (0.98...1.02).contains(viewModel.renderedTimelineRatio) ? .blue : .red
+                        )
+                    } else {
+                        Text("Measuring…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 LabeledContent("Cached Frames") {
                     Text("\(viewModel.frameCacheCount)")
                         .monospacedDigit()

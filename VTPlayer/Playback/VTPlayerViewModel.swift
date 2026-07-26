@@ -108,6 +108,9 @@ final class VTPlayerViewModel {
     var frameProcessingTime: Double = 0.0
     var fps: Double = 0.0
     var displayRate1PercentLow: Double = 0.0
+    var renderedTimelineRate: Double = 0.0
+    var renderedTimelineRatio: Double = 0.0
+    var renderedTimelineSampleDuration: Double = 0.0
     var displayFrameRate: Double {
         isPipelineActive ? fps : sourceFrameRate * playbackSpeed
     }
@@ -383,6 +386,8 @@ final class VTPlayerViewModel {
     @ObservationIgnored var presentationClockLastPlayerPTS = -Double.infinity
     @ObservationIgnored var presentationClockInitialized = false
     @ObservationIgnored var lastPresentationWall = DispatchTime.now()
+    @ObservationIgnored var renderedTimelineAnchorPTS: CMTime?
+    @ObservationIgnored var renderedTimelineAnchorWall = DispatchTime.now()
 
     func resetPresentationClock(at seconds: Double) {
         guard seconds.isFinite else { return }
@@ -391,6 +396,38 @@ final class VTPlayerViewModel {
         presentationClockLastPlayerPTS = seconds
         presentationClockInitialized = true
         lastPresentationWall = .now()
+        resetRenderedTimelineMetrics()
+    }
+
+    func resetRenderedTimelineMetrics() {
+        renderedTimelineRate = 0
+        renderedTimelineRatio = 0
+        renderedTimelineSampleDuration = 0
+        renderedTimelineAnchorPTS = nil
+        renderedTimelineAnchorWall = .now()
+    }
+
+    func recordRenderedTimeline(at pts: CMTime, wallTime: DispatchTime = .now()) {
+        let seconds = CMTimeGetSeconds(pts)
+        guard seconds.isFinite else { return }
+        guard let anchorPTS = renderedTimelineAnchorPTS else {
+            renderedTimelineAnchorPTS = pts
+            renderedTimelineAnchorWall = wallTime
+            return
+        }
+
+        let wallNanoseconds = wallTime.uptimeNanoseconds >= renderedTimelineAnchorWall.uptimeNanoseconds
+            ? wallTime.uptimeNanoseconds - renderedTimelineAnchorWall.uptimeNanoseconds
+            : 0
+        let wallSeconds = Double(wallNanoseconds) / 1_000_000_000.0
+        let mediaSeconds = CMTimeGetSeconds(CMTimeSubtract(pts, anchorPTS))
+        guard mediaSeconds > 0, wallSeconds >= 1.0 else { return }
+
+        renderedTimelineRate = mediaSeconds / wallSeconds
+        renderedTimelineRatio = renderedTimelineRate / max(playbackSpeed, 0.001)
+        renderedTimelineSampleDuration = wallSeconds
+        renderedTimelineAnchorPTS = pts
+        renderedTimelineAnchorWall = wallTime
     }
 
     func presentationClockSeconds(playerSeconds: Double) -> Double {

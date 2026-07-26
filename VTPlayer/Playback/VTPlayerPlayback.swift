@@ -1026,6 +1026,7 @@ extension VTPlayerViewModel {
             }
             #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
+            self.recordRenderedTimeline(at: frame.presentationTimeStamp, wallTime: now)
             self.enhancedAudioPlayer?.frameRendered(at: frame.presentationTimeStamp)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
