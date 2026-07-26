@@ -100,7 +100,6 @@ struct EnhancementsSettingsTab: View {
     @AppStorage("VTDefaultSharpness") private var defaultSharpness = 0.0
     @AppStorage("VTDefaultHDRBoost") private var defaultHDRBoost = 0.0
     @AppStorage("VTDefaultHDRColorfulness") private var defaultHDRColorfulness = 0.0
-    @AppStorage("VTEnhancedFrameCacheMemoryMB") private var enhancedFrameCacheMemoryMB = 1_024
 
     var body: some View {
         SettingsContainer(.enhancements) {
@@ -114,24 +113,6 @@ struct EnhancementsSettingsTab: View {
                             Text("Off").tag(0)
                             Text("2x").tag(2)
                             Text("4x").tag(4)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 100)
-                        .padding(.trailing, -16)
-                    }
-
-                    Divider()
-
-                    SettingsRow(
-                        "Enhanced frame cache",
-                        helperText: "Maximum memory used for prebuffered enhanced frames. Higher values allow longer quality-preserving pre-roll."
-                    ) {
-                        Picker("", selection: $enhancedFrameCacheMemoryMB) {
-                            Text("512 MB").tag(512)
-                            Text("1 GB").tag(1_024)
-                            Text("1.5 GB").tag(1_536)
-                            Text("2 GB").tag(2_048)
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
@@ -547,3 +528,4 @@ class SettingsWindowManager: NSObject, NSWindowDelegate {
     }
 }
 #endif
+
