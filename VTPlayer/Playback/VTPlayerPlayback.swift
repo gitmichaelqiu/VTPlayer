@@ -284,6 +284,11 @@ extension VTPlayerViewModel {
         if isPlaying, !isPaused {
             player?.rate = Float(playbackSpeed)
         }
+        lockCache { clearProcessedFrameCache() }
+        if let player {
+            lastRenderedPTS = player.currentTime()
+            resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
+        }
         let oldProducer = producerTask
         let oldCoordinator = activeCoordinator
         producerTask?.cancel()
@@ -1034,17 +1039,7 @@ extension VTPlayerViewModel {
         var lastFrameToRender: VTFrame? = nil
         var drained = 0
         let now = DispatchTime.now()
-        let wallElapsed = Double(now.uptimeNanoseconds - lastPresentationWall.uptimeNanoseconds) / 1_000_000_000.0
-        // MTKView callbacks may arrive around 48 Hz on a 60 Hz display.
-        // Requiring 90% of the 33 ms FI2 interval then presents every other
-        // callback (~24 Hz). A bounded 60% threshold lets the scheduler
-        // alternate one- and two-callback gaps, converging on the requested
-        // 30 Hz without allowing an unbounded burst.
-        let speed = max(playbackSpeed, 0.001)
-        let canForceNextFrame = wallElapsed >= (outputPresentationInterval / speed) * 0.6
-        let useWallClockPacing = frameInterpolationLevel == 2 && playbackSpeed <= 1.0 && sourceFrameRate > 0
-        let needsTimelineCatchUp = (frameInterpolationLevel == 4 ||
-            (frameInterpolationLevel == 2 && playbackSpeed > 1.0)) && sourceFrameRate > 0
+        let needsTimelineCatchUp = frameInterpolationLevel > 0 && sourceFrameRate > 0
         
         self.lockCache {
             if needsTimelineCatchUp {
@@ -1061,33 +1056,6 @@ extension VTPlayerViewModel {
                     drained += 1
                 }
                 guard lastFrameToRender != nil else { return }
-            } else if useWallClockPacing {
-                // FI output has a fixed cadence independent of the display
-                // callback cadence. Present at most one queued frame per
-                // wall-clock deadline; draining every PTS-eligible frame can
-                // turn 2x output into source-rate output when callbacks are
-                // delivered at an uneven ~45 Hz cadence.
-                guard canForceNextFrame else { return }
-
-                // Discard frames that are already behind the last visible
-                // timestamp, but never consume two eligible frames in one
-                // display callback.
-                while self.processedFrameCacheStart < self.processedFrameCache.count,
-                      self.processedFrameCache[self.processedFrameCacheStart].presentationTimeStamp <= self.lastRenderedPTS {
-                    self.processedFrameCacheStart += 1
-                    drained += 1
-                }
-
-                guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
-                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                // Keep audio/video bounded: a frame may lead the audio clock
-                // by at most 80 ms while the wall-clock cadence is restored.
-                guard frameTime <= presentationSecs + 0.08 else { return }
-                lastFrameToRender = firstFrame
-                self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                drained += 1
-                self.processedFrameCacheStart += 1
             } else {
                 guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
                 let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
