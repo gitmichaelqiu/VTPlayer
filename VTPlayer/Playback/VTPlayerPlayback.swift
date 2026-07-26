@@ -831,6 +831,10 @@ extension VTPlayerViewModel {
                     // instead of re-sorting the entire array every time.
                     self.lockCache {
                         for outFrame in outputFrames {
+                            let byteCount = CVPixelBufferGetDataSize(outFrame.buffer)
+                            if byteCount > self.processedFrameByteEstimate {
+                                self.processedFrameByteEstimate = byteCount
+                            }
                             let pts = outFrame.presentationTimeStamp
                             var lo = self.processedFrameCacheStart
                             var hi = self.processedFrameCache.count

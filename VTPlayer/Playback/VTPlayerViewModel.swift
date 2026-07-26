@@ -234,6 +234,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var diagTimer = DispatchTime.now()
     @ObservationIgnored var processedFrameCache: [VTFrame] = []
     @ObservationIgnored var processedFrameCacheStart = 0
+    @ObservationIgnored var processedFrameByteEstimate = 0
     @ObservationIgnored let cacheLock = NSRecursiveLock()
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
@@ -341,9 +342,12 @@ final class VTPlayerViewModel {
         let outputPixels = Double(videoWidth) * Double(videoHeight) * Double(scale * scale)
         guard outputPixels > 0 else { return maximumFrameCacheCount }
 
-        // The processors normally use YUV, but a four-byte estimate keeps
-        // the cache safe if VideoToolbox selects a packed destination format.
-        let estimatedBytesPerFrame = max(1.0, outputPixels * 4.0)
+        // VideoToolbox normally returns YUV. Refine this fallback from the
+        // actual processed buffers as soon as the producer has one, avoiding
+        // an unnecessarily shallow cache for 4:2:0 output.
+        let estimatedBytesPerFrame = processedFrameByteEstimate > 0
+            ? Double(processedFrameByteEstimate)
+            : max(1.0, outputPixels * 2.0)
         let budgetedFrames = Int(Double(frameCacheMemoryBudget) / estimatedBytesPerFrame)
         return min(maximumFrameCacheCount, max(2, budgetedFrames))
     }
