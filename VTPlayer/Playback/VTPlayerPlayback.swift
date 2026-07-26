@@ -758,7 +758,7 @@ extension VTPlayerViewModel {
                 let cachedFrameCount = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
-                guard cachedFrameCount >= self.bufferedFrameLimit || (force && cachedFrameCount > 0) else {
+                guard cachedFrameCount >= self.initialPrerollFrameCount || (force && cachedFrameCount > 0) else {
                     return
                 }
                 waitingForFramePreroll = false
@@ -999,7 +999,7 @@ extension VTPlayerViewModel {
         // AVPlayerViewController owns the transport controls. Honor its pause
         // state in the render callback as well as through KVO, because a busy
         // 4x pipeline can defer the KVO delivery by a display interval.
-        if player.timeControlStatus == .paused, !isInitializingPipeline {
+        if player.timeControlStatus == .paused, !isInitializingPipeline, !isBuffering {
             pause()
             return
         }

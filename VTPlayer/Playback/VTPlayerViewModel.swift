@@ -356,6 +356,16 @@ final class VTPlayerViewModel {
         min(8, max(2, bufferedFrameLimit / 2))
     }
 
+    var initialPrerollFrameCount: Int {
+        #if os(iOS)
+        let multiplier = frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0
+        let outputRate = max(sourceFrameRate * multiplier, 1.0)
+        return min(bufferedFrameLimit, max(2, Int((outputRate * 0.75).rounded(.up))))
+        #else
+        return bufferedFrameLimit
+        #endif
+    }
+
     var outputPresentationInterval: Double {
         guard sourceFrameRate > 0 else { return 1.0 / 30.0 }
         let multiplier: Double
