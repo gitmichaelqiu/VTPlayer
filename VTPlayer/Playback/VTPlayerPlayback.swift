@@ -477,10 +477,10 @@ extension VTPlayerViewModel {
         let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
         let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
         #if os(macOS)
-        // FI4 needs a high-refresh MTKView cadence. The previous fixed 60 Hz
-        // request capped FI4 at the same presentation rate as FI2 even on
-        // 120 Hz displays. macOS clamps this request to the display's limit.
-        renderer.preferredFramesPerSecond = frameInterpolationLevel == 4 ? 120 : 60
+        // FI output needs callback headroom above its media cadence. A 60 Hz
+        // request can settle below a 50/60 fps FI2 stream when rendering has
+        // even small timing variance. macOS clamps 120 Hz to the display.
+        renderer.preferredFramesPerSecond = frameInterpolationLevel > 0 ? 120 : 60
         #endif
         NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(frameInterpolationLevel)x sr=\(superResolutionLevel)x qsr=\(qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
 
