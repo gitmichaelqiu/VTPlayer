@@ -230,12 +230,13 @@ extension VTPlayerViewModel {
                     
                     // Retrieve and apply saved playback progress
                     let savedProgress = UserDefaults.standard.double(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
+                    let resumeTime: CMTime?
                     if savedProgress > 0 && savedProgress < durationSecs {
                         self.currentTime = savedProgress
-                        let cmTime = CMTime(seconds: savedProgress, preferredTimescale: 600)
-                        newPlayer.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                        resumeTime = CMTime(seconds: savedProgress, preferredTimescale: 600)
                     } else {
                         self.currentTime = 0.0
+                        resumeTime = nil
                     }
                     
                     // Restore per-video enhancement settings
@@ -245,8 +246,22 @@ extension VTPlayerViewModel {
                     self.setNativeVideoEnabled(!self.isPipelineActive)
                     #endif
 
-                    // Start rendering/processing loop
-                    self.play()
+                    // Start processing only after the initial seek completes.
+                    // Otherwise the producer can prebuffer from zero and then
+                    // be reset when AVPlayer applies saved progress.
+                    guard let resumeTime else {
+                        self.play()
+                        return
+                    }
+                    let completionViewModel = self
+                    newPlayer.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak completionViewModel] _ in
+                        Task { @MainActor [weak completionViewModel] in
+                            guard let completionViewModel,
+                                  completionViewModel.player === newPlayer,
+                                  completionViewModel.videoURL == url else { return }
+                            completionViewModel.play()
+                        }
+                    }
                 }
             } catch {
                 print("Error loading video properties: \(error.localizedDescription)")
@@ -261,4 +276,3 @@ extension VTPlayerViewModel {
     }
     
 }
-
