@@ -137,25 +137,6 @@ extension VTPlayerView {
                     LabeledContent("Codec", value: viewModel.videoFormat)
                 }
 
-                Section {
-                    LabeledContent("Playback speed") {
-                        Text(String(format: "%.2fx", viewModel.playbackSpeed))
-                            .monospacedDigit()
-                    }
-                    LabeledContent("Current time") {
-                        Text(formatTime(viewModel.currentTime))
-                            .monospacedDigit()
-                    }
-                    LabeledContent("Duration") {
-                        Text(formatTime(viewModel.duration))
-                            .monospacedDigit()
-                    }
-                } header: {
-                    Text("Playback status")
-                } footer: {
-                    Text("Frame processing metrics (display rate, latency) are available on macOS where the VideoToolbox pipeline runs.")
-                }
-
                 Section("Super resolution") {
                     LabeledContent("SR supported", value: viewModel.srIsSupported ? "Yes" : "No")
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
