@@ -302,6 +302,15 @@ extension VTPlayerViewModel {
               videoHeight > 0,
               (videoWidth > 1280 || videoHeight > 720) else {
             adaptiveSRFITiers.removeAll(keepingCapacity: true)
+              adaptiveSRFITierIndex = 0
+            return nil
+        }
+
+        // Keep combined SR2 + FI2 at native input resolution. Downscaling
+        // before the combined processor makes its SR output look worse than
+        // pure FI2, which otherwise receives the original source detail.
+        if superResolutionLevel == 2 && frameInterpolationLevel == 2 {
+            adaptiveSRFITiers.removeAll(keepingCapacity: true)
             adaptiveSRFITierIndex = 0
             return nil
         }
