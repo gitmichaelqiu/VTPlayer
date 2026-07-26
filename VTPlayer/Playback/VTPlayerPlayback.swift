@@ -688,8 +688,12 @@ extension VTPlayerViewModel {
             var waitingForFramePreroll = false
             if let player = self.player {
                 let resumeTime = player.currentTime()
-                self.lastPulledTime = resumeTime
-                self.lastRenderedPTS = resumeTime
+                let readerStart = CMTimeSubtract(resumeTime, frameDuration)
+                self.lastPulledTime = readerStart > .zero ? readerStart : .zero
+                self.lastRenderedPTS = CMTimeSubtract(
+                    resumeTime,
+                    CMTime(value: 1, timescale: 600)
+                )
                 self.resetPresentationClock(at: CMTimeGetSeconds(resumeTime))
                 await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 let shouldResume = shouldResumePlayback && gen == self.playbackGeneration
@@ -938,7 +942,7 @@ extension VTPlayerViewModel {
         let currentTime = player.currentTime()
         let observedSecs = CMTimeGetSeconds(currentTime)
         let currentSecs = presentationClockSeconds(playerSeconds: observedSecs)
-        let presentationSecs = currentSecs - interpolationPresentationDelay
+        let presentationSecs = currentSecs
         
         var lastFrameToRender: VTFrame? = nil
         var drained = 0

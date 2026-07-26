@@ -352,14 +352,6 @@ final class VTPlayerViewModel {
         min(8, max(2, bufferedFrameLimit / 2))
     }
 
-    /// FI generates frames between adjacent source timestamps. Keeping one
-    /// source interval in the presentation queue prevents a late processor
-    /// completion from collapsing the interpolated and source frames into one
-    /// display refresh.
-    var interpolationPresentationDelay: Double {
-        guard frameInterpolationLevel > 0, sourceFrameRate > 0 else { return 0 }
-        return 1.0 / sourceFrameRate
-    }
     var outputPresentationInterval: Double {
         guard sourceFrameRate > 0 else { return 1.0 / 30.0 }
         let multiplier: Double
