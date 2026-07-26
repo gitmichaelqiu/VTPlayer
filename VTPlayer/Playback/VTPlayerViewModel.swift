@@ -83,6 +83,7 @@ final class VTPlayerViewModel {
                 return
             }
             player?.volume = Float(clamped)
+            enhancedAudioPlayer?.setVolume(Float(clamped))
         }
     }
     @ObservationIgnored var volumeBeforeMute: Double?

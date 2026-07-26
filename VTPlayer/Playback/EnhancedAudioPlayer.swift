@@ -10,11 +10,13 @@ final class EnhancedAudioPlayer {
     private var rateReferencePTS: CMTime?
     private var rateReferenceWall = DispatchTime.now()
     private var smoothedRate = 1.0
+    private var volume: Float = 1.0
 
     func prepare(url: URL, initialRate: Double) -> Bool {
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return false }
         player.enableRate = true
         player.rate = Float(initialRate)
+        player.volume = volume
         guard player.prepareToPlay() else { return false }
         self.player = player
         smoothedRate = initialRate
@@ -64,6 +66,11 @@ final class EnhancedAudioPlayer {
     func pause() {
         paused = true
         player?.pause()
+    }
+
+    func setVolume(_ volume: Float) {
+        self.volume = min(max(volume, 0), 1)
+        player?.volume = self.volume
     }
 
     func resume() {

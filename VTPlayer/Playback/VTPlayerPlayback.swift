@@ -187,7 +187,7 @@ extension VTPlayerViewModel {
     #endif
 
     func setPrimaryAudioMuted(_ muted: Bool) {
-        player?.volume = muted ? 0 : 1
+        player?.volume = muted ? 0 : Float(volume)
     }
 
     func stopEnhancedAudioPlayback() {
@@ -726,6 +726,7 @@ extension VTPlayerViewModel {
                     waitingForFramePreroll = true
                     let audioPlayer = EnhancedAudioPlayer()
                     if audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                        audioPlayer.setVolume(Float(self.volume))
                         self.enhancedAudioPlayer = audioPlayer
                         self.setPrimaryAudioMuted(true)
                     }
@@ -981,10 +982,25 @@ extension VTPlayerViewModel {
         // alternate one- and two-callback gaps, converging on the requested
         // 30 Hz without allowing an unbounded burst.
         let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.6
-        let useWallClockPacing = frameInterpolationLevel > 0 && sourceFrameRate > 0
+        let useWallClockPacing = frameInterpolationLevel == 2 && sourceFrameRate > 0
+        let needsTimelineCatchUp = frameInterpolationLevel == 4 && sourceFrameRate > 0
         
         self.lockCache {
-            if useWallClockPacing {
+            if needsTimelineCatchUp {
+                // 4x output can exceed the display callback rate. Keep media
+                // time authoritative: present the newest frame due now and
+                // discard only interpolation frames the display has missed.
+                while self.processedFrameCacheStart < self.processedFrameCache.count {
+                    let candidate = self.processedFrameCache[self.processedFrameCacheStart]
+                    let candidateTime = CMTimeGetSeconds(candidate.presentationTimeStamp)
+                    guard candidateTime <= presentationSecs + 0.005 else { break }
+                    lastFrameToRender = candidate
+                    self.lastRenderedPTS = candidate.presentationTimeStamp
+                    self.processedFrameCacheStart += 1
+                    drained += 1
+                }
+                guard lastFrameToRender != nil else { return }
+            } else if useWallClockPacing {
                 // FI output has a fixed cadence independent of the display
                 // callback cadence. Present at most one queued frame per
                 // wall-clock deadline; draining every PTS-eligible frame can
