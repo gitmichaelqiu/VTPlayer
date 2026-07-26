@@ -237,7 +237,6 @@ public actor VTFrameProcessorCoordinator {
             kCVImageBufferColorPrimariesKey,
             kCVImageBufferTransferFunctionKey,
             kCVImageBufferYCbCrMatrixKey,
-            kCVImageBufferColorRangeKey,
             kCVImageBufferGammaLevelKey
         ]
         for key in colorKeys {
