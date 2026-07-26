@@ -525,7 +525,7 @@ final class VTPlayerViewModel {
     }
     
     #if os(iOS)
-    private func configureAudioSessionForPlayback() {
+    func configureAudioSessionForPlayback() {
         // Audio-session activation can block while negotiating the route. Do
         // not perform it on the main actor during video setup.
         DispatchQueue.global(qos: .userInitiated).async {
