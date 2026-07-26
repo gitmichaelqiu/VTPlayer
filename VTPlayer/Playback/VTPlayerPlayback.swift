@@ -925,26 +925,6 @@ extension VTPlayerViewModel {
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
 
-                // Keep AVPlayer's audio clock at or below the rate that the
-                // frame processor can sustain. The renderer continues to
-                // present the same frames at their original PTS; only audio
-                // is slowed enough to stop it from running ahead.
-                let sourceBudgetMilliseconds = self.sourceFrameRate > 0
-                    ? 1_000.0 / self.sourceFrameRate
-                    : 0
-                let processingRate: Double
-                if sourceBudgetMilliseconds > 0, self.frameProcessingTime > 0 {
-                    processingRate = min(1, sourceBudgetMilliseconds / self.frameProcessingTime)
-                } else {
-                    processingRate = 1
-                }
-                let leadCorrection = max(0.5, 1 - max(0, latency) * 2)
-                let targetAudioRate = Float(max(0.25, self.playbackSpeed * processingRate * leadCorrection))
-                if abs(player.rate - targetAudioRate) >= 0.02 {
-                    self.resetPresentationClock(at: currentSecs)
-                    player.rate = targetAudioRate
-                }
-
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {
