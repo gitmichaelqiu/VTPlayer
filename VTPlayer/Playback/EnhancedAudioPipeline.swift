@@ -13,6 +13,9 @@ final class EnhancedAudioPipeline {
     private var output: AVAssetReaderTrackOutput?
     private var isStarted = false
     private var isFinished = false
+    private var isHeldForVideo = false
+    private var isUserPaused = false
+    private let maximumAudioLead: Double = 0.010
 
     init() {
         synchronizer.addRenderer(renderer)
@@ -47,20 +50,45 @@ final class EnhancedAudioPipeline {
         return true
     }
 
-    func start(at presentationTime: CMTime) {
-        guard !isStarted else { return }
-        isStarted = true
-        synchronizer.setRate(1, time: presentationTime)
+    /// Advances audio only while its timeline is covered by frames that have
+    /// actually reached the renderer. This never changes AVPlayer or frame
+    /// presentation timing.
+    func presentVideoFrame(at presentationTime: CMTime) {
+        if !isStarted {
+            isStarted = true
+            synchronizer.setRate(1, time: presentationTime)
+            return
+        }
+
+        let audioTime = synchronizer.currentTime()
+        let audioSeconds = CMTimeGetSeconds(audioTime)
+        let videoSeconds = CMTimeGetSeconds(presentationTime)
+        guard audioSeconds.isFinite, videoSeconds.isFinite else { return }
+
+        if audioSeconds > videoSeconds + maximumAudioLead {
+            guard !isHeldForVideo else { return }
+            synchronizer.setRate(0, time: audioTime)
+            isHeldForVideo = true
+        } else if isHeldForVideo, videoSeconds >= audioSeconds - maximumAudioLead {
+            isHeldForVideo = false
+            if !isUserPaused {
+                synchronizer.setRate(1, time: audioTime)
+            }
+        }
     }
 
     func pause() {
         guard isStarted else { return }
+        isUserPaused = true
         synchronizer.setRate(0, time: synchronizer.currentTime())
     }
 
     func resume() {
         guard isStarted else { return }
-        synchronizer.setRate(1, time: synchronizer.currentTime())
+        isUserPaused = false
+        if !isHeldForVideo {
+            synchronizer.setRate(1, time: synchronizer.currentTime())
+        }
     }
 
     func stop() {
@@ -72,6 +100,8 @@ final class EnhancedAudioPipeline {
         output = nil
         isStarted = false
         isFinished = true
+        isHeldForVideo = false
+        isUserPaused = false
     }
 
     private func requestSamples() {
