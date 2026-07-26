@@ -536,7 +536,15 @@ extension VTPlayerViewModel {
         let fiLevel = self.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
         let realTime = self.useRealTimePriority
+        #if os(macOS)
+        // The combined LL SR/FI processor produces visibly softer output
+        // than native FI followed by SR on macOS. Prefer the temporal-first
+        // sequential path for this quality-sensitive combination.
+        let sequentialSRFIFallback = self.useSequentialSRFIFallback ||
+            (srLevel == 2 && fiLevel == 2)
+        #else
         let sequentialSRFIFallback = self.useSequentialSRFIFallback
+        #endif
         let qualitySR = self.qualitySuperResolutionScaleFactor
         let mbStrength = self.motionBlurStrength
         let dnStrength = self.denoiseStrength

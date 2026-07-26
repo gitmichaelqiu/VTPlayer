@@ -388,6 +388,16 @@ struct VTPlayerView: View {
                 .opacity(0)
 
             #if os(macOS)
+            Button("") {
+                guard viewModel.videoURL != nil else { return }
+                viewModel.toggleMute()
+            }
+            .keyboardShortcut("m", modifiers: [])
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            #endif
+
+            #if os(macOS)
             // Cmd+1...9 to switch between window tabs
             ForEach(1..<10, id: \.self) { i in
                 Button("") {

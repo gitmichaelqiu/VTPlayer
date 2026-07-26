@@ -85,6 +85,17 @@ final class VTPlayerViewModel {
             player?.volume = Float(clamped)
         }
     }
+    @ObservationIgnored var volumeBeforeMute: Double?
+
+    func toggleMute() {
+        if volume > 0 {
+            volumeBeforeMute = volume
+            volume = 0
+        } else {
+            volume = volumeBeforeMute ?? 1.0
+            volumeBeforeMute = nil
+        }
+    }
     
     // Video Track Specs
     var videoWidth: Int = 0
