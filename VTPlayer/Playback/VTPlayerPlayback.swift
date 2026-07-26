@@ -457,46 +457,7 @@ extension VTPlayerViewModel {
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
         let adaptiveFISize: CGSize? = resolveAdaptiveSRFIInputSize() ?? {
             guard frameInterpolationLevel > 0 else { return nil }
-            let combinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2
-            guard combinedMode || videoWidth > 1280 || videoHeight > 720 else { return nil }
-            // Combined 2x SR + 2x FI is the heaviest real-time mode. When
-            // possible, feed it a smaller source so the processor has enough
-            // headroom to produce every output phase on time. Pure FI keeps
-            // the native source resolution so interpolation never becomes an
-            // implicit quality downgrade.
-            if combinedMode {
-                // Probe the actual temporal-first configuration. A combined
-                // FI+spatial initializer may accept 480×270 while the pure
-                // FI configuration used by the stable sequential path
-                // rejects it at processing time on this Mac.
-                func alignedDimension(_ value: Double, maximum: Int) -> Int {
-                    // VideoToolbox's SR/FI implementations commonly require
-                    // macroblock-friendly heights. Flooring 266.7 to 266
-                    // made the 960x400 path fail, while the equivalent 272
-                    // pixel input is supported. Round up within the probe
-                    // bound so we preserve aspect ratio without selecting a
-                    // known-invalid odd-size surface.
-                    let rounded = Int(ceil(value / 16.0) * 16.0)
-                    return min(maximum, max(2, rounded & ~1))
-                }
-                for (maxWidth, maxHeight) in [(640.0, 360.0), (960.0, 540.0)] {
-                    let scale = min(1.0, maxWidth / Double(videoWidth), maxHeight / Double(videoHeight))
-                    let candidateWidth = alignedDimension(Double(videoWidth) * scale, maximum: Int(maxWidth))
-                    let candidateHeight = alignedDimension(Double(videoHeight) * scale, maximum: Int(maxHeight))
-                    guard candidateWidth > 0, candidateHeight > 0 else { continue }
-                    if VTLowLatencySuperResolutionScalerConfiguration
-                        .supportedScaleFactors(frameWidth: candidateWidth, frameHeight: candidateHeight)
-                        .contains(2.0),
-                       VTLowLatencyFrameInterpolationConfiguration(
-                           frameWidth: candidateWidth,
-                           frameHeight: candidateHeight,
-                           numberOfInterpolatedFrames: 1
-                       ) != nil {
-                        return CGSize(width: candidateWidth, height: candidateHeight)
-                    }
-                }
-                return nil
-            }
+            guard videoWidth > 1280 || videoHeight > 720 else { return nil }
             return nil
         }()
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
