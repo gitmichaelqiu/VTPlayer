@@ -375,7 +375,7 @@ final class VTPlayerViewModel {
     var seekGeneration: UInt64 = 0
     var isInitializingPipeline = false
 
-    // Audio sync monitoring (diagnostic only — never pauses player)
+    // Audio sync monitoring after the enhanced-frame audio pre-roll.
     var lastRenderedPTS: CMTime = .zero
     // AVPlayer can expose a frame-quantized currentTime for silent or low-rate
     // assets.  Interpolated output must be paced by a monotonic clock between
