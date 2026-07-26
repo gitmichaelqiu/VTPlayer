@@ -305,6 +305,28 @@ extension VTFrameProcessorCoordinator {
                 _ = try await instance.processor.process(parameters: params)
                 currentBuffer = outBuf1
             } else {
+                // In temporal-first mode, interpolated frames are synthetic
+                // and LL SR produces softer output on them. Use pixel
+                // transfer (bicubic) for interpolated frames instead.
+                if temporalFirstForSRInterpolation && f.isInterpolated,
+                   let transferSession = interpolatedTransferSession,
+                   let transferPool = interpolatedTransferPool {
+                    var buf: CVPixelBuffer?
+                    guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, transferPool, &buf) == kCVReturnSuccess,
+                          let outBuf = buf else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
+                            userInfo: [NSLocalizedDescriptionKey: "Interpolated transfer pool allocation failed"])
+                    }
+                    guard VTPixelTransferSessionTransferImage(
+                        transferSession,
+                        from: currentBuffer,
+                        to: outBuf
+                    ) == kCVReturnSuccess else {
+                        throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
+                            userInfo: [NSLocalizedDescriptionKey: "Interpolated frame transfer failed"])
+                    }
+                    currentBuffer = outBuf
+                } else {
                 // LL SR - Stage 1 2x
                 var buf1: CVPixelBuffer?
                 guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf1) == kCVReturnSuccess,
@@ -363,6 +385,7 @@ extension VTFrameProcessorCoordinator {
                         }
                         currentBuffer = outBuf2
                     }
+                }
                 }
             }
 
