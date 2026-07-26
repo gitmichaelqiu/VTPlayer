@@ -235,14 +235,20 @@ final class VTPlayerViewModel {
     @ObservationIgnored var processedFrameCache: [VTFrame] = []
     @ObservationIgnored var processedFrameCacheStart = 0
     @ObservationIgnored let cacheLock = NSRecursiveLock()
+    @ObservationIgnored var enhancedAudioPipeline: EnhancedAudioPipeline?
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
     let frameCacheMemoryBudget: Int = {
         #if os(iOS)
-        return 128 * 1024 * 1024
+        let defaultMegabytes = 256
+        let maximumMegabytes = 512
         #else
-        return 512 * 1024 * 1024
+        let defaultMegabytes = 1_024
+        let maximumMegabytes = 2_048
         #endif
+        let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheMemoryMB")
+        let megabytes = configured > 0 ? configured : defaultMegabytes
+        return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
     }()
     let maximumFrameCacheCount: Int = {
         #if os(iOS)
@@ -345,6 +351,12 @@ final class VTPlayerViewModel {
 
     var resumeBufferFrameCount: Int {
         min(8, max(2, bufferedFrameLimit / 2))
+    }
+
+    var enhancedAudioPrerollFrameCount: Int {
+        guard sourceFrameRate > 0 else { return resumeBufferFrameCount }
+        let oneSecondOfFrames = Int(ceil(sourceFrameRate))
+        return min(bufferedFrameLimit, max(resumeBufferFrameCount, oneSecondOfFrames))
     }
 
     /// FI generates frames between adjacent source timestamps. Keeping one
@@ -950,6 +962,15 @@ final class VTPlayerViewModel {
     func handleTimeJump() {
         guard let player = player else { return }
         let currentTime = player.currentTime()
+
+        if enhancedAudioPipeline != nil {
+            enhancedAudioPipeline?.stop()
+            enhancedAudioPipeline = nil
+            setAVPlayerAudioEnabled(true)
+            if isPlaying && !isPaused {
+                startPlaybackLoop()
+            }
+        }
         
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime
