@@ -73,7 +73,6 @@ extension VTPlayerViewModel {
         #endif
 
         player.rate = Float(self.playbackSpeed)
-        enhancedAudioPipeline?.resume()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyPlaybackRate] = playbackSpeed
@@ -125,7 +124,6 @@ extension VTPlayerViewModel {
     func pause() {
         guard let player = player else { return }
         player.pause()
-        enhancedAudioPipeline?.pause()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
@@ -180,18 +178,13 @@ extension VTPlayerViewModel {
         for track in tracks where track.assetTrack?.mediaType == .video {
             track.isEnabled = enabled
         }
+        // Keep audio explicitly enabled across pipeline restarts. AVPlayer
+        // owns the audio clock even while native video is hidden.
         for track in tracks where track.assetTrack?.mediaType == .audio {
-            track.isEnabled = enhancedAudioPipeline == nil
+            track.isEnabled = true
         }
     }
     #endif
-
-    func setAVPlayerAudioEnabled(_ enabled: Bool) {
-        guard let tracks = player?.currentItem?.tracks else { return }
-        for track in tracks where track.assetTrack?.mediaType == .audio {
-            track.isEnabled = enabled
-        }
-    }
 
     func stopPlaybackLoopOnly() {
         #if os(macOS)
@@ -221,9 +214,6 @@ extension VTPlayerViewModel {
         
         audioSyncTask?.cancel()
         audioSyncTask = nil
-        enhancedAudioPipeline?.stop()
-        enhancedAudioPipeline = nil
-        setAVPlayerAudioEnabled(true)
         audioSyncLatency = 0
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
@@ -248,9 +238,6 @@ extension VTPlayerViewModel {
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
         setNativeVideoEnabled(true)
-        enhancedAudioPipeline?.stop()
-        enhancedAudioPipeline = nil
-        setAVPlayerAudioEnabled(true)
         if let player {
             player.play()
             player.rate = Float(playbackSpeed)
@@ -707,16 +694,8 @@ extension VTPlayerViewModel {
                 }
             }
 
-            guard let videoURL = self.videoURL else {
-                self.activeCoordinator = nil
-                await coordinator.endSession()
-                return
-            }
-
-            // Re-sync after potentially slow coordinator setup. Enhanced
-            // audio is prepared from the same source PTS, but AVPlayer remains
-            // silent while it continues to schedule video frames.
-            var waitingForPreroll = false
+            // Re-sync lastPulledTime after potentially slow coordinator setup
+            // and resume the player from the same position.
             if let player = self.player {
                 let resumeTime = player.currentTime()
                 self.lastPulledTime = resumeTime
@@ -727,16 +706,9 @@ extension VTPlayerViewModel {
                 self.isInitializingPipeline = false
                 pausedForInitialization = false
                 if shouldResume {
-                    let audioPipeline = EnhancedAudioPipeline()
-                    if (try? await audioPipeline.prepare(url: videoURL, startTime: resumeTime)) == true {
-                        self.enhancedAudioPipeline?.stop()
-                        self.enhancedAudioPipeline = audioPipeline
-                        self.setAVPlayerAudioEnabled(false)
-                    }
                     self.isPlaying = true
                     self.isPaused = false
-                    self.isBuffering = true
-                    waitingForPreroll = true
+                    player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 } else {
                     player.pause()
                     if resumeTime <= .zero, let url = self.videoURL,
@@ -749,26 +721,16 @@ extension VTPlayerViewModel {
                 pausedForInitialization = false
             }
 
-            // Create VTFrameSequence to decode frames faster-than-real-time.
+            // Create VTFrameSequence to decode frames faster-than-real-time
+            guard let videoURL = self.videoURL else {
+                self.activeCoordinator = nil
+                await coordinator.endSession()
+                return
+            }
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
             var combinedProcessFallbackAttempted = false
-
-            @MainActor
-            func beginEnhancedPlaybackIfReady(force: Bool = false) {
-                guard waitingForPreroll, let player = self.player else { return }
-                let cachedFrames = self.lockCache {
-                    max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
-                }
-                guard cachedFrames >= self.enhancedAudioPrerollFrameCount || (force && cachedFrames > 0) else {
-                    return
-                }
-                waitingForPreroll = false
-                self.isBuffering = false
-                self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
-                player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
-            }
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
@@ -877,7 +839,6 @@ extension VTPlayerViewModel {
                         self.compactProcessedFrameCacheIfNeeded()
                     }
                     self.producedFramesCount += outputFrames.count
-                    beginEnhancedPlaybackIfReady()
 
                     // A completed source frame is the only safe point to
                     // retier: startPlaybackLoop() serializes teardown with
@@ -906,11 +867,8 @@ extension VTPlayerViewModel {
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     self.lockCache { self.processedFrameCache.append(vtFrame) }
                     self.producedFramesCount += 1
-                    beginEnhancedPlaybackIfReady()
                 }
             }
-
-            beginEnhancedPlaybackIfReady(force: true)
 
             await coordinator.endSession()
             if self.playbackGeneration == gen {
@@ -928,10 +886,16 @@ extension VTPlayerViewModel {
                 guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
-                guard !self.isBuffering else { continue }
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
+                // Keep the audio clock independent from the processed-frame
+                // queue. Pausing AVPlayer here can deadlock playback when a
+                // restart or a slow FI/SR frame leaves fewer than two frames
+                // buffered; the display consumer already performs PTS-aware
+                // pacing and late-frame dropping.
+                self.isBuffering = false
+
                 // Record desync for diagnostics without interrupting audio.
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
@@ -1045,7 +1009,6 @@ extension VTPlayerViewModel {
             }
             #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
-            self.enhancedAudioPipeline?.presentVideoFrame(at: frame.presentationTimeStamp)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
             #endif
@@ -1175,9 +1138,6 @@ extension VTPlayerViewModel {
         }
         audioSyncTask?.cancel()
         audioSyncTask = nil
-        enhancedAudioPipeline?.stop()
-        enhancedAudioPipeline = nil
-        setAVPlayerAudioEnabled(true)
         audioSyncLatency = 0
         lastRenderedPTS = .zero
         lockCache { clearProcessedFrameCache() }
