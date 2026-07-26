@@ -174,6 +174,12 @@ public actor VTFrameProcessorCoordinator {
     // as many pixels and cannot sustain the generated-frame cadence.
     var temporalFirstForSRInterpolation = false
 
+    // Bicubic upscale for interpolated frames in temporal-first mode.
+    // LL SR is trained on real video and produces softer output on
+    // synthetically interpolated frames.
+    var interpolatedTransferSession: VTPixelTransferSession?
+    var interpolatedTransferPool: CVPixelBufferPool?
+
     // Second spatial stage for 4x LL SR cascading (2x → 2x)
     var secondSpatialProcessor: VTFrameProcessor?
     var secondSpatialPool: CVPixelBufferPool?
@@ -527,6 +533,27 @@ public actor VTFrameProcessorCoordinator {
 
         if useTemporalFirstForSRInterpolation {
             try configureSpatialStages()
+
+            // ── Interpolated Frame Transfer (temporal-first only) ──────
+            // LL SR produces softer results on synthetically interpolated
+            // frames. Use pixel transfer for interpolated frames instead.
+            if needsSpatial && !hasQualitySR,
+               let spatialInstance = stages[.spatial] {
+                var session: VTPixelTransferSession?
+                if VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &session) == kCVReturnSuccess,
+                   let session {
+                    configureTransferSession(session)
+                    interpolatedTransferSession = session
+                    interpolatedTransferPool = makePool(
+                        width: spatialInstance.outputWidth,
+                        height: spatialInstance.outputHeight,
+                        from: [
+                            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                            kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]
+                        ]
+                    )
+                }
+            }
         }
 
         // ── 4. Motion Blur Stage ──────────────────────────────────────
@@ -602,8 +629,8 @@ public actor VTFrameProcessorCoordinator {
     }
 
     func completeEndSession() {
-        var hasResources = isSessionActive || !stages.isEmpty || secondSpatialProcessor != nil ||
-            fallbackTransferSession != nil
+           var hasResources = isSessionActive || !stages.isEmpty || secondSpatialProcessor != nil ||
+            fallbackTransferSession != nil || interpolatedTransferSession != nil
         #if os(macOS)
         hasResources = hasResources || rendererTransferSession != nil || rendererPixelBufferPool != nil
         #endif
@@ -624,6 +651,12 @@ public actor VTFrameProcessorCoordinator {
             VTPixelTransferSessionInvalidate(session)
         }
         fallbackTransferSession = nil
+
+        if let session = interpolatedTransferSession {
+            VTPixelTransferSessionInvalidate(session)
+        }
+        interpolatedTransferSession = nil
+        interpolatedTransferPool = nil
 
         #if os(macOS)
         if let session = rendererTransferSession {
