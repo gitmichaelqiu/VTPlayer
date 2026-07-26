@@ -750,6 +750,7 @@ extension VTPlayerViewModel {
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
+            var sourceFrameOrdinal = 0
             var combinedProcessFallbackAttempted = false
 
             @MainActor
@@ -782,6 +783,7 @@ extension VTPlayerViewModel {
                     iteratorStartTime = self.lastPulledTime
                     let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
                     frameIterator = newSequence.makeAsyncIterator()
+                    sourceFrameOrdinal = 0
                     continue
                 }
 
@@ -808,6 +810,17 @@ extension VTPlayerViewModel {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     continue
                 }
+
+                sourceFrameOrdinal += 1
+                #if os(macOS)
+                let fastFI4Stride = fiLevel == 4 && self.playbackSpeed > 1
+                    ? Int(self.playbackSpeed.rounded(.up))
+                    : 1
+                if fastFI4Stride > 1,
+                   (sourceFrameOrdinal - 1) % fastFI4Stride != 0 {
+                    continue
+                }
+                #endif
 
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()
