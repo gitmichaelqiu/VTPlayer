@@ -229,8 +229,7 @@ extension VTPlayerView {
                 LabeledContent("Rendered Timeline") {
                     if viewModel.renderedTimelineSampleDuration > 0 {
                         Text(String(
-                            format: "%.2f× (%.0f%%)",
-                            viewModel.renderedTimelineRate,
+                            format: "%.0f%%",
                             viewModel.renderedTimelineRatio * 100
                         ))
                         .monospacedDigit()
