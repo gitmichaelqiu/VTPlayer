@@ -72,7 +72,11 @@ extension VTPlayerViewModel {
         renderer.setRenderingActive(true)
         #endif
 
+        #if os(iOS)
+        player.playImmediately(atRate: Float(self.playbackSpeed))
+        #else
         player.rate = Float(self.playbackSpeed)
+        #endif
         enhancedAudioPlayer?.resume()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
