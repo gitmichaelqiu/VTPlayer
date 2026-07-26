@@ -95,6 +95,7 @@ final class VTPlayerViewModel {
             volume = volumeBeforeMute ?? 1.0
             volumeBeforeMute = nil
         }
+        userActivityDetected()
     }
     
     // Video Track Specs
