@@ -39,11 +39,6 @@ final class EnhancedAudioPlayer {
         item.audioTimePitchAlgorithm = .spectral
         player.replaceCurrentItem(with: item)
         smoothedRate = initialRate
-        await withCheckedContinuation { continuation in
-            player.preroll(atRate: Float(initialRate)) { _ in
-                continuation.resume()
-            }
-        }
         return true
     }
 
