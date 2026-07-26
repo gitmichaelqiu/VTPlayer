@@ -36,8 +36,7 @@ struct GeneralSettingsTab: View {
 
                 SettingsSection("Updates") {
                     SettingsRow(
-                        "Automatically check for updates",
-                        helperText: "Check for new VTPlayer releases automatically."
+                        "Automatically check for updates"
                     ) {
                         Toggle("", isOn: $automaticallyChecksForUpdates)
                             .labelsHidden()
@@ -53,8 +52,7 @@ struct GeneralSettingsTab: View {
                             Divider()
 
                             SettingsRow(
-                                "Automatically download updates",
-                                helperText: "Download new updates in the background when they are available."
+                                "Automatically download updates"
                             ) {
                                 Toggle("", isOn: $automaticallyDownloadsUpdates)
                                     .labelsHidden()
@@ -72,9 +70,6 @@ struct GeneralSettingsTab: View {
 
                     SettingsRow(
                         "Check for updates",
-                        helperText: VTPlayerUpdater.shared.isConfigured
-                            ? "Check for a new VTPlayer release now."
-                            : "Update checking will be available once Sparkle is configured for a release build."
                     ) {
                         Button("Check Now") {
                             VTPlayerUpdater.shared.checkForUpdates()
