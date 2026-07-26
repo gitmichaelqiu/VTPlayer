@@ -132,6 +132,7 @@ extension VTPlayerViewModel {
         resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
         self.isPaused = true
         self.isBuffering = false
+        self.isAudioSyncPaused = false
         #if os(macOS)
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
@@ -215,6 +216,7 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        isAudioSyncPaused = false
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0
@@ -442,6 +444,7 @@ extension VTPlayerViewModel {
         setNativeVideoEnabled(true)
         #endif
         isBuffering = false
+        isAudioSyncPaused = false
         playbackGeneration += 1
         qualityModelRetryTask?.cancel()
         qualityModelRetryTask = nil
@@ -925,8 +928,23 @@ extension VTPlayerViewModel {
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
 
+                if self.isAudioSyncPaused {
+                    // The display scheduler intentionally continues from its
+                    // existing wall-clock anchor while AVPlayer is paused.
+                    // Once its rendered PTS reaches the held audio time, the
+                    // matching audio sample can resume without changing frame
+                    // presentation cadence.
+                    if latency <= self.audioSyncResumeThreshold {
+                        self.isAudioSyncPaused = false
+                        player.rate = Float(self.playbackSpeed)
+                    }
+                    continue
+                }
+
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
+                    self.isAudioSyncPaused = true
+                    player.pause()
                 } else {
                     self.audioSyncLatency = 0
                 }
@@ -934,7 +952,7 @@ extension VTPlayerViewModel {
                 // AVPlayer may stop playback (rate → 0) if its audio decoder fails
                 // on certain file formats. Periodically re-assert the desired rate
                 // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline {
+                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline && !self.isAudioSyncPaused {
                     player.rate = Float(self.playbackSpeed)
                 }
             }
@@ -1167,6 +1185,7 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        isAudioSyncPaused = false
         lastRenderedPTS = .zero
         lockCache { clearProcessedFrameCache() }
         

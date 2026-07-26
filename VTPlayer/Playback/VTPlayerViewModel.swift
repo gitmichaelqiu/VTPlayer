@@ -429,6 +429,9 @@ final class VTPlayerViewModel {
 
     var audioSyncLatency: Double = 0
     var audioSyncTask: Task<Void, Never>?
+    /// AVPlayer is paused only to hold audio until rendered video catches up.
+    /// This is distinct from a user-initiated playback pause.
+    @ObservationIgnored var isAudioSyncPaused = false
 
     func retryAfterQualityModelDownload(generation: UInt64) {
         qualityModelRetryTask?.cancel()
@@ -449,6 +452,7 @@ final class VTPlayerViewModel {
         }
     }
     let audioSyncLatencyThreshold: Double = 0.1
+    let audioSyncResumeThreshold: Double = 0.025
     
     let renderer: VTMetalRenderer
     let modelManager = VTModelManager()
