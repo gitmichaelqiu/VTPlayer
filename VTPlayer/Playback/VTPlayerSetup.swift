@@ -215,7 +215,6 @@ extension VTPlayerViewModel {
                             switch player.timeControlStatus {
                             case .paused:
                                 if !self.isInitializingPipeline,
-                                   !self.isBuffering,
                                    self.isPlaying,
                                    !self.isPaused {
                                     // Native iOS controls pause AVPlayer

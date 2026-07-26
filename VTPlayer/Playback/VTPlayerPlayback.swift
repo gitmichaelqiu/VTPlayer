@@ -970,9 +970,20 @@ extension VTPlayerViewModel {
         // Default display links are commonly capped at 60 Hz even on
         // ProMotion hardware. Request the display maximum for 4x FI and
         // restore the system default for other playback modes.
-        displayLink.preferredFramesPerSecond = frameInterpolationLevel == 4
-            ? UIScreen.main.maximumFramesPerSecond
-            : 0
+        if frameInterpolationLevel == 4 {
+            let maximumRate = Float(UIScreen.main.maximumFramesPerSecond)
+            if #available(iOS 15.0, *) {
+                displayLink.preferredFrameRateRange = CAFrameRateRange(
+                    minimum: maximumRate,
+                    maximum: maximumRate,
+                    preferred: maximumRate
+                )
+            } else {
+                displayLink.preferredFramesPerSecond = Int(maximumRate)
+            }
+        } else {
+            displayLink.preferredFramesPerSecond = 0
+        }
     }
     #endif
     #endif
@@ -980,6 +991,15 @@ extension VTPlayerViewModel {
     @MainActor
     func tickDisplayLink() {
         guard isPlaying && !isPaused, let player = self.player else { return }
+        #if os(iOS)
+        // AVPlayerViewController owns the transport controls. Honor its pause
+        // state in the render callback as well as through KVO, because a busy
+        // 4x pipeline can defer the KVO delivery by a display interval.
+        if player.timeControlStatus == .paused, !isInitializingPipeline {
+            pause()
+            return
+        }
+        #endif
         displayLinkTickCount += 1
         
         let currentTime = player.currentTime()
