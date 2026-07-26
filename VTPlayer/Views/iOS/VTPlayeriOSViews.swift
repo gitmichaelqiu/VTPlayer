@@ -552,6 +552,8 @@ extension VTPlayerView {
                     Text("256 MB").tag(256)
                     Text("384 MB").tag(384)
                     Text("512 MB").tag(512)
+                    Text("768 MB").tag(768)
+                    Text("1 GB").tag(1_024)
                 }
                 .tint(.secondary)
                 

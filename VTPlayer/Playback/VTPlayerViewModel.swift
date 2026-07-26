@@ -245,7 +245,7 @@ final class VTPlayerViewModel {
     var frameCacheMemoryBudget: Int {
         #if os(iOS)
         let defaultMegabytes = 256
-        let maximumMegabytes = 512
+        let maximumMegabytes = 1_024
         #else
         let defaultMegabytes = 1_024
         let maximumMegabytes = 2_048

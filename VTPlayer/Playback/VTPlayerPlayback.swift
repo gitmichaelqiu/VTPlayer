@@ -931,18 +931,19 @@ extension VTPlayerViewModel {
                     self.audioSyncLatency = 0
                 }
 
-                // AVPlayer may stop playback (rate → 0) if its audio decoder fails
-                // on certain file formats. Periodically re-assert the desired rate
-                // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline {
-                    player.rate = Float(self.playbackSpeed)
-                }
             }
         }
     }
 
     func startDisplayLinkIfNeeded() {
+        #if os(iOS)
+        if let displayLink {
+            configureDisplayLinkFrameRate(displayLink)
+            return
+        }
+        #else
         guard displayLink == nil else { return }
+        #endif
 
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
@@ -954,18 +955,26 @@ extension VTPlayerViewModel {
         }
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
-        if frameInterpolationLevel == 4 {
-            // Default display links are commonly capped at 60 Hz even on
-            // ProMotion hardware. Request the display maximum so 4x FI can
-            // present every generated frame when the device supports it.
-            link.preferredFramesPerSecond = UIScreen.main.maximumFramesPerSecond
-        }
+        #if os(iOS)
+        configureDisplayLinkFrameRate(link)
+        #endif
         #endif
         #if !os(macOS)
         link.add(to: .main, forMode: .common)
         self.displayLink = link
         #endif
     }
+
+    #if os(iOS)
+    private func configureDisplayLinkFrameRate(_ displayLink: CADisplayLink) {
+        // Default display links are commonly capped at 60 Hz even on
+        // ProMotion hardware. Request the display maximum for 4x FI and
+        // restore the system default for other playback modes.
+        displayLink.preferredFramesPerSecond = frameInterpolationLevel == 4
+            ? UIScreen.main.maximumFramesPerSecond
+            : 0
+    }
+    #endif
     #endif
 
     @MainActor
