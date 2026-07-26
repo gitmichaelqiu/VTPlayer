@@ -546,7 +546,7 @@ extension VTPlayerViewModel {
             #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
             @MainActor func fallBackFromQualitySR(preserveSelection: Bool = false) {
                 effectiveQualitySR = 0
-                let requestedFallback = qualitySR == 4 ? 4 : 2
+                let requestedFallback: Float = qualitySR == 4 ? 4 : 2
                 if self.availableSuperResolutionScales.contains(requestedFallback) {
                     effectiveSRLevel = requestedFallback
                 } else if self.availableSuperResolutionScales.contains(2) {
@@ -607,7 +607,7 @@ extension VTPlayerViewModel {
             #if os(macOS)
             if effectiveSRLevel > 0 {
                 let canStartPipeline = await VTFrameProcessorCoordinator
-                    .canStartLowLatencyPipeline(width: pipelineWidth, height: pipelineHeight, scale: 2)
+                    .canStartLowLatencyPipeline(width: pipelineWidth, height: pipelineHeight, scale: effectiveSRLevel)
                 if !canStartPipeline {
                     self.srInitializationError = "Low Latency SR does not support \(pipelineWidth)x\(pipelineHeight) on this device; enhancement disabled."
                     effectiveSRLevel = 0

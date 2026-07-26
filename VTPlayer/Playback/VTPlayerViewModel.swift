@@ -30,8 +30,8 @@ final class VTPlayerViewModel {
     /// VideoToolbox pipeline has produced a frame.
     var pipelinePresentationReady = false
 
-    // Feature Levels (0 = Off, 2 = 2x, 4 = 4x)
-    var superResolutionLevel: Int = 0
+    // Feature Levels (0 = Off; supported Low Latency scales vary by device)
+    var superResolutionLevel: Float = 0
     var frameInterpolationLevel: Int = 0
 
     // New API Feature Levels
@@ -138,7 +138,7 @@ final class VTPlayerViewModel {
     /// Scale choices supported for the currently loaded video's dimensions.
     /// These are intentionally separate from the display string so menus can
     /// keep unsupported choices visible but disabled.
-    var availableSuperResolutionScales: Set<Int> = []
+    var availableSuperResolutionScales: Set<Float> = []
     var availableQualitySuperResolutionScales: Set<Int> = []
     var readyQualitySuperResolutionScales: Set<Int> = []
     var srInitializationError: String? = nil
@@ -337,7 +337,7 @@ final class VTPlayerViewModel {
     }
 
     var bufferedFrameLimit: Int {
-        let scale = max(1, max(superResolutionLevel, qualitySuperResolutionScaleFactor))
+        let scale = max(1, max(superResolutionLevel, Float(qualitySuperResolutionScaleFactor)))
         let outputPixels = Double(videoWidth) * Double(videoHeight) * Double(scale * scale)
         guard outputPixels > 0 else { return maximumFrameCacheCount }
 

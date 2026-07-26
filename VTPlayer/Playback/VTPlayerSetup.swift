@@ -75,9 +75,12 @@ extension VTPlayerViewModel {
                 } else {
                     ll4SessionSupported = false
                 }
-                var availableSRScales: Set<Int> = []
-                if ll2SessionSupported {
-                    availableSRScales.insert(2)
+                var availableSRScales: Set<Float> = []
+                for scale in scales where scale > 0 && scale != 4 {
+                    if await VTFrameProcessorCoordinator
+                        .canStartLowLatencyPipeline(width: width, height: height, scale: scale) {
+                        availableSRScales.insert(scale)
+                    }
                 }
                 if ll4SessionSupported {
                     availableSRScales.insert(4)

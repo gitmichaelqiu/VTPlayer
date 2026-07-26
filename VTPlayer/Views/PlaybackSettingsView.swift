@@ -11,14 +11,14 @@ struct PlaybackSettingsView: View {
                     Picker("Super Resolution", selection: Binding(
                         get: {
                             if viewModel.qualitySuperResolutionScaleFactor > 0 {
-                                return 10 + viewModel.qualitySuperResolutionScaleFactor
+                                return Float(10 + viewModel.qualitySuperResolutionScaleFactor)
                             }
                             return viewModel.superResolutionLevel
                         },
                         set: { selection in
                             let isSupported: Bool
                             switch selection {
-                            case 2, 4:
+                            case 1.5, 2, 4:
                                 isSupported = viewModel.availableSuperResolutionScales.contains(selection)
                             case 12:
                                 isSupported = viewModel.availableQualitySuperResolutionScales.contains(2)
@@ -29,11 +29,8 @@ struct PlaybackSettingsView: View {
                             }
                             guard isSupported else { return }
                             switch selection {
-                            case 2:
-                                viewModel.superResolutionLevel = 2
-                                viewModel.qualitySuperResolutionScaleFactor = 0
-                            case 4:
-                                viewModel.superResolutionLevel = 4
+                            case 1.5, 2, 4:
+                                viewModel.superResolutionLevel = selection
                                 viewModel.qualitySuperResolutionScaleFactor = 0
                             case 12:
                                 viewModel.superResolutionLevel = 0
@@ -48,18 +45,15 @@ struct PlaybackSettingsView: View {
                             viewModel.updateEnhancements()
                         }
                     )) {
-                        Text("Off").tag(0)
-                        if viewModel.availableSuperResolutionScales.contains(2) {
-                            Text("Low Latency 2x").tag(2)
-                        }
-                        if viewModel.availableSuperResolutionScales.contains(4) {
-                            Text("Low Latency 4x").tag(4)
+                        Text("Off").tag(Float(0))
+                        ForEach(viewModel.availableSuperResolutionScales.sorted(), id: \.self) { scale in
+                            Text(String(format: "Low Latency %.1fx", scale)).tag(scale)
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                            Text("Quality 2x").tag(12)
+                            Text("Quality 2x").tag(Float(12))
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                            Text("Quality 4x").tag(14)
+                            Text("Quality 4x").tag(Float(14))
                         }
                     }
                     .pickerStyle(.menu)

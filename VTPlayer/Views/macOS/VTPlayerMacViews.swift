@@ -278,8 +278,8 @@ extension VTPlayerView {
                 }
                 
                 let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
-                let scale = max(viewModel.superResolutionLevel, viewModel.qualitySuperResolutionScaleFactor)
-                LabeledContent("Active State", value: scale > 0 ? "\(isQL ? "Quality" : "Low Latency") \(scale)x" : "Off")
+                let scale = max(viewModel.superResolutionLevel, Float(viewModel.qualitySuperResolutionScaleFactor))
+                LabeledContent("Active State", value: scale > 0 ? String(format: "%@ %.1fx", isQL ? "Quality" : "Low Latency", scale) : "Off")
                     .foregroundStyle(scale > 0 ? .blue : .secondary)
                 
                 if viewModel.qualitySuperResolutionScaleFactor > 0 {

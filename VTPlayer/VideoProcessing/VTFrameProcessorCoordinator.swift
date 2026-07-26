@@ -75,8 +75,7 @@ public actor VTFrameProcessorCoordinator {
     /// bare processor session. Capability lists and a successful bare session
     /// can still disagree with the pixel-buffer pools and presentation
     /// conversion required by real playback on macOS.
-    public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Int) async -> Bool {
-        guard scale == 2 else { return false }
+    public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Float) async -> Bool {
         let coordinator = VTFrameProcessorCoordinator(superResolutionLevel: scale)
         do {
             try await coordinator.startSession(width: width, height: height)
@@ -120,7 +119,7 @@ public actor VTFrameProcessorCoordinator {
     // MARK: - Configuration
 
     // Existing
-    public let superResolutionLevel: Int       // 0, 2, 4 (LL SR)
+    public let superResolutionLevel: Float     // 0, 1.5, 2, 4 (LL SR)
     public let frameInterpolationLevel: Int    // 0, 2, 4 (LL FI)
     public let useHighQualityDownsampling: Bool
     public let useRealTimePriority: Bool
@@ -187,7 +186,7 @@ public actor VTFrameProcessorCoordinator {
     // MARK: - Init
 
     public init(
-        superResolutionLevel: Int = 0,
+        superResolutionLevel: Float = 0,
         frameInterpolationLevel: Int = 0,
         useHighQualityDownsampling: Bool = true,
         useRealTimePriority: Bool = true,
@@ -339,7 +338,7 @@ public actor VTFrameProcessorCoordinator {
 
         // ── 2. Spatial Stage ──────────────────────────────────────────
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
-        let hasLLSR = superResolutionLevel >= 2
+        let hasLLSR = superResolutionLevel > 0
         #if os(macOS)
         let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !preferSequentialSRFI
         #else
@@ -353,7 +352,7 @@ public actor VTFrameProcessorCoordinator {
         // resolution and applies LL SR to each output frame. In particular,
         // FI4 must not interpolate already-upscaled 2x surfaces.
         #if os(macOS)
-        let useTemporalFirstForSRInterpolation = superResolutionLevel >= 2 &&
+        let useTemporalFirstForSRInterpolation = superResolutionLevel > 0 &&
             frameInterpolationLevel > 0 && !inCombinedMode
         #else
         let useTemporalFirstForSRInterpolation = false
@@ -392,20 +391,22 @@ public actor VTFrameProcessorCoordinator {
                 currentWidth *= scale
                 currentHeight *= scale
             } else {
-                // LL SR — first stage 2x
+                // LL SR — 4x cascades two 2x stages; other supported scales
+                // use their native VideoToolbox factor directly.
+                let firstStageScale: Float = superResolutionLevel == 4 ? 2 : superResolutionLevel
                 guard Self.isLowLatencySuperResolutionSupported(
-                    width: currentWidth, height: currentHeight, scale: 2.0
+                    width: currentWidth, height: currentHeight, scale: firstStageScale
                 ) else {
                     throw NSError(
                         domain: "VTFrameProcessorCoordinator",
                         code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Low Latency SR does not support \(currentWidth)x\(currentHeight) at 2x on this device"]
+                        userInfo: [NSLocalizedDescriptionKey: "Low Latency SR does not support \(currentWidth)x\(currentHeight) at \(firstStageScale)x on this device"]
                     )
                 }
                 let config1 = VTLowLatencySuperResolutionScalerConfiguration(
                     frameWidth: currentWidth,
                     frameHeight: currentHeight,
-                    scaleFactor: 2.0
+                    scaleFactor: firstStageScale
                 )
                 guard !config1.sourcePixelBufferAttributes.isEmpty,
                       !config1.destinationPixelBufferAttributes.isEmpty else {
@@ -417,14 +418,16 @@ public actor VTFrameProcessorCoordinator {
                 }
                 let proc1 = VTFrameProcessor()
                 try proc1.startSession(configuration: config1)
-                let pool1 = makePool(width: currentWidth * 2, height: currentHeight * 2, from: config1.destinationPixelBufferAttributes)
+                let firstOutputWidth = Int((Float(currentWidth) * firstStageScale).rounded())
+                let firstOutputHeight = Int((Float(currentHeight) * firstStageScale).rounded())
+                let pool1 = makePool(width: firstOutputWidth, height: firstOutputHeight, from: config1.destinationPixelBufferAttributes)
                 guard pool1 != nil else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create SR pool 1"])
                 }
-                addStage(.spatial, processor: proc1, pool: pool1, outW: currentWidth * 2, outH: currentHeight * 2)
-                currentWidth *= 2
-                currentHeight *= 2
+                addStage(.spatial, processor: proc1, pool: pool1, outW: firstOutputWidth, outH: firstOutputHeight)
+                currentWidth = firstOutputWidth
+                currentHeight = firstOutputHeight
 
                 // Second stage for 4x LL SR
                 if superResolutionLevel == 4 {
@@ -719,11 +722,11 @@ public actor VTFrameProcessorCoordinator {
         return []
     }
 
-    public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Int) async -> Bool {
+    public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Float) async -> Bool {
         return false
     }
 
-    public let superResolutionLevel: Int
+    public let superResolutionLevel: Float
     public let frameInterpolationLevel: Int
     public let useHighQualityDownsampling: Bool
     public let useRealTimePriority: Bool
@@ -733,7 +736,7 @@ public actor VTFrameProcessorCoordinator {
     public let qualityPrioritization: Int
 
     public init(
-        superResolutionLevel: Int,
+        superResolutionLevel: Float,
         frameInterpolationLevel: Int,
         useHighQualityDownsampling: Bool = true,
         useRealTimePriority: Bool = true,

@@ -164,7 +164,7 @@ extension VTFrameProcessorCoordinator {
         }
 
         #if os(macOS)
-        let isCombined = superResolutionLevel >= 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
+        let isCombined = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
         if isCombined {
             // Combined 2x spatial + 2x temporal
             var buf1: CVPixelBuffer?

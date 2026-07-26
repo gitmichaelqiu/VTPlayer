@@ -79,7 +79,7 @@ extension VTPlayerViewModel {
             applyDefaultPlaybackSettings()
             return
         }
-        superResolutionLevel = settings["superResolutionLevel"] as? Int ?? 0
+        superResolutionLevel = (settings["superResolutionLevel"] as? NSNumber)?.floatValue ?? 0
         frameInterpolationLevel = settings["frameInterpolationLevel"] as? Int ?? 0
         playbackSpeed = settings["playbackSpeed"] as? Double ?? 1.0
         volume = settings["volume"] as? Double ?? 1.0
