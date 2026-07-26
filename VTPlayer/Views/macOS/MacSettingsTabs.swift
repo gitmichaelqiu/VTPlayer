@@ -118,7 +118,7 @@ struct EnhancementsSettingsTab: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .frame(width: 100)
-                        .padding(.trailing, -16)
+                        .padding(.trailing, -20)
                     }
 
                     Divider()
@@ -136,7 +136,7 @@ struct EnhancementsSettingsTab: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .frame(width: 100)
-                        .padding(.trailing, -16)
+                        .padding(.trailing, -8)
                     }
                 }
 
