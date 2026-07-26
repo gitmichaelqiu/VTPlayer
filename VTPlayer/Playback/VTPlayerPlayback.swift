@@ -456,6 +456,7 @@ extension VTPlayerViewModel {
         stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false
+        renderer.setRenderingActive(true)
         setNativeVideoEnabled(true)
         #endif
         isBuffering = false
@@ -500,6 +501,12 @@ extension VTPlayerViewModel {
             resetPresentationClock(at: 0)
         }
         audioSyncLatency = 0
+        fps = 0
+        presentedFramesCount = 0
+        displayRateSamples.removeAll(keepingCapacity: true)
+        displayRate1PercentLow = 0
+        fpsTimer = .now()
+        displayRateMeasurementStart = .now()
 
         let srLevel = self.superResolutionLevel
         let fiLevel = self.frameInterpolationLevel
