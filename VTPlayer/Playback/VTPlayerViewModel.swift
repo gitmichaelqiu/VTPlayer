@@ -250,13 +250,9 @@ final class VTPlayerViewModel {
         let megabytes = configured > 0 ? configured : defaultMegabytes
         return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
     }
-    let maximumFrameCacheCount: Int = {
-        #if os(iOS)
-        return 32
-        #else
-        return 120
-        #endif
-    }()
+    /// The memory budget is the cache limit. A frame-count cap would make
+    /// low-resolution videos start with only a few seconds of reserve.
+    let maximumFrameCacheCount = Int.max
     func lockCache<T>(_ block: () -> T) -> T {
         cacheLock.lock()
         defer { cacheLock.unlock() }
@@ -438,7 +434,6 @@ final class VTPlayerViewModel {
 
     var audioSyncLatency: Double = 0
     var audioSyncTask: Task<Void, Never>?
-    @ObservationIgnored var enhancedAudioPlayer: EnhancedAudioPlayer?
 
     func retryAfterQualityModelDownload(generation: UInt64) {
         qualityModelRetryTask?.cancel()
@@ -960,7 +955,6 @@ final class VTPlayerViewModel {
     func handleTimeJump() {
         guard let player = player else { return }
         let currentTime = player.currentTime()
-        enhancedAudioPlayer?.seek(to: currentTime, shouldPlay: isPlaying && !isPaused)
         
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime

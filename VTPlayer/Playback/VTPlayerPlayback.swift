@@ -73,7 +73,6 @@ extension VTPlayerViewModel {
         #endif
 
         player.rate = Float(self.playbackSpeed)
-        enhancedAudioPlayer?.resume()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyPlaybackRate] = playbackSpeed
@@ -125,7 +124,6 @@ extension VTPlayerViewModel {
     func pause() {
         guard let player = player else { return }
         player.pause()
-        enhancedAudioPlayer?.pause()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
@@ -186,18 +184,7 @@ extension VTPlayerViewModel {
     }
     #endif
 
-    func setPrimaryAudioMuted(_ muted: Bool) {
-        player?.volume = muted ? 0 : 1
-    }
-
-    func stopEnhancedAudioPlayback() {
-        enhancedAudioPlayer?.stop()
-        enhancedAudioPlayer = nil
-        setPrimaryAudioMuted(false)
-    }
-
     func stopPlaybackLoopOnly() {
-        stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
@@ -244,7 +231,6 @@ extension VTPlayerViewModel {
     /// session cannot be started. Settings stay intact so the user can adjust
     /// them and retry without the player going dark or losing audio.
     func restoreNativePresentationAfterPipelineFailure() {
-        stopEnhancedAudioPlayback()
         isInitializingPipeline = false
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
@@ -449,7 +435,6 @@ extension VTPlayerViewModel {
 
     private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
-        stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false
         setNativeVideoEnabled(true)
@@ -698,12 +683,6 @@ extension VTPlayerViewModel {
                 }
             }
 
-            guard let videoURL = self.videoURL else {
-                self.activeCoordinator = nil
-                await coordinator.endSession()
-                return
-            }
-
             // Re-sync after coordinator setup, then keep audio and video
             // paused until the entire safe processed-frame cache is ready.
             var waitingForFramePreroll = false
@@ -721,11 +700,6 @@ extension VTPlayerViewModel {
                     self.isPaused = false
                     self.isBuffering = true
                     waitingForFramePreroll = true
-                    let audioPlayer = EnhancedAudioPlayer()
-                    if (try? await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed)) == true {
-                        self.enhancedAudioPlayer = audioPlayer
-                        self.setPrimaryAudioMuted(true)
-                    }
                 } else {
                     player.pause()
                     if resumeTime <= .zero, let url = self.videoURL,
@@ -739,6 +713,11 @@ extension VTPlayerViewModel {
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
+            guard let videoURL = self.videoURL else {
+                self.activeCoordinator = nil
+                await coordinator.endSession()
+                return
+            }
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
@@ -799,25 +778,6 @@ extension VTPlayerViewModel {
                     print("VTFrameSequence error: \(error.localizedDescription)")
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     continue
-                }
-
-                // Drop late frames to maintain real-time audio-video synchronization.
-                // Do not drop frames if the cache is completely empty (e.g. after seek or startup),
-                // to avoid getting stuck in a dropping loop before the rendering loop recovers.
-                if let player = self.player, !self.isPaused, player.rate > 0 {
-                    let currentSecs = self.presentationClockSeconds(
-                        playerSeconds: CMTimeGetSeconds(player.currentTime())
-                    )
-                    let frameSecs = CMTimeGetSeconds(vtFrame.presentationTimeStamp)
-                    // If the frame is late by more than 100ms, skip processing it
-                    let isEmpty = self.lockCache {
-                        self.processedFrameCacheStart >= self.processedFrameCache.count
-                    }
-                    if !isEmpty && frameSecs < currentSecs - 0.10 {
-                        self.pendingDroppedFrames += 1
-                        self.publishProcessingDiagnostics()
-                        continue
-                    }
                 }
 
                 // Process through the VideoToolbox pipeline
@@ -1021,18 +981,14 @@ extension VTPlayerViewModel {
                 drained += 1
                 self.processedFrameCacheStart += 1
             } else {
-                while self.processedFrameCacheStart < self.processedFrameCache.count {
-                    let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                    let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                    if frameTime > presentationSecs + 0.005 {
-                        break
-                    }
-
-                    lastFrameToRender = firstFrame
-                    self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                    drained += 1
-                    self.processedFrameCacheStart += 1
-                }
+                guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
+                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
+                let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
+                guard frameTime <= presentationSecs + 0.005 else { return }
+                lastFrameToRender = firstFrame
+                self.lastRenderedPTS = firstFrame.presentationTimeStamp
+                drained = 1
+                self.processedFrameCacheStart += 1
             }
             self.compactProcessedFrameCacheIfNeeded()
         }
@@ -1045,7 +1001,6 @@ extension VTPlayerViewModel {
             }
             #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
-            self.enhancedAudioPlayer?.frameRendered(at: frame.presentationTimeStamp)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
             #endif
@@ -1135,7 +1090,6 @@ extension VTPlayerViewModel {
 
     /// Pauses/stops playback entirely.
     func stop() {
-        stopEnhancedAudioPlayback()
         inactivityTask?.cancel()
         inactivityTask = nil
         #if os(macOS)
