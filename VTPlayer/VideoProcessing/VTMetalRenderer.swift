@@ -26,6 +26,7 @@ public final class VTMetalRenderer: MTKView {
     
     // The current pixel buffer to render
     private var currentPixelBuffer: CVPixelBuffer?
+    private var needsDrawableUpdate = true
     private enum NativeHDRTransfer: Equatable {
         case pq
         case hlg
@@ -269,6 +270,7 @@ public final class VTMetalRenderer: MTKView {
     }
 
     private func requestRedrawForImageAdjustment() {
+        needsDrawableUpdate = true
         #if os(macOS)
         if isPaused {
             draw()
@@ -305,6 +307,7 @@ public final class VTMetalRenderer: MTKView {
         if sizeChanged {
             lastLayoutSize = bounds.size
             updateDrawableSizeForBackingScale()
+            needsDrawableUpdate = true
             if isPaused {
                 requestPausedLayoutRedraw()
             }
@@ -349,6 +352,7 @@ public final class VTMetalRenderer: MTKView {
     public func render(pixelBuffer: CVPixelBuffer, isInterpolated _: Bool = false) {
         updateNativeHDRPresentation(for: pixelBuffer)
         self.currentPixelBuffer = pixelBuffer
+        needsDrawableUpdate = true
         #if os(macOS)
         if self.isPaused {
             self.draw()
@@ -370,6 +374,7 @@ public final class VTMetalRenderer: MTKView {
     /// Removes the currently displayed frame and redraws the view as black.
     public func clear() {
         self.currentPixelBuffer = nil
+        needsDrawableUpdate = true
         #if os(macOS)
         self.draw()
         #else
@@ -390,6 +395,8 @@ public final class VTMetalRenderer: MTKView {
         onDisplayTick?()
         #endif
 
+        guard needsDrawableUpdate else { return }
+
         if currentPixelBuffer == nil {
             guard let commandBuffer = queue.makeCommandBuffer() else { return }
             let renderPassDescriptor = MTLRenderPassDescriptor()
@@ -401,6 +408,7 @@ public final class VTMetalRenderer: MTKView {
             encoder.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
+            needsDrawableUpdate = false
             return
         }
 
@@ -509,6 +517,7 @@ public final class VTMetalRenderer: MTKView {
         
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        needsDrawableUpdate = false
     }
     
     #if os(iOS)
