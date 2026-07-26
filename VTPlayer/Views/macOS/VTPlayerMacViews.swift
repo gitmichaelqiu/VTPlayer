@@ -211,40 +211,42 @@ extension VTPlayerView {
     @ViewBuilder
     var rightSidebar: some View {
         Form {
-            Section("Real-Time Metrics") {
-                LabeledContent("Frame Processing") {
-                    Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
-                        .monospacedDigit()
-                }
-                LabeledContent("Display Rate") {
-                    Text(String(format: "%.1f Hz", viewModel.displayFrameRate))
-                        .monospacedDigit()
-                        .foregroundStyle(viewModel.displayFrameRate > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                }
-                LabeledContent("Display 1% Low") {
-                    Text(String(format: "%.1f Hz", viewModel.displayRate1PercentLow))
-                        .monospacedDigit()
-                        .foregroundStyle(viewModel.displayRate1PercentLow > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
-                }
-                LabeledContent("Rendered Timeline") {
-                    if viewModel.renderedTimelineSampleDuration > 0 {
-                        Text(String(
-                            format: "%.0f%%",
-                            viewModel.renderedTimelineRatio * 100
-                        ))
-                        .monospacedDigit()
-                        .foregroundStyle(
-                            (0.98...1.02).contains(viewModel.renderedTimelineRatio) ? .blue : .red
-                        )
-                    } else {
-                        Text("Measuring…")
-                            .foregroundStyle(.secondary)
+            if viewModel.isPipelineActive {
+                Section("Real-Time Metrics") {
+                    LabeledContent("Frame Processing") {
+                        Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
+                            .monospacedDigit()
                     }
-                }
-                LabeledContent("Cached Frames") {
-                    Text("\(viewModel.frameCacheCount)")
-                        .monospacedDigit()
-                        .foregroundStyle(viewModel.frameCacheCount > 10 ? .blue : .secondary)
+                    LabeledContent("Display Rate") {
+                        Text(String(format: "%.1f Hz", viewModel.displayFrameRate))
+                            .monospacedDigit()
+                            .foregroundStyle(viewModel.displayFrameRate > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                    }
+                    LabeledContent("Display 1% Low") {
+                        Text(String(format: "%.1f Hz", viewModel.displayRate1PercentLow))
+                            .monospacedDigit()
+                            .foregroundStyle(viewModel.displayRate1PercentLow > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                    }
+                    LabeledContent("Rendered Timeline") {
+                        if viewModel.renderedTimelineSampleDuration > 0 {
+                            Text(String(
+                                format: "%.0f%%",
+                                viewModel.renderedTimelineRatio * 100
+                            ))
+                            .monospacedDigit()
+                            .foregroundStyle(
+                                (0.98...1.02).contains(viewModel.renderedTimelineRatio) ? .blue : .red
+                            )
+                        } else {
+                            Text("Measuring…")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    LabeledContent("Cached Frames") {
+                        Text("\(viewModel.frameCacheCount)")
+                            .monospacedDigit()
+                            .foregroundStyle(viewModel.frameCacheCount > 10 ? .blue : .secondary)
+                    }
                 }
             }
             
