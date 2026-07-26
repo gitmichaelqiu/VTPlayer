@@ -1020,9 +1020,11 @@ extension VTPlayerViewModel {
         // callback (~24 Hz). A bounded 60% threshold lets the scheduler
         // alternate one- and two-callback gaps, converging on the requested
         // 30 Hz without allowing an unbounded burst.
-        let canForceNextFrame = wallElapsed >= outputPresentationInterval * 0.6
-        let useWallClockPacing = frameInterpolationLevel == 2 && sourceFrameRate > 0
-        let needsTimelineCatchUp = frameInterpolationLevel == 4 && sourceFrameRate > 0
+        let speed = max(playbackSpeed, 0.001)
+        let canForceNextFrame = wallElapsed >= (outputPresentationInterval / speed) * 0.6
+        let useWallClockPacing = frameInterpolationLevel == 2 && playbackSpeed <= 1.0 && sourceFrameRate > 0
+        let needsTimelineCatchUp = (frameInterpolationLevel == 4 ||
+            (frameInterpolationLevel == 2 && playbackSpeed > 1.0)) && sourceFrameRate > 0
         
         self.lockCache {
             if needsTimelineCatchUp {
