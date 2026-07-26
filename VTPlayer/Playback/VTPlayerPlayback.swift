@@ -917,17 +917,34 @@ extension VTPlayerViewModel {
                 guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
+                // The producer intentionally pauses AVPlayer while it fills
+                // the initial enhanced-frame queue. Do not let the normal
+                // audio recovery path defeat that pre-roll.
+                guard !self.isBuffering else { continue }
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
-                // Keep the audio clock independent from the processed-frame
-                // queue. Pausing AVPlayer here can deadlock playback when a
-                // restart or a slow FI/SR frame leaves fewer than two frames
-                // buffered; the display consumer already performs PTS-aware
-                // pacing and late-frame dropping.
-                self.isBuffering = false
 
-                // Record desync for diagnostics without interrupting audio.
+                // Keep AVPlayer's audio clock at or below the rate that the
+                // frame processor can sustain. The renderer continues to
+                // present the same frames at their original PTS; only audio
+                // is slowed enough to stop it from running ahead.
+                let sourceBudgetMilliseconds = self.sourceFrameRate > 0
+                    ? 1_000.0 / self.sourceFrameRate
+                    : 0
+                let processingRate: Double
+                if sourceBudgetMilliseconds > 0, self.frameProcessingTime > 0 {
+                    processingRate = min(1, sourceBudgetMilliseconds / self.frameProcessingTime)
+                } else {
+                    processingRate = 1
+                }
+                let leadCorrection = max(0.5, 1 - max(0, latency) * 2)
+                let targetAudioRate = Float(max(0.25, self.playbackSpeed * processingRate * leadCorrection))
+                if abs(player.rate - targetAudioRate) >= 0.02 {
+                    self.resetPresentationClock(at: currentSecs)
+                    player.rate = targetAudioRate
+                }
+
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {

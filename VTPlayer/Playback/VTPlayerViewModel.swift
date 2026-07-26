@@ -424,7 +424,12 @@ final class VTPlayerViewModel {
             ? now.uptimeNanoseconds - presentationClockAnchorWall.uptimeNanoseconds
             : 0
         let elapsed = Double(elapsedNanoseconds) / 1_000_000_000.0
-        return max(playerSeconds, presentationClockAnchorPTS + elapsed * playbackSpeed)
+        // The processed-video scheduler follows the actual audio rate, which
+        // can be reduced temporarily when enhancement processing cannot keep
+        // up.  Using the user's requested rate here would let presentation
+        // race ahead of the audio clock again.
+        let audioRate = max(0, Double(player?.rate ?? Float(playbackSpeed)))
+        return max(playerSeconds, presentationClockAnchorPTS + elapsed * audioRate)
     }
 
     var audioSyncLatency: Double = 0
