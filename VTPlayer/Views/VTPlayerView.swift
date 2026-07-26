@@ -159,6 +159,7 @@ struct VTPlayerView: View {
     @AppStorage("VTDefaultSharpness") var defaultSharpness = 0.0
     @AppStorage("VTDefaultHDRBoost") var defaultHDRBoost = 0.0
     @AppStorage("VTDefaultHDRColorfulness") var defaultHDRColorfulness = 0.0
+    @AppStorage("VTEnhancedFrameCacheMemoryMB") var enhancedFrameCacheMemoryMB = 256
 
     @State var scrubTime: Double = 0.0
     @State var isScrubbing: Bool = false

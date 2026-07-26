@@ -546,6 +546,14 @@ extension VTPlayerView {
                     Text("4x").tag(4)
                 }
                 .tint(.secondary)
+
+                Picker("Enhanced frame cache", selection: $enhancedFrameCacheMemoryMB) {
+                    Text("128 MB").tag(128)
+                    Text("256 MB").tag(256)
+                    Text("384 MB").tag(384)
+                    Text("512 MB").tag(512)
+                }
+                .tint(.secondary)
                 
                 HStack {
                     Text("Motion Blur")

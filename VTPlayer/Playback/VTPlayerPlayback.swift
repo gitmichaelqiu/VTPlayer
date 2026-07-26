@@ -954,6 +954,12 @@ extension VTPlayerViewModel {
         }
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
+        if frameInterpolationLevel == 4 {
+            // Default display links are commonly capped at 60 Hz even on
+            // ProMotion hardware. Request the display maximum so 4x FI can
+            // present every generated frame when the device supports it.
+            link.preferredFramesPerSecond = UIScreen.main.maximumFramesPerSecond
+        }
         #endif
         #if !os(macOS)
         link.add(to: .main, forMode: .common)
