@@ -178,7 +178,10 @@ extension VTPlayerViewModel {
     func setNativeVideoEnabled(_ enabled: Bool) {
         guard let tracks = player?.currentItem?.tracks else { return }
         for track in tracks where track.assetTrack?.mediaType == .video {
-            track.isEnabled = enabled
+            // SwiftUI hides the native layer after the first enhanced frame.
+            // Keep its track active while independent enhanced audio is in
+            // use so AVPlayer continues to provide a stable video clock.
+            track.isEnabled = enabled || enhancedAudioPipeline != nil
         }
         for track in tracks where track.assetTrack?.mediaType == .audio {
             track.isEnabled = enhancedAudioPipeline == nil
