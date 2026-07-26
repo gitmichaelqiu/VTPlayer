@@ -716,7 +716,6 @@ extension VTPlayerViewModel {
                     CMTime(value: 1, timescale: 600)
                 )
                 self.resetPresentationClock(at: CMTimeGetSeconds(resumeTime))
-                await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 let shouldResume = shouldResumePlayback && gen == self.playbackGeneration
                 self.isInitializingPipeline = false
                 pausedForInitialization = false
@@ -849,6 +848,13 @@ extension VTPlayerViewModel {
                                 } else {
                                     hi = mid
                                 }
+                            }
+                            if lo < self.processedFrameCache.count,
+                               CMTimeCompare(
+                                self.processedFrameCache[lo].presentationTimeStamp,
+                                pts
+                               ) == 0 {
+                                continue
                             }
                             self.processedFrameCache.insert(outFrame, at: lo)
                         }
