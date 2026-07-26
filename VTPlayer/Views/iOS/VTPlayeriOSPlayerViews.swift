@@ -34,6 +34,26 @@ extension VTPlayerView {
                     .tint(.white)
             }
 
+            if viewModel.showControls && isPlayerNavigationReady {
+                VStack {
+                    HStack {
+                        Button(action: exitIOSPlayer) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .accessibilityLabel("Exit player")
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .zIndex(2)
+            }
         }
         .navigationTitle(viewModel.showControls ? displayTitle : "")
         .navigationBarTitleDisplayMode(.inline)
@@ -45,20 +65,6 @@ extension VTPlayerView {
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
             if viewModel.showControls && isPlayerNavigationReady {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        isPlayerPresented = false
-                        viewModel.player?.pause()
-                        IOSPlayerTabBarController.setHidden(false, animated: true)
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isPlayerTabBarHidden = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .accessibilityLabel("Exit player")
-                }
-
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showSettingsSheet = true
@@ -112,6 +118,17 @@ extension VTPlayerView {
             withAnimation(.easeInOut(duration: 0.25)) {
                 isPlayerTabBarHidden = true
             }
+        }
+    }
+
+    func exitIOSPlayer() {
+        viewModel.stop()
+        viewModel.videoURL = nil
+        isPlayerPresented = false
+        isPlayerNavigationReady = false
+        IOSPlayerTabBarController.setHidden(false, animated: true)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isPlayerTabBarHidden = false
         }
     }
 
@@ -193,4 +210,3 @@ extension VTPlayerView {
     #endif
 
 }
-

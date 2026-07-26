@@ -39,6 +39,7 @@ public final class VTMetalRenderer: MTKView {
     #endif
     #if os(iOS)
     private var edrRefreshAttempts = 0
+    private var pausedLayoutRedrawPending = false
     #endif
 
     public var sharpness: Float = 0.0 {
@@ -539,9 +540,16 @@ public final class VTMetalRenderer: MTKView {
     public override func layoutSubviews() {
         super.layoutSubviews()
         configureExtendedDynamicRangePresentation()
-        // Force the MTKView to trigger draw() when bounds change due to rotation,
-        // ensuring the aspect ratio transforms recalculate correctly while paused.
+        needsDrawableUpdate = true
         self.setNeedsDisplay(self.bounds)
+        guard isPaused, !pausedLayoutRedrawPending else { return }
+        pausedLayoutRedrawPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pausedLayoutRedrawPending = false
+            guard self.isPaused else { return }
+            self.draw()
+        }
     }
     #endif
 }
