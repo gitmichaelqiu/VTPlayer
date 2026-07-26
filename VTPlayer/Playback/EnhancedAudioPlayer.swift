@@ -7,8 +7,8 @@ final class EnhancedAudioPlayer {
     private var player: AVAudioPlayer?
     private var started = false
     private var paused = false
-    private var lastPTS: CMTime?
-    private var lastWall = DispatchTime.now()
+    private var rateReferencePTS: CMTime?
+    private var rateReferenceWall = DispatchTime.now()
     private var smoothedRate = 1.0
 
     func prepare(url: URL, initialRate: Double) -> Bool {
@@ -27,8 +27,8 @@ final class EnhancedAudioPlayer {
 
         guard started else {
             started = true
-            lastPTS = pts
-            lastWall = now
+            rateReferencePTS = pts
+            rateReferenceWall = now
             player.currentTime = min(max(0, CMTimeGetSeconds(pts)), player.duration)
             player.rate = Float(smoothedRate)
             if !paused {
@@ -37,23 +37,28 @@ final class EnhancedAudioPlayer {
             return
         }
 
-        defer {
-            lastPTS = pts
-            lastWall = now
-        }
-        guard let lastPTS else { return }
-        let mediaDelta = CMTimeGetSeconds(CMTimeSubtract(pts, lastPTS))
-        let wallNanoseconds = now.uptimeNanoseconds >= lastWall.uptimeNanoseconds
-            ? now.uptimeNanoseconds - lastWall.uptimeNanoseconds
+        guard let rateReferencePTS else { return }
+        let wallNanoseconds = now.uptimeNanoseconds >= rateReferenceWall.uptimeNanoseconds
+            ? now.uptimeNanoseconds - rateReferenceWall.uptimeNanoseconds
             : 0
         let wallDelta = Double(wallNanoseconds) / 1_000_000_000.0
-        guard mediaDelta > 0, wallDelta > 0 else { return }
+        guard wallDelta >= 0.2 else { return }
+
+        let mediaDelta = CMTimeGetSeconds(CMTimeSubtract(pts, rateReferencePTS))
+        guard mediaDelta > 0 else { return }
 
         let observedRate = min(2.0, max(0.5, mediaDelta / wallDelta))
-        smoothedRate = smoothedRate * 0.85 + observedRate * 0.15
+        smoothedRate = smoothedRate * 0.9 + observedRate * 0.1
         let lead = player.currentTime - CMTimeGetSeconds(pts)
         let correction = min(0.12, max(-0.12, lead * 0.35))
-        player.rate = Float(min(2.0, max(0.5, smoothedRate - correction)))
+        let requestedRate = min(2.0, max(0.5, smoothedRate - correction))
+        let currentRate = Double(player.rate)
+        let boundedRate = currentRate + min(0.025, max(-0.025, requestedRate - currentRate))
+        if abs(boundedRate - currentRate) >= 0.005 {
+            player.rate = Float(boundedRate)
+        }
+        self.rateReferencePTS = pts
+        rateReferenceWall = now
     }
 
     func pause() {
@@ -71,8 +76,8 @@ final class EnhancedAudioPlayer {
     func seek(to time: CMTime, shouldPlay: Bool) {
         guard let player else { return }
         player.currentTime = min(max(0, CMTimeGetSeconds(time)), player.duration)
-        lastPTS = time
-        lastWall = .now()
+        rateReferencePTS = time
+        rateReferenceWall = .now()
         if shouldPlay && !paused {
             player.rate = Float(smoothedRate)
             player.play()
@@ -84,6 +89,6 @@ final class EnhancedAudioPlayer {
         player = nil
         started = false
         paused = false
-        lastPTS = nil
+        rateReferencePTS = nil
     }
 }
