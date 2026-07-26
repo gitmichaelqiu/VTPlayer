@@ -16,6 +16,9 @@ final class EnhancedAudioPipeline {
 
     init() {
         synchronizer.addRenderer(renderer)
+        // Sample buffers may be queued well before enhanced video is ready.
+        // Hold the audio timeline until the first frame is actually rendered.
+        synchronizer.setRate(0, time: .zero)
     }
 
     func prepare(url: URL, startTime: CMTime) async throws -> Bool {

@@ -238,7 +238,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var enhancedAudioPipeline: EnhancedAudioPipeline?
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
-    let frameCacheMemoryBudget: Int = {
+    var frameCacheMemoryBudget: Int {
         #if os(iOS)
         let defaultMegabytes = 256
         let maximumMegabytes = 512
@@ -249,7 +249,7 @@ final class VTPlayerViewModel {
         let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheMemoryMB")
         let megabytes = configured > 0 ? configured : defaultMegabytes
         return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
-    }()
+    }
     let maximumFrameCacheCount: Int = {
         #if os(iOS)
         return 32
