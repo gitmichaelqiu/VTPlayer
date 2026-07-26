@@ -132,7 +132,6 @@ extension VTPlayerViewModel {
         resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
         self.isPaused = true
         self.isBuffering = false
-        self.isAudioSyncPaused = false
         #if os(macOS)
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
@@ -216,7 +215,6 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
-        isAudioSyncPaused = false
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0
@@ -444,7 +442,6 @@ extension VTPlayerViewModel {
         setNativeVideoEnabled(true)
         #endif
         isBuffering = false
-        isAudioSyncPaused = false
         playbackGeneration += 1
         qualityModelRetryTask?.cancel()
         qualityModelRetryTask = nil
@@ -697,12 +694,8 @@ extension VTPlayerViewModel {
                 }
             }
 
-            // Re-sync lastPulledTime after potentially slow coordinator setup.
-            // Keep AVPlayer paused until the enhanced frame queue is primed:
-            // AVPlayer is the audio renderer, and starting it before the
-            // processed frames exist makes audio lead the video at startup and
-            // after every pipeline restart.
-            var waitingForAudioPreroll = false
+            // Re-sync lastPulledTime after potentially slow coordinator setup
+            // and resume the player from the same position.
             if let player = self.player {
                 let resumeTime = player.currentTime()
                 self.lastPulledTime = resumeTime
@@ -715,8 +708,7 @@ extension VTPlayerViewModel {
                 if shouldResume {
                     self.isPlaying = true
                     self.isPaused = false
-                    self.isBuffering = true
-                    waitingForAudioPreroll = true
+                    player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 } else {
                     player.pause()
                     if resumeTime <= .zero, let url = self.videoURL,
@@ -739,25 +731,6 @@ extension VTPlayerViewModel {
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
             var combinedProcessFallbackAttempted = false
-
-            @MainActor
-            func resumeAudioAfterPrerollIfReady(force: Bool = false) {
-                guard waitingForAudioPreroll,
-                      gen == self.playbackGeneration,
-                      let player = self.player else { return }
-
-                let cachedFrameCount = self.lockCache {
-                    max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
-                }
-                guard cachedFrameCount >= self.resumeBufferFrameCount || (force && cachedFrameCount > 0) else {
-                    return
-                }
-
-                waitingForAudioPreroll = false
-                self.isBuffering = false
-                self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
-                player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
-            }
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
@@ -866,7 +839,6 @@ extension VTPlayerViewModel {
                         self.compactProcessedFrameCacheIfNeeded()
                     }
                     self.producedFramesCount += outputFrames.count
-                    resumeAudioAfterPrerollIfReady()
 
                     // A completed source frame is the only safe point to
                     // retier: startPlaybackLoop() serializes teardown with
@@ -895,14 +867,8 @@ extension VTPlayerViewModel {
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     self.lockCache { self.processedFrameCache.append(vtFrame) }
                     self.producedFramesCount += 1
-                    resumeAudioAfterPrerollIfReady()
                 }
             }
-
-            // A short asset can end before the normal pre-roll target. Start
-            // its audio when at least one processed frame is available rather
-            // than leaving playback paused at end of input.
-            resumeAudioAfterPrerollIfReady(force: true)
 
             await coordinator.endSession()
             if self.playbackGeneration == gen {
@@ -920,31 +886,19 @@ extension VTPlayerViewModel {
                 guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
-                // The producer intentionally pauses AVPlayer while it fills
-                // the initial enhanced-frame queue. Do not let the normal
-                // audio recovery path defeat that pre-roll.
-                guard !self.isBuffering else { continue }
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
+                // Keep the audio clock independent from the processed-frame
+                // queue. Pausing AVPlayer here can deadlock playback when a
+                // restart or a slow FI/SR frame leaves fewer than two frames
+                // buffered; the display consumer already performs PTS-aware
+                // pacing and late-frame dropping.
+                self.isBuffering = false
 
-                if self.isAudioSyncPaused {
-                    // The display scheduler intentionally continues from its
-                    // existing wall-clock anchor while AVPlayer is paused.
-                    // Once its rendered PTS reaches the held audio time, the
-                    // matching audio sample can resume without changing frame
-                    // presentation cadence.
-                    if latency <= self.audioSyncResumeThreshold {
-                        self.isAudioSyncPaused = false
-                        player.rate = Float(self.playbackSpeed)
-                    }
-                    continue
-                }
-
+                // Record desync for diagnostics without interrupting audio.
                 if latency > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
-                    self.isAudioSyncPaused = true
-                    player.pause()
                 } else {
                     self.audioSyncLatency = 0
                 }
@@ -952,7 +906,7 @@ extension VTPlayerViewModel {
                 // AVPlayer may stop playback (rate → 0) if its audio decoder fails
                 // on certain file formats. Periodically re-assert the desired rate
                 // to kickstart the decoder. This does NOT pause — it only recovers.
-                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline && !self.isAudioSyncPaused {
+                if player.rate == 0 && self.isPlaying && !self.isPaused && !self.isInitializingPipeline {
                     player.rate = Float(self.playbackSpeed)
                 }
             }
@@ -1185,7 +1139,6 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
-        isAudioSyncPaused = false
         lastRenderedPTS = .zero
         lockCache { clearProcessedFrameCache() }
         

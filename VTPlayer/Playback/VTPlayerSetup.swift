@@ -211,7 +211,7 @@ extension VTPlayerViewModel {
                             guard let self else { return }
                             switch player.timeControlStatus {
                             case .paused:
-                                if !self.isInitializingPipeline && !self.isAudioSyncPaused {
+                                if !self.isInitializingPipeline {
                                     if !self.isBuffering {
                                         self.isPaused = true
                                     }
@@ -261,3 +261,4 @@ extension VTPlayerViewModel {
     }
     
 }
+

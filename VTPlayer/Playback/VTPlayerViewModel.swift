@@ -375,7 +375,7 @@ final class VTPlayerViewModel {
     var seekGeneration: UInt64 = 0
     var isInitializingPipeline = false
 
-    // Audio sync monitoring after the enhanced-frame audio pre-roll.
+    // Audio sync monitoring (diagnostic only — never pauses player)
     var lastRenderedPTS: CMTime = .zero
     // AVPlayer can expose a frame-quantized currentTime for silent or low-rate
     // assets.  Interpolated output must be paced by a monotonic clock between
@@ -429,9 +429,6 @@ final class VTPlayerViewModel {
 
     var audioSyncLatency: Double = 0
     var audioSyncTask: Task<Void, Never>?
-    /// AVPlayer is paused only to hold audio until rendered video catches up.
-    /// This is distinct from a user-initiated playback pause.
-    @ObservationIgnored var isAudioSyncPaused = false
 
     func retryAfterQualityModelDownload(generation: UInt64) {
         qualityModelRetryTask?.cancel()
@@ -452,7 +449,6 @@ final class VTPlayerViewModel {
         }
     }
     let audioSyncLatencyThreshold: Double = 0.1
-    let audioSyncResumeThreshold: Double = 0.025
     
     let renderer: VTMetalRenderer
     let modelManager = VTModelManager()
