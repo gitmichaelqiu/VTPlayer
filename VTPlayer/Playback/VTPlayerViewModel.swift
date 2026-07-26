@@ -438,7 +438,6 @@ final class VTPlayerViewModel {
 
     var audioSyncLatency: Double = 0
     var audioSyncTask: Task<Void, Never>?
-    @ObservationIgnored var enhancedAudioPipeline: EnhancedAudioPipeline?
 
     func retryAfterQualityModelDownload(generation: UInt64) {
         qualityModelRetryTask?.cancel()
@@ -960,13 +959,6 @@ final class VTPlayerViewModel {
     func handleTimeJump() {
         guard let player = player else { return }
         let currentTime = player.currentTime()
-
-        if enhancedAudioPipeline != nil {
-            enhancedAudioPipeline?.stop()
-            enhancedAudioPipeline = nil
-            setAVPlayerAudioEnabled(true)
-            enhancementsPendingRestart = true
-        }
         
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime
@@ -974,12 +966,6 @@ final class VTPlayerViewModel {
         resetPresentationClock(at: CMTimeGetSeconds(currentTime))
         Task { @MainActor in
             await self.activeCoordinator?.clearHistory()
-        }
-
-        if isPlaying && !isPaused && enhancementsPendingRestart {
-            enhancementsPendingRestart = false
-            startPlaybackLoop()
-            return
         }
         
         // If paused (e.g. scrubbing), read and draw a single frame immediately
