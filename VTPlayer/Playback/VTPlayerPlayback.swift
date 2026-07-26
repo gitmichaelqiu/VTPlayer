@@ -484,15 +484,6 @@ extension VTPlayerViewModel {
         }
         audioSyncLatency = 0
 
-        // Re-assert player rate so audio keeps playing after a pipeline
-        // restart triggered by updateEnhancements().  Without this, a
-        // rate that dropped to 0 (AVPlayer internal stall) stays silent
-        // because the old audioSyncTask was already cancelled and the new
-        // one won't check for 200 ms.
-        if let player = player, !isPaused {
-            player.rate = Float(playbackSpeed)
-        }
-
         let srLevel = self.superResolutionLevel
         let fiLevel = self.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
@@ -694,8 +685,9 @@ extension VTPlayerViewModel {
                 }
             }
 
-            // Re-sync lastPulledTime after potentially slow coordinator setup
-            // and resume the player from the same position.
+            // Re-sync after coordinator setup, then keep audio and video
+            // paused until the entire safe processed-frame cache is ready.
+            var waitingForFramePreroll = false
             if let player = self.player {
                 let resumeTime = player.currentTime()
                 self.lastPulledTime = resumeTime
@@ -708,7 +700,8 @@ extension VTPlayerViewModel {
                 if shouldResume {
                     self.isPlaying = true
                     self.isPaused = false
-                    player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+                    self.isBuffering = true
+                    waitingForFramePreroll = true
                 } else {
                     player.pause()
                     if resumeTime <= .zero, let url = self.videoURL,
@@ -731,6 +724,21 @@ extension VTPlayerViewModel {
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
             var combinedProcessFallbackAttempted = false
+
+            @MainActor
+            func resumeAfterFramePrerollIfReady(force: Bool = false) {
+                guard waitingForFramePreroll, let player = self.player else { return }
+                let cachedFrameCount = self.lockCache {
+                    max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
+                }
+                guard cachedFrameCount >= self.bufferedFrameLimit || (force && cachedFrameCount > 0) else {
+                    return
+                }
+                waitingForFramePreroll = false
+                self.isBuffering = false
+                self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
+                player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+            }
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
@@ -839,6 +847,7 @@ extension VTPlayerViewModel {
                         self.compactProcessedFrameCacheIfNeeded()
                     }
                     self.producedFramesCount += outputFrames.count
+                    resumeAfterFramePrerollIfReady()
 
                     // A completed source frame is the only safe point to
                     // retier: startPlaybackLoop() serializes teardown with
@@ -867,8 +876,11 @@ extension VTPlayerViewModel {
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     self.lockCache { self.processedFrameCache.append(vtFrame) }
                     self.producedFramesCount += 1
+                    resumeAfterFramePrerollIfReady()
                 }
             }
+
+            resumeAfterFramePrerollIfReady(force: true)
 
             await coordinator.endSession()
             if self.playbackGeneration == gen {
@@ -886,6 +898,7 @@ extension VTPlayerViewModel {
                 guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !self.isPaused, let player = self.player else { continue }
+                guard !self.isBuffering else { continue }
                 let currentSecs = CMTimeGetSeconds(player.currentTime())
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs

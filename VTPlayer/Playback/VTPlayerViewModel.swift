@@ -237,13 +237,18 @@ final class VTPlayerViewModel {
     @ObservationIgnored let cacheLock = NSRecursiveLock()
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
-    let frameCacheMemoryBudget: Int = {
+    var frameCacheMemoryBudget: Int {
         #if os(iOS)
-        return 128 * 1024 * 1024
+        let defaultMegabytes = 256
+        let maximumMegabytes = 512
         #else
-        return 512 * 1024 * 1024
+        let defaultMegabytes = 1_024
+        let maximumMegabytes = 2_048
         #endif
-    }()
+        let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheMemoryMB")
+        let megabytes = configured > 0 ? configured : defaultMegabytes
+        return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
+    }
     let maximumFrameCacheCount: Int = {
         #if os(iOS)
         return 32
