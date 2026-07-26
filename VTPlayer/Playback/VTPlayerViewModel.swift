@@ -426,6 +426,7 @@ final class VTPlayerViewModel {
 
     var audioSyncLatency: Double = 0
     var audioSyncTask: Task<Void, Never>?
+    @ObservationIgnored var enhancedAudioPlayer: EnhancedAudioPlayer?
 
     func retryAfterQualityModelDownload(generation: UInt64) {
         qualityModelRetryTask?.cancel()
@@ -947,6 +948,7 @@ final class VTPlayerViewModel {
     func handleTimeJump() {
         guard let player = player else { return }
         let currentTime = player.currentTime()
+        enhancedAudioPlayer?.seek(to: currentTime, shouldPlay: isPlaying && !isPaused)
         
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime

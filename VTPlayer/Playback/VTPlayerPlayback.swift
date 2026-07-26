@@ -73,6 +73,7 @@ extension VTPlayerViewModel {
         #endif
 
         player.rate = Float(self.playbackSpeed)
+        enhancedAudioPlayer?.resume()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyPlaybackRate] = playbackSpeed
@@ -124,6 +125,7 @@ extension VTPlayerViewModel {
     func pause() {
         guard let player = player else { return }
         player.pause()
+        enhancedAudioPlayer?.pause()
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
@@ -184,7 +186,18 @@ extension VTPlayerViewModel {
     }
     #endif
 
+    func setPrimaryAudioMuted(_ muted: Bool) {
+        player?.volume = muted ? 0 : 1
+    }
+
+    func stopEnhancedAudioPlayback() {
+        enhancedAudioPlayer?.stop()
+        enhancedAudioPlayer = nil
+        setPrimaryAudioMuted(false)
+    }
+
     func stopPlaybackLoopOnly() {
+        stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
@@ -231,6 +244,7 @@ extension VTPlayerViewModel {
     /// session cannot be started. Settings stay intact so the user can adjust
     /// them and retry without the player going dark or losing audio.
     func restoreNativePresentationAfterPipelineFailure() {
+        stopEnhancedAudioPlayback()
         isInitializingPipeline = false
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
@@ -435,6 +449,7 @@ extension VTPlayerViewModel {
 
     private func startPlaybackLoopNow() {
         let shouldResumePlayback = isPlaying && !isPaused
+        stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false
         setNativeVideoEnabled(true)
@@ -683,6 +698,12 @@ extension VTPlayerViewModel {
                 }
             }
 
+            guard let videoURL = self.videoURL else {
+                self.activeCoordinator = nil
+                await coordinator.endSession()
+                return
+            }
+
             // Re-sync after coordinator setup, then keep audio and video
             // paused until the entire safe processed-frame cache is ready.
             var waitingForFramePreroll = false
@@ -704,6 +725,11 @@ extension VTPlayerViewModel {
                     self.isPaused = false
                     self.isBuffering = true
                     waitingForFramePreroll = true
+                    let audioPlayer = EnhancedAudioPlayer()
+                    if audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                        self.enhancedAudioPlayer = audioPlayer
+                        self.setPrimaryAudioMuted(true)
+                    }
                 } else {
                     player.pause()
                     if resumeTime <= .zero, let url = self.videoURL,
@@ -717,11 +743,6 @@ extension VTPlayerViewModel {
             }
 
             // Create VTFrameSequence to decode frames faster-than-real-time
-            guard let videoURL = self.videoURL else {
-                self.activeCoordinator = nil
-                await coordinator.endSession()
-                return
-            }
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
@@ -1005,6 +1026,7 @@ extension VTPlayerViewModel {
             }
             #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
+            self.enhancedAudioPlayer?.frameRendered(at: frame.presentationTimeStamp)
             #if os(macOS)
             self.adaptiveSRFIHasPresentedFrame = true
             #endif
@@ -1094,6 +1116,7 @@ extension VTPlayerViewModel {
 
     /// Pauses/stops playback entirely.
     func stop() {
+        stopEnhancedAudioPlayback()
         inactivityTask?.cancel()
         inactivityTask = nil
         #if os(macOS)
