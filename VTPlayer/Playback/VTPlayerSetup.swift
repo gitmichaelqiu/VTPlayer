@@ -211,14 +211,21 @@ extension VTPlayerViewModel {
                             guard let self else { return }
                             switch player.timeControlStatus {
                             case .paused:
-                                if !self.isInitializingPipeline {
-                                    if !self.isBuffering {
-                                        self.isPaused = true
-                                    }
+                                if !self.isInitializingPipeline,
+                                   !self.isBuffering,
+                                   self.isPlaying,
+                                   !self.isPaused {
+                                    // Native iOS controls pause AVPlayer
+                                    // directly. Mirror that action through
+                                    // the enhancement lifecycle so Metal and
+                                    // the independent audio transport stop too.
+                                    self.pause()
                                 }
                             case .playing:
-                                if !self.isInitializingPipeline {
-                                    self.isPaused = false
+                                if !self.isInitializingPipeline,
+                                   self.isPlaying,
+                                   self.isPaused {
+                                    self.play()
                                 }
                             case .waitingToPlayAtSpecifiedRate:
                                 break
