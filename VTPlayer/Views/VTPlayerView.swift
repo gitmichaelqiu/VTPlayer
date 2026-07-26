@@ -244,6 +244,7 @@ struct VTPlayerView: View {
                 }
                 #endif
                 if let movie = try? await item.loadTransferable(type: PhotosMovie.self) {
+                    #if os(iOS)
                     await MainActor.run {
                         isPlayerTabBarHidden = true
                         showPhotoPicker = false
@@ -251,6 +252,7 @@ struct VTPlayerView: View {
                     await Task.yield()
                     await Task.yield()
                     guard !Task.isCancelled else { return }
+                    #endif
                     await MainActor.run {
                         viewModel.openVideo(movie.url, importIdentifier: item.itemIdentifier)
                     }
