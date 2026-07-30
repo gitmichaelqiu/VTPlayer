@@ -7,6 +7,8 @@ extension VTPlayerViewModel {
         // Capability probing is asynchronous. Clear the previous video's
         // scale set immediately so its enabled menu items cannot leak into
         // the new video's loading window.
+        srIsSupported = false
+        srSupportedScales = "None"
         availableSuperResolutionScales.removeAll()
         availableQualitySuperResolutionScales.removeAll()
         readyQualitySuperResolutionScales.removeAll()
@@ -85,6 +87,9 @@ extension VTPlayerViewModel {
                 if ll4SessionSupported {
                     availableSRScales.insert(4)
                 }
+                let availableScalesStr = availableSRScales.isEmpty
+                    ? "None"
+                    : availableSRScales.sorted().map { String(format: "%.1fx", $0) }.joined(separator: ", ")
                 var availableQualityScales: Set<Int> = []
                 var readyQualityScales: Set<Int> = []
                 #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
@@ -155,8 +160,8 @@ extension VTPlayerViewModel {
                     self.videoHeight = height
                     self.sourceFrameRate = frameRate
                     self.videoFormat = formatStr
-                    self.srIsSupported = supported
-                    self.srSupportedScales = scalesStr
+                    self.srIsSupported = supported && !availableSRScales.isEmpty
+                    self.srSupportedScales = availableScalesStr
                     self.availableSuperResolutionScales = availableSRScales
                     self.availableQualitySuperResolutionScales = availableQualityScales
                     self.readyQualitySuperResolutionScales = readyQualityScales
