@@ -553,7 +553,7 @@ extension VTPlayerView {
                 .tint(.secondary)
 
                 HStack {
-                    Text("Enhanced frame cache")
+                    Text("Frame cache")
                     Spacer()
                     Slider(value: Binding(
                         get: { Double(min(max(enhancedFrameCacheMemoryMB, 128), 1_024)) },
@@ -565,6 +565,7 @@ extension VTPlayerView {
                         : "\(enhancedFrameCacheMemoryMB) MB")
                         .frame(width: 58, alignment: .trailing)
                 }
+                .padding(.bottom, 8)
                 
                 HStack {
                     Text("Motion Blur")

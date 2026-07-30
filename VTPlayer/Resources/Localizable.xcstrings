@@ -736,6 +736,16 @@
         }
       }
     },
+    "Frame cache" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帧缓存"
+          }
+        }
+      }
+    },
     "Frame Processing" : {
       "localizations" : {
         "zh-Hans" : {
