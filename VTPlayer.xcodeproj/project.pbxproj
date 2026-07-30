@@ -100,6 +100,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 4668B1512FE2CEDA002FF95C;
 			minimizedProjectReferenceProxies = 1;
@@ -197,6 +198,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -256,6 +258,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
 		};
@@ -273,12 +276,12 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
-				"INFOPLIST_FILE[sdk=macosx*]" = "VTPlayer-Info.plist";
 				"GENERATE_INFOPLIST_FILE[sdk=iphoneos*]" = NO;
 				"GENERATE_INFOPLIST_FILE[sdk=iphonesimulator*]" = NO;
+				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
 				"INFOPLIST_FILE[sdk=iphoneos*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
 				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=macosx*]" = "VTPlayer-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -328,12 +331,12 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
-				"INFOPLIST_FILE[sdk=macosx*]" = "VTPlayer-Info.plist";
 				"GENERATE_INFOPLIST_FILE[sdk=iphoneos*]" = NO;
 				"GENERATE_INFOPLIST_FILE[sdk=iphonesimulator*]" = NO;
+				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
 				"INFOPLIST_FILE[sdk=iphoneos*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
 				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=macosx*]" = "VTPlayer-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
