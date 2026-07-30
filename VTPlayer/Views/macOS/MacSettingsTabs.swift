@@ -130,24 +130,22 @@ struct EnhancementsSettingsTab: View {
 
                     Divider()
 
-                    SettingsRow(
+                    SliderSettingsRow(
                         "Enhanced frame cache",
-                        helperText: "Maximum memory for enhanced-frame prebuffering."
-                    ) {
-                        HStack(spacing: 10) {
-                            Slider(value: Binding(
-                                get: { Double(min(max(enhancedFrameCacheMemoryMB, 256), 4_096)) },
-                                set: { enhancedFrameCacheMemoryMB = Int($0.rounded()) }
-                            ), in: 256...4_096, step: 256)
-                            .frame(width: 150)
-
-                            Text(enhancedFrameCacheMemoryMB >= 1_024
-                                 ? String(format: "%.1f GB", Double(enhancedFrameCacheMemoryMB) / 1_024.0)
-                                 : "\(enhancedFrameCacheMemoryMB) MB")
-                                .font(.subheadline.monospacedDigit())
-                                .frame(width: 58, alignment: .trailing)
+                        helperText: "Maximum memory for enhanced-frame prebuffering.",
+                        value: Binding(
+                            get: { Double(min(max(enhancedFrameCacheMemoryMB, 256), 4_096)) },
+                            set: { enhancedFrameCacheMemoryMB = Int($0.rounded()) }
+                        ),
+                        range: 256.0...4_096.0,
+                        defaultValue: 1_024.0,
+                        step: 256.0,
+                        valueString: {
+                            $0 >= 1_024
+                                ? String(format: "%.1f GB", $0 / 1_024.0)
+                                : String(format: "%.0f MB", $0)
                         }
-                    }
+                    )
                 }
 
                 SettingsSection("Postprocessing") {
