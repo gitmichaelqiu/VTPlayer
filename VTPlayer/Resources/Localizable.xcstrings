@@ -1076,14 +1076,7 @@
       }
     },
     "Player" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放器"
-          }
-        }
-      }
+      "shouldTranslate" : false
     },
     "Postprocessing" : {
       "localizations" : {
