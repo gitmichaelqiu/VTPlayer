@@ -269,7 +269,12 @@ extension VTPlayerView {
                 LabeledContent("SR Supported", value: String(localized: viewModel.srIsSupported ? "Yes" : "No"))
                     .foregroundStyle(viewModel.srIsSupported ? .blue : .secondary)
                 
-                LabeledContent("Scales", value: viewModel.srSupportedScales)
+                LabeledContent(
+                    "Scales",
+                    value: viewModel.srSupportedScales == "None"
+                        ? String(localized: "None")
+                        : viewModel.srSupportedScales
+                )
                 LabeledContent("Quality Scales") {
                     let qualityScales = viewModel.availableQualitySuperResolutionScales
                         .sorted()
