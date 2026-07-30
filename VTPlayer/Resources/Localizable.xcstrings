@@ -24,6 +24,7 @@
       "shouldTranslate" : false
     },
     "1.5 GB" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -34,6 +35,7 @@
       }
     },
     "2 GB" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -47,21 +49,6 @@
       "shouldTranslate" : false
     },
     "4x" : {
-      "shouldTranslate" : false
-    },
-    "128 MB" : {
-      "shouldTranslate" : false
-    },
-    "256 MB" : {
-      "shouldTranslate" : false
-    },
-    "384 MB" : {
-      "shouldTranslate" : false
-    },
-    "512 MB" : {
-      "shouldTranslate" : false
-    },
-    "768 MB" : {
       "shouldTranslate" : false
     },
     "A real-time video enhancer using hardware acceleration." : {
