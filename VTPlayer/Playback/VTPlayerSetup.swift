@@ -238,23 +238,24 @@ extension VTPlayerViewModel {
                         }
                     }
                     
-                    // Retrieve and apply saved playback progress
-                    let savedProgress = UserDefaults.standard.double(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
-                    let resumeTime: CMTime?
-                    if savedProgress > 0 && savedProgress < durationSecs {
-                        self.currentTime = savedProgress
-                        resumeTime = CMTime(seconds: savedProgress, preferredTimescale: 600)
-                    } else {
-                        self.currentTime = 0.0
-                        resumeTime = nil
-                    }
-                    
                     // Restore per-video enhancement settings
                     self.loadVideoSettings(for: url)
                     self.validateEnhancementSelections()
                     #if os(macOS)
                     self.setNativeVideoEnabled(!self.isPipelineActive)
                     #endif
+
+                    let savedProgress = UserDefaults.standard.double(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
+                    let resumeTime: CMTime?
+                    if self.shouldContinueVideoPlayback,
+                       savedProgress > 0,
+                       savedProgress < durationSecs {
+                        self.currentTime = savedProgress
+                        resumeTime = CMTime(seconds: savedProgress, preferredTimescale: 600)
+                    } else {
+                        self.currentTime = 0.0
+                        resumeTime = nil
+                    }
 
                     // Start processing only after the initial seek completes.
                     // Otherwise the producer can prebuffer from zero and then

@@ -6,6 +6,7 @@ import AppKit
 struct GeneralSettingsTab: View {
     @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
     @AppStorage("VTAlwaysDarkOnPlayback") private var alwaysDarkOnPlayback = false
+    @AppStorage("VTDefaultContinueVideoPlayback") private var defaultContinueVideoPlayback = true
     @State private var automaticallyChecksForUpdates = false
     @State private var automaticallyDownloadsUpdates = false
 
@@ -18,6 +19,17 @@ struct GeneralSettingsTab: View {
                         helperText: "Toggle visibility of file extensions (e.g. .mp4, .mkv)."
                     ) {
                         Toggle("", isOn: $showFileExtensions)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    Divider()
+
+                    SettingsRow(
+                        "Continue video playback",
+                        helperText: "Use this as the default for new videos."
+                    ) {
+                        Toggle("", isOn: $defaultContinueVideoPlayback)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }

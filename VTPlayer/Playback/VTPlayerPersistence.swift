@@ -70,6 +70,7 @@ extension VTPlayerViewModel {
             "motionBlurStrength": motionBlurStrength,
             "denoiseStrength": denoiseStrength,
             "qualityPrioritization": qualityPrioritization,
+            "continueVideoPlaybackPreference": continueVideoPlaybackPreference.rawValue,
         ]
         UserDefaults.standard.set(settings, forKey: Self.videoSettingsKey(for: url.lastPathComponent))
     }
@@ -96,6 +97,9 @@ extension VTPlayerViewModel {
         motionBlurStrength = settings["motionBlurStrength"] as? Int ?? 0
         denoiseStrength = settings["denoiseStrength"] as? Double ?? 0.0
         qualityPrioritization = settings["qualityPrioritization"] as? Int ?? 1
+        continueVideoPlaybackPreference = ContinueVideoPlaybackPreference(
+            rawValue: settings["continueVideoPlaybackPreference"] as? Int ?? 0
+        ) ?? .default
     }
 
     func applyDefaultPlaybackSettings() {
@@ -120,6 +124,7 @@ extension VTPlayerViewModel {
         motionBlurStrength = UserDefaults.standard.integer(forKey: "VTDefaultMBLevel")
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1
+        continueVideoPlaybackPreference = .default
     }
 
     #if os(iOS)

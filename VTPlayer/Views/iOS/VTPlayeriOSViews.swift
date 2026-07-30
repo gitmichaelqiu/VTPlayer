@@ -540,6 +540,8 @@ extension VTPlayerView {
             
             // Default Playback Settings Section
             Section("Defaults") {
+                Toggle("Continue video playback", isOn: $defaultContinueVideoPlayback)
+
                 Picker("Frame Interpolation", selection: $defaultFILevel) {
                     Text("Off").tag(0)
                     Text("2x").tag(2)

@@ -7,6 +7,18 @@ struct PlaybackSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Playback") {
+                    Picker("Continue video playback", selection: Binding(
+                        get: { viewModel.continueVideoPlaybackPreference },
+                        set: { viewModel.setContinueVideoPlaybackPreference($0) }
+                    )) {
+                        Text("Default").tag(ContinueVideoPlaybackPreference.default)
+                        Text("On").tag(ContinueVideoPlaybackPreference.on)
+                        Text("Off").tag(ContinueVideoPlaybackPreference.off)
+                    }
+                    .tint(.secondary)
+                }
+
                 Section("Neural Engine Enhancements") {
                     Picker("Super Resolution", selection: Binding(
                         get: {

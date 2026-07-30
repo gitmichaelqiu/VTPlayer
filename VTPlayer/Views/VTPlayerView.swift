@@ -150,6 +150,7 @@ struct VTPlayerView: View {
     @State var isSettingsExpanded = false
     @AppStorage("VTShowFileExtensions") var showFileExtensions = true
     @AppStorage("VTAlwaysDarkOnPlayback") var alwaysDarkOnPlayback = false
+    @AppStorage("VTDefaultContinueVideoPlayback") var defaultContinueVideoPlayback = true
     
     @AppStorage("VTDefaultSRLevel") var defaultSRLevel = 0
     @AppStorage("VTDefaultQSRLevel") var defaultQSRLevel = 0

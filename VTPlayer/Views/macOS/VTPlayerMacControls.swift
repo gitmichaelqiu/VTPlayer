@@ -374,6 +374,17 @@ extension VTPlayerView {
                     get: { viewModel.playbackSpeed },
                     set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.playbackSpeed = newValue } }
                 ), in: 0.5...2.0, step: 0.25)
+
+                Divider()
+
+                Picker("Continue video playback", selection: Binding(
+                    get: { viewModel.continueVideoPlaybackPreference },
+                    set: { viewModel.setContinueVideoPlaybackPreference($0) }
+                )) {
+                    Text("Default").tag(ContinueVideoPlaybackPreference.default)
+                    Text("On").tag(ContinueVideoPlaybackPreference.on)
+                    Text("Off").tag(ContinueVideoPlaybackPreference.off)
+                }
             }
             .padding(16)
             .frame(width: 220)

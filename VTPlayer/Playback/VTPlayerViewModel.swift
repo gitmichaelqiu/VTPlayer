@@ -16,6 +16,12 @@ import AppKit
 import UniformTypeIdentifiers
 #endif
 
+enum ContinueVideoPlaybackPreference: Int {
+    case `default`
+    case on
+    case off
+}
+
 /// The Main ViewModel managing the playback loop, synchronization, and processor pipeline.
 @Observable
 @MainActor
@@ -46,6 +52,7 @@ final class VTPlayerViewModel {
     }
     var denoiseStrength: Double = 0.0  // 0.0=off, 0.0-1.0
     var qualityPrioritization: Int = 1  // 1=normal, 2=quality
+    var continueVideoPlaybackPreference: ContinueVideoPlaybackPreference = .default
     var showSidebar = false
     var showLeftSidebar = true
     
@@ -92,6 +99,33 @@ final class VTPlayerViewModel {
             player?.volume = Float(clamped)
             enhancedAudioPlayer?.setVolume(Float(clamped))
         }
+    }
+
+    var shouldContinueVideoPlayback: Bool {
+        switch continueVideoPlaybackPreference {
+        case .default:
+            if UserDefaults.standard.object(forKey: "VTDefaultContinueVideoPlayback") == nil {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: "VTDefaultContinueVideoPlayback")
+        case .on:
+            return true
+        case .off:
+            return false
+        }
+    }
+
+    func setContinueVideoPlaybackPreference(_ preference: ContinueVideoPlaybackPreference) {
+        continueVideoPlaybackPreference = preference
+        if !shouldContinueVideoPlayback {
+            clearSavedProgress()
+        }
+        saveVideoSettings()
+    }
+
+    private func clearSavedProgress() {
+        guard let url = videoURL else { return }
+        UserDefaults.standard.removeObject(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
     }
     @ObservationIgnored var volumeBeforeMute: Double?
 
@@ -603,7 +637,12 @@ final class VTPlayerViewModel {
     }
     #endif
 
-    func saveProgress() {        guard let url = videoURL else { return }
+    func saveProgress() {
+        guard let url = videoURL else { return }
+        guard shouldContinueVideoPlayback else {
+            UserDefaults.standard.removeObject(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
+            return
+        }
         UserDefaults.standard.set(self.currentTime, forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
     }
     
