@@ -36,7 +36,7 @@ private struct IOSSliderSettingRow: View {
     let valueText: (Double) -> String
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             HStack {
                 Text(title)
                 Spacer()
@@ -60,7 +60,7 @@ private struct IOSSliderSettingRow: View {
                     .frame(width: 58, alignment: .trailing)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 #if os(iOS)
@@ -589,9 +589,6 @@ extension VTPlayerView {
                 }
                 .tint(.secondary)
 
-            }
-
-            Section {
                 IOSSliderSettingRow(
                     title: "Frame cache",
                     value: Binding(
