@@ -164,7 +164,7 @@ extension VTPlayerView {
                                     withAnimation(.snappy(duration: 0.18)) { viewModel.motionBlurStrength = Int(newValue) }
                                 }
                             ),
-                            in: 0...30,
+                            in: 0...100,
                             step: 1,
                             onEditingChanged: { editing in
                                 if !editing {

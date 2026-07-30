@@ -138,12 +138,12 @@ struct EnhancementsSettingsTab: View {
                 SettingsSection("Postprocessing") {
                     SliderSettingsRow(
                         "Motion Blur",
-                        helperText: "Apply a simulated motion blur filter (capped at 30 to prevent extreme darkening).",
+                        helperText: "Apply a simulated motion blur filter.",
                         value: Binding(
                             get: { Double(defaultMBLevel) },
                             set: { defaultMBLevel = Int($0) }
                         ),
-                        range: 0.0...30.0,
+                        range: 0.0...100.0,
                         defaultValue: 0.0,
                         step: 1.0,
                         valueString: { $0 > 0 ? String(format: "%.0f", $0) : "Off" }

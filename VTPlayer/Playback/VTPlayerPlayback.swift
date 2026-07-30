@@ -1048,6 +1048,11 @@ extension VTPlayerViewModel {
                 // discard only interpolation frames the display has missed.
                 while self.processedFrameCacheStart < self.processedFrameCache.count {
                     let candidate = self.processedFrameCache[self.processedFrameCacheStart]
+                    if candidate.presentationTimeStamp <= self.lastRenderedPTS {
+                        self.processedFrameCacheStart += 1
+                        drained += 1
+                        continue
+                    }
                     let candidateTime = CMTimeGetSeconds(candidate.presentationTimeStamp)
                     guard candidateTime <= presentationSecs + 0.005 else { break }
                     lastFrameToRender = candidate
@@ -1057,6 +1062,11 @@ extension VTPlayerViewModel {
                 }
                 guard lastFrameToRender != nil else { return }
             } else {
+                while self.processedFrameCacheStart < self.processedFrameCache.count,
+                      self.processedFrameCache[self.processedFrameCacheStart].presentationTimeStamp <= self.lastRenderedPTS {
+                    self.processedFrameCacheStart += 1
+                    drained += 1
+                }
                 guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
                 let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
                 let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)

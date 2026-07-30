@@ -36,7 +36,14 @@ final class VTPlayerViewModel {
 
     // New API Feature Levels
     var qualitySuperResolutionScaleFactor: Int = 0  // 0=off, 2, 4 (Quality SR)
-    var motionBlurStrength: Int = 0  // 0=off, 1-100
+    var motionBlurStrength: Int = 0 {
+        didSet {
+            let clamped = min(max(motionBlurStrength, 0), 100)
+            if clamped != motionBlurStrength {
+                motionBlurStrength = clamped
+            }
+        }
+    }
     var denoiseStrength: Double = 0.0  // 0.0=off, 0.0-1.0
     var qualityPrioritization: Int = 1  // 1=normal, 2=quality
     var showSidebar = false

@@ -563,7 +563,7 @@ extension VTPlayerView {
                     Slider(value: Binding(
                         get: { Double(defaultMBLevel) },
                         set: { defaultMBLevel = Int($0) }
-                    ), in: 0...30, step: 1)
+                    ), in: 0...100, step: 1)
                     .frame(width: 140)
                     AnimatedIOSSettingValue(text: defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
                         .frame(width: 36, alignment: .trailing)
