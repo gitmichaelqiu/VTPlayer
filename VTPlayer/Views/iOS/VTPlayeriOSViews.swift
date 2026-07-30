@@ -628,9 +628,9 @@ extension VTPlayerView {
                     title: "Sharpness",
                     value: $defaultSharpness,
                     range: 0.0...2.0,
-                    step: 0.1,
+                    step: 0.05,
                     defaultValue: 0,
-                    valueText: { String(format: "%.1f", $0) }
+                    valueText: { String(format: "%.2f", $0) }
                 )
 
                 IOSSliderSettingRow(
@@ -644,9 +644,9 @@ extension VTPlayerView {
                         }
                     ),
                     range: 0.0...2.0,
-                    step: 0.1,
+                    step: 0.05,
                     defaultValue: 0,
-                    valueText: { String(format: "%.1f", $0) }
+                    valueText: { String(format: "%.2f", $0) }
                 )
 
             if defaultHDRBoost > 0 {
