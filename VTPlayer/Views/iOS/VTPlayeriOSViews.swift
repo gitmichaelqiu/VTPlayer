@@ -26,6 +26,43 @@ private struct AnimatedIOSSettingValue: View {
             }
     }
 }
+
+private struct IOSSliderSettingRow: View {
+    let title: LocalizedStringKey
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let defaultValue: Double
+    let valueText: (Double) -> String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text(title)
+                Spacer()
+                Button {
+                    withAnimation(.snappy(duration: 0.18)) {
+                        value = defaultValue
+                    }
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .disabled(abs(value - defaultValue) < 0.001)
+                .accessibilityLabel("Reset to default")
+            }
+
+            HStack(spacing: 10) {
+                Slider(value: $value, in: range, step: step)
+                AnimatedIOSSettingValue(text: valueText(value))
+                    .frame(width: 58, alignment: .trailing)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
 #if os(iOS)
 private struct IOSMoreApp: Identifiable {
     let id: String
@@ -552,80 +589,82 @@ extension VTPlayerView {
                 }
                 .tint(.secondary)
 
-                HStack {
-                    Text("Frame cache")
-                    Spacer()
-                    Slider(value: Binding(
+            }
+
+            Section {
+                IOSSliderSettingRow(
+                    title: "Frame cache",
+                    value: Binding(
                         get: { Double(min(max(enhancedFrameCacheMemoryMB, 128), 1_024)) },
                         set: { enhancedFrameCacheMemoryMB = Int($0.rounded()) }
-                    ), in: 128...1_024, step: 128)
-                    .frame(width: 140)
-                    AnimatedIOSSettingValue(text: enhancedFrameCacheMemoryMB >= 1_024
-                        ? "1 GB"
-                        : "\(enhancedFrameCacheMemoryMB) MB")
-                        .frame(width: 58, alignment: .trailing)
-                }
-                .padding(.bottom, 8)
-                
-                HStack {
-                    Text("Motion Blur")
-                    Spacer()
-                    Slider(value: Binding(
-                        get: { Double(defaultMBLevel) },
-                        set: { defaultMBLevel = Int($0) }
-                    ), in: 0...100, step: 5)
-                    .frame(width: 140)
-                    AnimatedIOSSettingValue(text: defaultMBLevel == 0 ? String(localized: "Off") : "\(defaultMBLevel)")
-                        .frame(width: 36, alignment: .trailing)
-                }
-                
-                HStack {
-                    Text("Denoise")
-                    Spacer()
-                    Slider(value: $defaultDNLevel, in: 0.0...1.0, step: 0.05)
-                    .frame(width: 140)
-                    AnimatedIOSSettingValue(text: String(format: "%.2f", defaultDNLevel))
-                        .frame(width: 36, alignment: .trailing)
-                }
-                
-                HStack {
-                    Text("Sharpness")
-                    Spacer()
-                    Slider(value: $defaultSharpness, in: 0.0...2.0, step: 0.1)
-                    .frame(width: 140)
-                    AnimatedIOSSettingValue(text: String(format: "%.1f", defaultSharpness))
-                        .frame(width: 36, alignment: .trailing)
-                }
-                
-                HStack {
-                    Text("HDR Boost")
-                    Spacer()
-                    Slider(value: Binding(
-                        get: { defaultHDRBoost },
-                        set: { newValue in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                defaultHDRBoost = newValue
-                            }
-                        }
-                    ), in: 0.0...2.0, step: 0.1)
-                    .frame(width: 140)
-                    AnimatedIOSSettingValue(text: String(format: "%.1f", defaultHDRBoost))
-                        .frame(width: 36, alignment: .trailing)
-                }
-
-                if defaultHDRBoost > 0 {
-                    HStack {
-                        Text("HDR Colorfulness")
-                        Spacer()
-                        Slider(value: $defaultHDRColorfulness, in: 0.0...1.0, step: 0.05)
-                        .frame(width: 140)
-                        AnimatedIOSSettingValue(text: String(format: "%.2f", defaultHDRColorfulness))
-                            .frame(width: 36, alignment: .trailing)
-                    }
-                    .transition(.opacity)
-                }
+                    ),
+                    range: 128...1_024,
+                    step: 128,
+                    defaultValue: 256,
+                    valueText: { $0 >= 1_024 ? "1 GB" : "\(Int($0)) MB" }
+                )
             }
-            .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
+
+            Section {
+                IOSSliderSettingRow(
+                    title: "Motion Blur",
+                    value: Binding(
+                        get: { Double(defaultMBLevel) },
+                        set: { defaultMBLevel = Int($0.rounded()) }
+                    ),
+                    range: 0...100,
+                    step: 5,
+                    defaultValue: 0,
+                    valueText: { $0 == 0 ? String(localized: "Off") : "\(Int($0))" }
+                )
+            }
+
+            Section {
+                IOSSliderSettingRow(
+                    title: "Denoise",
+                    value: $defaultDNLevel,
+                    range: 0.0...1.0,
+                    step: 0.05,
+                    defaultValue: 0,
+                    valueText: { String(format: "%.2f", $0) }
+                )
+            }
+
+            Section {
+                IOSSliderSettingRow(
+                    title: "Sharpness",
+                    value: $defaultSharpness,
+                    range: 0.0...2.0,
+                    step: 0.1,
+                    defaultValue: 0,
+                    valueText: { String(format: "%.1f", $0) }
+                )
+            }
+
+            Section {
+                IOSSliderSettingRow(
+                    title: "HDR Boost",
+                    value: $defaultHDRBoost,
+                    range: 0.0...2.0,
+                    step: 0.1,
+                    defaultValue: 0,
+                    valueText: { String(format: "%.1f", $0) }
+                )
+            }
+
+            if defaultHDRBoost > 0 {
+                Section {
+                    IOSSliderSettingRow(
+                        title: "HDR Colorfulness",
+                        value: $defaultHDRColorfulness,
+                        range: 0.0...1.0,
+                        step: 0.05,
+                        defaultValue: 0,
+                        valueText: { String(format: "%.2f", $0) }
+                    )
+                }
+                .transition(.opacity)
+            }
             
             // Gallery Configuration Section
             Section("Display") {
