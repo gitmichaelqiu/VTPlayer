@@ -617,9 +617,7 @@ extension VTPlayerView {
                     defaultValue: 0,
                     valueText: { $0 == 0 ? String(localized: "Off") : "\(Int($0))" }
                 )
-            }
 
-            Section {
                 IOSSliderSettingRow(
                     title: "Denoise",
                     value: $defaultDNLevel,
@@ -628,9 +626,7 @@ extension VTPlayerView {
                     defaultValue: 0,
                     valueText: { String(format: "%.2f", $0) }
                 )
-            }
 
-            Section {
                 IOSSliderSettingRow(
                     title: "Sharpness",
                     value: $defaultSharpness,
@@ -639,9 +635,7 @@ extension VTPlayerView {
                     defaultValue: 0,
                     valueText: { String(format: "%.1f", $0) }
                 )
-            }
 
-            Section {
                 IOSSliderSettingRow(
                     title: "HDR Boost",
                     value: $defaultHDRBoost,
@@ -650,21 +644,20 @@ extension VTPlayerView {
                     defaultValue: 0,
                     valueText: { String(format: "%.1f", $0) }
                 )
-            }
 
             if defaultHDRBoost > 0 {
-                Section {
-                    IOSSliderSettingRow(
-                        title: "HDR Colorfulness",
-                        value: $defaultHDRColorfulness,
-                        range: 0.0...1.0,
-                        step: 0.05,
-                        defaultValue: 0,
-                        valueText: { String(format: "%.2f", $0) }
-                    )
-                }
+                IOSSliderSettingRow(
+                    title: "HDR Colorfulness",
+                    value: $defaultHDRColorfulness,
+                    range: 0.0...1.0,
+                    step: 0.05,
+                    defaultValue: 0,
+                    valueText: { String(format: "%.2f", $0) }
+                )
                 .transition(.opacity)
             }
+            }
+            .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
             
             // Gallery Configuration Section
             Section("Display") {
