@@ -658,7 +658,7 @@ extension VTPlayerView {
                     defaultValue: 0,
                     valueText: { String(format: "%.2f", $0) }
                 )
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
             }
             .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
