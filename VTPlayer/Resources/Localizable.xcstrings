@@ -8,14 +8,14 @@
       "shouldTranslate" : false
     },
     "© %@ Michael Yicheng Qiu" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "© %@ Michael Yicheng Qiu"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "© %@ Michael Yicheng Qiu"
           }
         }
+      }
     },
     "↺" : {
       "shouldTranslate" : false
@@ -24,24 +24,24 @@
       "shouldTranslate" : false
     },
     "1.5 GB" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "1.5 GB"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1.5 GB"
           }
         }
+      }
     },
     "2 GB" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "2 GB"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 GB"
           }
         }
+      }
     },
     "2x" : {
       "shouldTranslate" : false
@@ -85,14 +85,14 @@
       }
     },
     "About VTPlayer" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "关于 VTPlayer"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于 VTPlayer"
           }
         }
+      }
     },
     "Acknowledgement Unavailable" : {
       "localizations" : {
@@ -135,24 +135,24 @@
       }
     },
     "Adjust chroma saturation boost in the midtone range during HDR expansion." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "调整 HDR 扩展时中间调范围的色度饱和度增强。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整 HDR 扩展时中间调范围的色度饱和度增强。"
           }
         }
+      }
     },
     "Adjust intensity of edge-enhancement contrast (radius is fixed at 0.5)." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "调整边缘增强对比度强度（半径固定为 0.5）。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整边缘增强对比度强度（半径固定为 0.5）。"
           }
         }
+      }
     },
     "Adjust playback speed (0.5x - 2x)" : {
       "localizations" : {
@@ -165,6 +165,7 @@
       }
     },
     "Adjust sharpness intensity (CIUnsharpMask)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -195,34 +196,34 @@
       }
     },
     "Apply a simulated motion blur filter." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "应用模拟运动模糊滤镜。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用模拟运动模糊滤镜。"
           }
         }
+      }
     },
     "Automatically check for updates" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "自动检查更新"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动检查更新"
           }
         }
+      }
     },
     "Automatically download updates" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "自动下载更新"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动下载更新"
           }
         }
+      }
     },
     "Browse Files" : {
       "localizations" : {
@@ -255,34 +256,34 @@
       }
     },
     "Check for updates" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "检查更新"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查更新"
           }
         }
+      }
     },
     "Check for Updates…" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "检查更新…"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查更新…"
           }
         }
+      }
     },
     "Check Now" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "立即检查"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即检查"
           }
         }
+      }
     },
     "Checking..." : {
       "localizations" : {
@@ -315,14 +316,14 @@
       }
     },
     "Clear History" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "清除历史记录"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除历史记录"
           }
         }
+      }
     },
     "Clear playback history" : {
       "localizations" : {
@@ -335,14 +336,14 @@
       }
     },
     "Clear Playback History?" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "清除播放历史记录？"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除播放历史记录？"
           }
         }
+      }
     },
     "Codec" : {
       "localizations" : {
@@ -355,14 +356,14 @@
       }
     },
     "Color & Image Adjustments" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "色彩与图像调整"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "色彩与图像调整"
           }
         }
+      }
     },
     "Continue video playback" : {
       "localizations" : {
@@ -545,14 +546,14 @@
       }
     },
     "Enter Fullscreen (F)" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "进入全屏（F）"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进入全屏（F）"
           }
         }
+      }
     },
     "Error" : {
       "localizations" : {
@@ -565,14 +566,14 @@
       }
     },
     "Exit Fullscreen (F)" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "退出全屏（F）"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出全屏（F）"
           }
         }
+      }
     },
     "Exit player" : {
       "localizations" : {
@@ -605,14 +606,14 @@
       }
     },
     "Filter out noise dynamically using temporal reference frames." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "使用时间参考帧动态过滤噪点。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用时间参考帧动态过滤噪点。"
           }
         }
+      }
     },
     "Filters & Adjustments" : {
       "localizations" : {
@@ -625,14 +626,14 @@
       }
     },
     "Force the application window to use dark mode styling during video playback, regardless of system theme." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "播放视频时始终以深色模式显示应用窗口，不受系统主题影响。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放视频时始终以深色模式显示应用窗口，不受系统主题影响。"
           }
         }
+      }
     },
     "Frame Interpolation" : {
       "localizations" : {
@@ -675,14 +676,14 @@
       }
     },
     "General" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "通用"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用"
           }
         }
+      }
     },
     "HDR Boost" : {
       "localizations" : {
@@ -735,24 +736,34 @@
       }
     },
     "Links" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "链接"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
           }
         }
+      }
+    },
+    "Low Latency" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低延迟"
+          }
+        }
+      }
     },
     "Luminance expansion from SDR into display's EDR headroom." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "将 SDR 亮度扩展至显示器的 EDR 余量。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将 SDR 亮度扩展至显示器的 EDR 余量。"
           }
         }
+      }
     },
     "Made by Michael Qiu." : {
       "localizations" : {
@@ -765,14 +776,14 @@
       }
     },
     "Maximum memory used to prebuffer enhanced frames before playback begins." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "播放开始前用于预缓冲增强帧的最大内存。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放开始前用于预缓冲增强帧的最大内存。"
           }
         }
+      }
     },
     "Measuring…" : {
       "localizations" : {
@@ -795,14 +806,14 @@
       }
     },
     "More Apps" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "更多应用"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多应用"
           }
         }
+      }
     },
     "More apps for Apple platforms" : {
       "localizations" : {
@@ -844,16 +855,6 @@
         }
       }
     },
-    "Low Latency" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "低延迟"
-          }
-        }
-      }
-    },
     "Name" : {
       "localizations" : {
         "zh-Hans" : {
@@ -884,15 +885,25 @@
         }
       }
     },
-    "No results" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "没有结果"
-            }
+    "No" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "否"
           }
         }
+      }
+    },
+    "No results" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有结果"
+          }
+        }
+      }
     },
     "No Video Loaded" : {
       "localizations" : {
@@ -910,16 +921,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有视频"
-          }
-        }
-      }
-    },
-    "No" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "否"
           }
         }
       }
@@ -1005,14 +1006,14 @@
       }
     },
     "Open Video..." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "打开视频…"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开视频…"
           }
         }
+      }
     },
     "Photos Library" : {
       "localizations" : {
@@ -1075,24 +1076,24 @@
       }
     },
     "Player" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "播放器"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器"
           }
         }
+      }
     },
     "Postprocessing" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "后处理"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后处理"
           }
         }
+      }
     },
     "QL Model" : {
       "localizations" : {
@@ -1225,14 +1226,14 @@
       }
     },
     "Reset to default" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "恢复默认设置"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复默认设置"
           }
         }
+      }
     },
     "Resolution" : {
       "localizations" : {
@@ -1255,14 +1256,14 @@
       }
     },
     "Search" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "搜索"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索"
           }
         }
+      }
     },
     "Settings" : {
       "localizations" : {
@@ -1275,14 +1276,14 @@
       }
     },
     "Settings..." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "设置…"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置…"
           }
         }
+      }
     },
     "Sharper. Smoother. Better." : {
       "localizations" : {
@@ -1325,14 +1326,14 @@
       }
     },
     "Show in Finder" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "在访达中显示"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在访达中显示"
           }
         }
+      }
     },
     "Sort" : {
       "localizations" : {
@@ -1495,14 +1496,14 @@
       }
     },
     "Temporal low-latency frame interpolation factor to boost frame rate." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "用于提高帧率的低延迟时间帧生成倍率。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于提高帧率的低延迟时间帧生成倍率。"
           }
         }
+      }
     },
     "This will clear your recent playback history. The original video files will not be deleted." : {
       "localizations" : {
@@ -1515,14 +1516,14 @@
       }
     },
     "This will clear your recent playback history. Your video files will remain safe." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "这将清除最近播放历史记录，视频文件将保持安全。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这将清除最近播放历史记录，视频文件将保持安全。"
           }
         }
+      }
     },
     "Toggle diagnostics and metadata sidebar panel" : {
       "localizations" : {
@@ -1535,24 +1536,24 @@
       }
     },
     "Toggle Left Sidebar" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "切换左侧边栏"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换左侧边栏"
           }
         }
+      }
     },
     "Toggle Right Sidebar" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "切换右侧边栏"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换右侧边栏"
           }
         }
+      }
     },
     "Toggle Sidebar" : {
       "localizations" : {
@@ -1565,14 +1566,14 @@
       }
     },
     "Toggle visibility of file extensions (e.g. .mp4, .mkv)." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "切换文件扩展名显示（例如 .mp4、.mkv）。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换文件扩展名显示（例如 .mp4、.mkv）。"
           }
         }
+      }
     },
     "Unpin" : {
       "localizations" : {
@@ -1595,44 +1596,44 @@
       }
     },
     "Updates" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "更新"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新"
           }
         }
+      }
     },
     "Use this as the default for new videos." : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "将此项用作新视频的默认设置。"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将此项用作新视频的默认设置。"
           }
         }
+      }
     },
     "User Interface" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "用户界面"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户界面"
           }
         }
+      }
     },
     "v%@" : {
-        "localizations": {
-          "zh-Hans": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "v%@"
-            }
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@"
           }
         }
+      }
     },
     "Video Codec" : {
       "localizations" : {
@@ -1674,16 +1675,6 @@
         }
       }
     },
-    "Yes" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "是"
-          }
-        }
-      }
-    },
     "Volume: %lld%%" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1699,6 +1690,16 @@
     },
     "VTPlayer" : {
       "shouldTranslate" : false
+    },
+    "Yes" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是"
+          }
+        }
+      }
     }
   },
   "version" : "1.3"

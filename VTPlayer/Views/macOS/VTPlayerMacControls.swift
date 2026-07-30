@@ -221,7 +221,7 @@ extension VTPlayerView {
                 // Image Adjustments Popover Button
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
                     enhancementControlLabel(
-                        "Adjustments",
+                        String(localized: "Image Adjustments"),
                         isActive: viewModel.sharpness > 0 || viewModel.hdrStrength > 0
                     )
                 }
