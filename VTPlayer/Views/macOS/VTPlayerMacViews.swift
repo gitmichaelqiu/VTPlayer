@@ -201,6 +201,7 @@ extension VTPlayerView {
             showClearAllAlert = true
         } label: {
             Label("Delete", systemImage: "trash")
+                .labelStyle(.iconOnly)
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
