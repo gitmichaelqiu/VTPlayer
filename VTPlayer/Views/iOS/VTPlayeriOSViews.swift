@@ -27,7 +27,7 @@ private struct AnimatedIOSSettingValue: View {
 private struct IOSMoreApp: Identifiable {
     let id: String
     let name: String
-    let description: String
+    let description: LocalizedStringKey
     let url: URL
     let iconName: String
 }
@@ -665,12 +665,12 @@ extension VTPlayerView {
 
     private var appVersionLabel: String {
         let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        return "Version \(version)"
+        let version = info?["CFBundleShortVersionString"] as? String ?? String(localized: "Unknown")
+        return String(format: String(localized: "Version %@"), version)
     }
 
     @ViewBuilder
-    private func aboutLinkRow(title: String, systemImage: String, url: String) -> some View {
+    private func aboutLinkRow(title: LocalizedStringKey, systemImage: String, url: String) -> some View {
         Button {
             openExternalURL(url)
         } label: {
@@ -696,7 +696,7 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    private func aboutActionRow(title: String, systemImage: String, verticalPadding: CGFloat = 8, action: @escaping () -> Void) -> some View {
+    private func aboutActionRow(title: LocalizedStringKey, systemImage: String, verticalPadding: CGFloat = 8, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)

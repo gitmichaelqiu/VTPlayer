@@ -343,7 +343,7 @@ struct AboutSettingsTab: View {
 }
 
 struct AboutLinkRow: View {
-    let title: String
+    let title: LocalizedStringKey
     let url: String
     
     @State private var isHovering = false
@@ -412,7 +412,7 @@ struct OtherAppRow: View {
     let imageName: String
     let darkImageName: String
     let appName: String
-    let description: String
+    let description: LocalizedStringKey
     let url: String
 
     @Environment(\.colorScheme) private var colorScheme

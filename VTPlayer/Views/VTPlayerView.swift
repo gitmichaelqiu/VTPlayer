@@ -147,13 +147,10 @@ struct VTPlayerView: View {
     }()
     @State var isPinnedExpanded = true
     @State var isRecentsExpanded = true
-    @State var isSettingsExpanded = false
     @AppStorage("VTShowFileExtensions") var showFileExtensions = true
     @AppStorage("VTAlwaysDarkOnPlayback") var alwaysDarkOnPlayback = false
     @AppStorage("VTDefaultContinueVideoPlayback") var defaultContinueVideoPlayback = true
     
-    @AppStorage("VTDefaultSRLevel") var defaultSRLevel = 0
-    @AppStorage("VTDefaultQSRLevel") var defaultQSRLevel = 0
     @AppStorage("VTDefaultFILevel") var defaultFILevel = 0
     @AppStorage("VTDefaultMBLevel") var defaultMBLevel = 0
     @AppStorage("VTDefaultDNLevel") var defaultDNLevel = 0.0
@@ -164,27 +161,6 @@ struct VTPlayerView: View {
 
     @State var scrubTime: Double = 0.0
     @State var isScrubbing: Bool = false
-
-    // Hover state for control bar feature labels
-    @State var hoverSR = false
-    @State var hoverFI = false
-    @State var hoverMB = false
-    @State var hoverDN = false
-    @State var hoverHDR = false
-
-    var globallySupportedQualityScales: Set<Int> {
-        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-        if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
-           VTSuperResolutionScalerConfiguration.isSupported {
-            return Set(VTSuperResolutionScalerConfiguration.supportedScaleFactors.filter { $0 == 2 || $0 == 4 })
-        }
-        #endif
-        return []
-    }
-
-    var globallySupportedLowLatencySR: Bool {
-        VTLowLatencySuperResolutionScalerConfiguration.isSupported
-    }
 
     var body: some View {
         Group {
@@ -447,13 +423,13 @@ struct VTPlayerView: View {
     func formatDateAdded(for url: URL) -> String {
         let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDates") as? [String: Double] ?? [:]
         guard let timeInterval = dates[url.lastPathComponent] else {
-            return "Added recently"
+            return String(localized: "Added recently")
         }
         let date = Date(timeIntervalSince1970: timeInterval)
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        return "Added " + formatter.string(from: date)
+        return String(format: String(localized: "Added %@"), formatter.string(from: date))
     }
 
     func renameVideoFile(_ url: URL, to newBaseName: String) {

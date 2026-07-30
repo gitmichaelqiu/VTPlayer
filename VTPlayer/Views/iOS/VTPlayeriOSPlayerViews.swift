@@ -172,13 +172,13 @@ extension VTPlayerView {
     func formatDateOpened(for url: URL) -> String {
         let dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDates") as? [String: Double] ?? [:]
         guard let timeInterval = dates[url.lastPathComponent] else {
-            return "Opened recently"
+            return String(localized: "Opened recently")
         }
         let date = Date(timeIntervalSince1970: timeInterval)
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        return "Opened " + formatter.string(from: date)
+        return String(format: String(localized: "Opened %@"), formatter.string(from: date))
     }
     #endif
 
