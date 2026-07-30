@@ -132,7 +132,7 @@ struct PlaybackSettingsView: View {
                     HStack {
                         Text("Sharpness")
                         Spacer()
-                        Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
+                        Slider(value: $viewModel.sharpness, in: 0...2, step: 0.05)
                             .frame(width: 150)
                         Text(String(format: "%.2f", viewModel.sharpness))
                             .font(.subheadline.monospacedDigit())
@@ -145,7 +145,7 @@ struct PlaybackSettingsView: View {
                     HStack {
                         Text("HDR Boost")
                         Spacer()
-                        Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.25)
+                        Slider(value: $viewModel.hdrStrength, in: 0...2, step: 0.05)
                             .frame(width: 150)
                         Text(String(format: "%.2f", viewModel.hdrStrength))
                             .font(.subheadline.monospacedDigit())

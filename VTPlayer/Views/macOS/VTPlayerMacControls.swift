@@ -245,7 +245,7 @@ extension VTPlayerView {
                             Slider(value: Binding(
                                 get: { viewModel.sharpness },
                                 set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue } }
-                            ), in: 0...2, step: 0.25)
+                            ), in: 0...2, step: 0.05)
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
@@ -256,7 +256,7 @@ extension VTPlayerView {
                             Slider(value: Binding(
                                 get: { viewModel.hdrStrength },
                                 set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue } }
-                            ), in: 0...2, step: 0.25)
+                            ), in: 0...2, step: 0.05)
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
