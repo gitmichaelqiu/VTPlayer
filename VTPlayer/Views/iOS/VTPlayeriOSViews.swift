@@ -549,15 +549,19 @@ extension VTPlayerView {
                 }
                 .tint(.secondary)
 
-                Picker("Enhanced frame cache", selection: $enhancedFrameCacheMemoryMB) {
-                    Text("128 MB").tag(128)
-                    Text("256 MB").tag(256)
-                    Text("384 MB").tag(384)
-                    Text("512 MB").tag(512)
-                    Text("768 MB").tag(768)
-                    Text("1 GB").tag(1_024)
+                HStack {
+                    Text("Enhanced frame cache")
+                    Spacer()
+                    Slider(value: Binding(
+                        get: { Double(min(max(enhancedFrameCacheMemoryMB, 128), 1_024)) },
+                        set: { enhancedFrameCacheMemoryMB = Int($0.rounded()) }
+                    ), in: 128...1_024, step: 128)
+                    .frame(width: 140)
+                    AnimatedIOSSettingValue(text: enhancedFrameCacheMemoryMB >= 1_024
+                        ? "1 GB"
+                        : "\(enhancedFrameCacheMemoryMB) MB")
+                        .frame(width: 58, alignment: .trailing)
                 }
-                .tint(.secondary)
                 
                 HStack {
                     Text("Motion Blur")

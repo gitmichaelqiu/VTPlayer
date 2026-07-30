@@ -134,16 +134,19 @@ struct EnhancementsSettingsTab: View {
                         "Enhanced frame cache",
                         helperText: "Maximum memory for enhanced-frame prebuffering."
                     ) {
-                        Picker("", selection: $enhancedFrameCacheMemoryMB) {
-                            Text("512 MB").tag(512)
-                            Text("1 GB").tag(1_024)
-                            Text("1.5 GB").tag(1_536)
-                            Text("2 GB").tag(2_048)
+                        HStack(spacing: 10) {
+                            Slider(value: Binding(
+                                get: { Double(min(max(enhancedFrameCacheMemoryMB, 256), 4_096)) },
+                                set: { enhancedFrameCacheMemoryMB = Int($0.rounded()) }
+                            ), in: 256...4_096, step: 256)
+                            .frame(width: 150)
+
+                            Text(enhancedFrameCacheMemoryMB >= 1_024
+                                 ? String(format: "%.1f GB", Double(enhancedFrameCacheMemoryMB) / 1_024.0)
+                                 : "\(enhancedFrameCacheMemoryMB) MB")
+                                .font(.subheadline.monospacedDigit())
+                                .frame(width: 58, alignment: .trailing)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 100)
-                        .padding(.trailing, -8)
                     }
                 }
 

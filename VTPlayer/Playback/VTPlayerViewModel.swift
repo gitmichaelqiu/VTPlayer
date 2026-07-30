@@ -289,7 +289,7 @@ final class VTPlayerViewModel {
         let maximumMegabytes = 1_024
         #else
         let defaultMegabytes = 1_024
-        let maximumMegabytes = 2_048
+        let maximumMegabytes = 4_096
         #endif
         let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheMemoryMB")
         let megabytes = configured > 0 ? configured : defaultMegabytes

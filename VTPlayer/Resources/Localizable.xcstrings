@@ -165,6 +165,7 @@
       }
     },
     "Adjust chroma saturation boost in the midtone range during HDR expansion." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -174,7 +175,18 @@
         }
       }
     },
+    "Adjust HDR color intensity." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整 HDR 色彩强度。"
+          }
+        }
+      }
+    },
     "Adjust intensity of edge-enhancement contrast (radius is fixed at 0.5)." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -215,11 +227,22 @@
       }
     },
     "Apply a simulated motion blur filter." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "应用模拟运动模糊滤镜。"
+          }
+        }
+      }
+    },
+    "Apply motion blur." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用运动模糊。"
           }
         }
       }
@@ -644,6 +667,16 @@
         }
       }
     },
+    "Expand luminance for HDR displays." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为 HDR 显示器扩展亮度。"
+          }
+        }
+      }
+    },
     "Explore more apps" : {
       "localizations" : {
         "zh-Hans" : {
@@ -665,6 +698,7 @@
       }
     },
     "Filter out noise dynamically using temporal reference frames." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -685,6 +719,7 @@
       }
     },
     "Force the application window to use dark mode styling during video playback, regardless of system theme." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -794,6 +829,16 @@
         }
       }
     },
+    "Increase the video frame rate." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提高视频帧率。"
+          }
+        }
+      }
+    },
     "Let you right-click with the Option key." : {
       "localizations" : {
         "zh-Hans" : {
@@ -825,6 +870,7 @@
       }
     },
     "Luminance expansion from SDR into display's EDR headroom." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -844,7 +890,18 @@
         }
       }
     },
+    "Maximum memory for enhanced-frame prebuffering." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "增强帧预缓冲的最大内存。"
+          }
+        }
+      }
+    },
     "Maximum memory used to prebuffer enhanced frames before playback begins." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1247,6 +1304,16 @@
         }
       }
     },
+    "Reduce video noise." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "降低视频噪点。"
+          }
+        }
+      }
+    },
     "Remove" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1347,6 +1414,16 @@
         }
       }
     },
+    "Resume new videos from their saved position." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从保存的位置继续播放新视频。"
+          }
+        }
+      }
+    },
     "Right-click with the Option key." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1443,6 +1520,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在访达中显示"
+          }
+        }
+      }
+    },
+    "Show or hide file extensions." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示或隐藏文件扩展名。"
           }
         }
       }
@@ -1608,6 +1695,7 @@
       }
     },
     "Temporal low-latency frame interpolation factor to boost frame rate." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1688,6 +1776,7 @@
       }
     },
     "Toggle visibility of file extensions (e.g. .mp4, .mkv)." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1737,7 +1826,18 @@
         }
       }
     },
+    "Use dark styling during playback." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放时使用深色样式。"
+          }
+        }
+      }
+    },
     "Use this as the default for new videos." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1813,96 +1913,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "视频"
-          }
-        }
-      }
-    },
-    "Show or hide file extensions." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示或隐藏文件扩展名。"
-          }
-        }
-      }
-    },
-    "Resume new videos from their saved position." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从保存的位置继续播放新视频。"
-          }
-        }
-      }
-    },
-    "Use dark styling during playback." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放时使用深色样式。"
-          }
-        }
-      }
-    },
-    "Increase the video frame rate." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提高视频帧率。"
-          }
-        }
-      }
-    },
-    "Maximum memory for enhanced-frame prebuffering." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "增强帧预缓冲的最大内存。"
-          }
-        }
-      }
-    },
-    "Apply motion blur." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用运动模糊。"
-          }
-        }
-      }
-    },
-    "Reduce video noise." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "降低视频噪点。"
-          }
-        }
-      }
-    },
-    "Expand luminance for HDR displays." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为 HDR 显示器扩展亮度。"
-          }
-        }
-      }
-    },
-    "Adjust HDR color intensity." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整 HDR 色彩强度。"
           }
         }
       }
