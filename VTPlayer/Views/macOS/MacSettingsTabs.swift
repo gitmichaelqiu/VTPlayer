@@ -16,7 +16,7 @@ struct GeneralSettingsTab: View {
                 SettingsSection("User Interface") {
                     SettingsRow(
                         "Show file extensions",
-                        helperText: "Toggle visibility of file extensions (e.g. .mp4, .mkv)."
+                        helperText: "Show or hide file extensions."
                     ) {
                         Toggle("", isOn: $showFileExtensions)
                             .toggleStyle(.switch)
@@ -27,7 +27,7 @@ struct GeneralSettingsTab: View {
 
                     SettingsRow(
                         "Continue video playback",
-                        helperText: "Use this as the default for new videos."
+                        helperText: "Resume new videos from their saved position."
                     ) {
                         Toggle("", isOn: $defaultContinueVideoPlayback)
                             .toggleStyle(.switch)
@@ -38,7 +38,7 @@ struct GeneralSettingsTab: View {
 
                     SettingsRow(
                         "Always use dark mode when playing",
-                        helperText: "Force the application window to use dark mode styling during video playback, regardless of system theme."
+                        helperText: "Use dark styling during playback."
                     ) {
                         Toggle("", isOn: $alwaysDarkOnPlayback)
                             .toggleStyle(.switch)
@@ -115,7 +115,7 @@ struct EnhancementsSettingsTab: View {
                 SettingsSection("Neural Engine Enhancements") {
                     SettingsRow(
                         "Frame Interpolation",
-                        helperText: "Temporal low-latency frame interpolation factor to boost frame rate."
+                        helperText: "Increase the video frame rate."
                     ) {
                         Picker("", selection: $defaultFILevel) {
                             Text("Off").tag(0)
@@ -132,7 +132,7 @@ struct EnhancementsSettingsTab: View {
 
                     SettingsRow(
                         "Enhanced frame cache",
-                        helperText: "Maximum memory used to prebuffer enhanced frames before playback begins."
+                        helperText: "Maximum memory for enhanced-frame prebuffering."
                     ) {
                         Picker("", selection: $enhancedFrameCacheMemoryMB) {
                             Text("512 MB").tag(512)
@@ -150,14 +150,14 @@ struct EnhancementsSettingsTab: View {
                 SettingsSection("Postprocessing") {
                     SliderSettingsRow(
                         "Motion Blur",
-                        helperText: "Apply a simulated motion blur filter.",
+                        helperText: "Apply motion blur.",
                         value: Binding(
                             get: { Double(defaultMBLevel) },
                             set: { defaultMBLevel = Int($0) }
                         ),
                         range: 0.0...100.0,
                         defaultValue: 0.0,
-                        step: 1.0,
+                        step: 5.0,
                         valueString: { $0 > 0 ? String(format: "%.0f", $0) : String(localized: "Off") }
                     )
 
@@ -165,7 +165,7 @@ struct EnhancementsSettingsTab: View {
 
                     SliderSettingsRow(
                         "Denoise",
-                        helperText: "Filter out noise dynamically using temporal reference frames.",
+                        helperText: "Reduce video noise.",
                         value: $defaultDNLevel,
                         range: 0.0...1.0,
                         defaultValue: 0.0,
@@ -178,7 +178,6 @@ struct EnhancementsSettingsTab: View {
                     VStack(spacing: 0) {
                         SliderSettingsRow(
                             "Sharpness",
-                            helperText: "Adjust intensity of edge-enhancement contrast (radius is fixed at 0.5).",
                             value: $defaultSharpness,
                             range: 0.0...2.0,
                             defaultValue: 0.0,
@@ -189,7 +188,7 @@ struct EnhancementsSettingsTab: View {
 
                         SliderSettingsRow(
                             "HDR Boost",
-                            helperText: "Luminance expansion from SDR into display's EDR headroom.",
+                            helperText: "Expand luminance for HDR displays.",
                             value: $defaultHDRBoost,
                             range: 0.0...2.0,
                             defaultValue: 0.0,
@@ -202,7 +201,7 @@ struct EnhancementsSettingsTab: View {
 
                             SliderSettingsRow(
                                 "HDR Colorfulness",
-                                helperText: "Adjust chroma saturation boost in the midtone range during HDR expansion.",
+                                helperText: "Adjust HDR color intensity.",
                                 value: $defaultHDRColorfulness,
                                 range: 0.0...1.0,
                                 defaultValue: 0.0,

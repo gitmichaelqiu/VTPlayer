@@ -167,7 +167,7 @@ extension VTPlayerView {
                                 }
                             ),
                             in: 0...100,
-                            step: 1,
+                            step: 5,
                             onEditingChanged: { editing in
                                 if !editing {
                                     viewModel.updateEnhancements()

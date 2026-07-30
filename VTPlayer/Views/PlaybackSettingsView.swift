@@ -89,7 +89,7 @@ struct PlaybackSettingsView: View {
                                 set: { viewModel.motionBlurStrength = Int($0) }
                             ),
                             in: 0...100,
-                            step: 1,
+                            step: 5,
                             onEditingChanged: { editing in
                                 if !editing {
                                     viewModel.updateEnhancements()

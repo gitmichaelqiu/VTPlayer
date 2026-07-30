@@ -69,7 +69,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "一款使用硬件加速的实时视频增强器。"
+            "value" : "一款使用硬件加速的视频提升播放器。"
           }
         }
       }
@@ -90,6 +90,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关于 VTPlayer"
+          }
+        }
+      }
+    },
+    "Acknowledgement" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "致谢"
           }
         }
       }
@@ -134,6 +144,26 @@
         }
       }
     },
+    "Added %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加于 %@"
+          }
+        }
+      }
+    },
+    "Added recently" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近添加"
+          }
+        }
+      }
+    },
     "Adjust chroma saturation boost in the midtone range during HDR expansion." : {
       "localizations" : {
         "zh-Hans" : {
@@ -164,17 +194,6 @@
         }
       }
     },
-    "Adjust sharpness intensity (CIUnsharpMask)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整锐化强度（CIUnsharpMask）"
-          }
-        }
-      }
-    },
     "Adjust volume (0% - 100%)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -201,6 +220,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "应用模拟运动模糊滤镜。"
+          }
+        }
+      }
+    },
+    "Author's GitHub" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作者的 GitHub"
+          }
+        }
+      }
+    },
+    "Author's website" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作者的网站"
           }
         }
       }
@@ -371,6 +410,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "继续播放视频"
+          }
+        }
+      }
+    },
+    "Control apps and docks across spaces." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跨空间控制应用和程序坞。"
+          }
+        }
+      }
+    },
+    "Control which app and dock to show in each space." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制每个空间中显示的应用和程序坞。"
           }
         }
       }
@@ -735,6 +794,16 @@
         }
       }
     },
+    "Let you right-click with the Option key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让你按住 Option 键即可右键单击。"
+          }
+        }
+      }
+    },
     "Links" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1015,6 +1084,26 @@
         }
       }
     },
+    "Opened %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开于 %@"
+          }
+        }
+      }
+    },
+    "Opened recently" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近打开"
+          }
+        }
+      }
+    },
     "Photos Library" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1188,6 +1277,16 @@
         }
       }
     },
+    "Rename and organize your desktop spaces." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名并整理你的桌面空间。"
+          }
+        }
+      }
+    },
     "Rename File" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1218,6 +1317,16 @@
         }
       }
     },
+    "Report an issue" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "报告问题"
+          }
+        }
+      }
+    },
     "Reset to default" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1234,6 +1343,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分辨率"
+          }
+        }
+      }
+    },
+    "Right-click with the Option key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住 Option 键即可右键单击。"
           }
         }
       }
@@ -1498,6 +1617,16 @@
         }
       }
     },
+    "The essential tool for naming and organizing your desktop spaces." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为桌面空间命名和整理的必备工具。"
+          }
+        }
+      }
+    },
     "This will clear your recent playback history. The original video files will not be deleted." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1568,6 +1697,16 @@
         }
       }
     },
+    "Unknown" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知"
+          }
+        }
+      }
+    },
     "Unpin" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1628,6 +1767,16 @@
         }
       }
     },
+    "Version %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本 %@"
+          }
+        }
+      }
+    },
     "Video Codec" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1668,172 +1817,92 @@
         }
       }
     },
-    "Added %@" : {
+    "Show or hide file extensions." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加于 %@"
+            "value" : "显示或隐藏文件扩展名。"
           }
         }
       }
     },
-    "Added recently" : {
+    "Resume new videos from their saved position." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近添加"
+            "value" : "从保存的位置继续播放新视频。"
           }
         }
       }
     },
-    "Opened %@" : {
+    "Use dark styling during playback." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开于 %@"
+            "value" : "播放时使用深色样式。"
           }
         }
       }
     },
-    "Opened recently" : {
+    "Increase the video frame rate." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近打开"
+            "value" : "提高视频帧率。"
           }
         }
       }
     },
-    "Version %@" : {
+    "Maximum memory for enhanced-frame prebuffering." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "版本 %@"
+            "value" : "增强帧预缓冲的最大内存。"
           }
         }
       }
     },
-    "Unknown" : {
+    "Apply motion blur." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未知"
+            "value" : "应用运动模糊。"
           }
         }
       }
     },
-    "Report an issue" : {
+    "Reduce video noise." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "报告问题"
+            "value" : "降低视频噪点。"
           }
         }
       }
     },
-    "VTPlayer's GitHub" : {
+    "Expand luminance for HDR displays." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "VTPlayer 的 GitHub"
+            "value" : "为 HDR 显示器扩展亮度。"
           }
         }
       }
     },
-    "Author's website" : {
+    "Adjust HDR color intensity." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "作者的网站"
-          }
-        }
-      }
-    },
-    "Author's GitHub" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "作者的 GitHub"
-          }
-        }
-      }
-    },
-    "Acknowledgement" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "致谢"
-          }
-        }
-      }
-    },
-    "Rename and organize your desktop spaces." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名并整理你的桌面空间。"
-          }
-        }
-      }
-    },
-    "Right-click with the Option key." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按住 Option 键即可右键单击。"
-          }
-        }
-      }
-    },
-    "Control apps and docks across spaces." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跨空间控制应用和程序坞。"
-          }
-        }
-      }
-    },
-    "The essential tool for naming and organizing your desktop spaces." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为桌面空间命名和整理的必备工具。"
-          }
-        }
-      }
-    },
-    "Let you right-click with the Option key." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "让你按住 Option 键即可右键单击。"
-          }
-        }
-      }
-    },
-    "Control which app and dock to show in each space." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "控制每个空间中显示的应用和程序坞。"
+            "value" : "调整 HDR 色彩强度。"
           }
         }
       }
@@ -1853,6 +1922,16 @@
     },
     "VTPlayer" : {
       "shouldTranslate" : false
+    },
+    "VTPlayer's GitHub" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VTPlayer 的 GitHub"
+          }
+        }
+      }
     },
     "Yes" : {
       "localizations" : {
