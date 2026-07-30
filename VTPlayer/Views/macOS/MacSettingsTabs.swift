@@ -158,7 +158,7 @@ struct EnhancementsSettingsTab: View {
                         range: 0.0...100.0,
                         defaultValue: 0.0,
                         step: 1.0,
-                        valueString: { $0 > 0 ? String(format: "%.0f", $0) : "Off" }
+                        valueString: { $0 > 0 ? String(format: "%.0f", $0) : String(localized: "Off") }
                     )
 
                     Divider()
@@ -170,7 +170,7 @@ struct EnhancementsSettingsTab: View {
                         range: 0.0...1.0,
                         defaultValue: 0.0,
                         step: 0.05,
-                        valueString: { $0 > 0 ? String(format: "%.2f", $0) : "Off" }
+                        valueString: { $0 > 0 ? String(format: "%.2f", $0) : String(localized: "Off") }
                     )
                 }
 

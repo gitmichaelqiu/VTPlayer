@@ -170,7 +170,6 @@ struct VTPlayerView: View {
     @State var hoverFI = false
     @State var hoverMB = false
     @State var hoverDN = false
-    @State var hoverSH = false
     @State var hoverHDR = false
 
     var globallySupportedQualityScales: Set<Int> {

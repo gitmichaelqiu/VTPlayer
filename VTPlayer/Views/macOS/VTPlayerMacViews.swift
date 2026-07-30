@@ -266,7 +266,7 @@ extension VTPlayerView {
             }
             
             Section("Super Resolution Specs") {
-                LabeledContent("SR Supported", value: viewModel.srIsSupported ? "Yes" : "No")
+                LabeledContent("SR Supported", value: String(localized: viewModel.srIsSupported ? "Yes" : "No"))
                     .foregroundStyle(viewModel.srIsSupported ? .blue : .secondary)
                 
                 LabeledContent("Scales", value: viewModel.srSupportedScales)
@@ -275,13 +275,18 @@ extension VTPlayerView {
                         .sorted()
                         .map { "\($0)x" }
                         .joined(separator: ", ")
-                    Text(qualityScales.isEmpty ? "None" : qualityScales)
+                    Text(qualityScales.isEmpty ? String(localized: "None") : qualityScales)
                         .monospacedDigit()
                 }
                 
                 let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                 let scale = max(viewModel.superResolutionLevel, Float(viewModel.qualitySuperResolutionScaleFactor))
-                LabeledContent("Active State", value: scale > 0 ? String(format: "%@ %.1fx", isQL ? "Quality" : "Low Latency", scale) : "Off")
+                LabeledContent(
+                    "Active State",
+                    value: scale > 0
+                        ? String(format: "%@ %.1fx", String(localized: isQL ? "Quality" : "Low Latency"), scale)
+                        : String(localized: "Off")
+                )
                     .foregroundStyle(scale > 0 ? .blue : .secondary)
                 
                 if viewModel.qualitySuperResolutionScaleFactor > 0 {

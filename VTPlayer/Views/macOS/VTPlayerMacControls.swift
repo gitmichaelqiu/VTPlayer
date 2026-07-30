@@ -69,7 +69,9 @@ extension VTPlayerView {
                     let scaleLabel = scale.rounded() == scale ? String(Int(scale)) : String(format: "%.1f", scale)
                     let isActive = scale > 0
                     enhancementControlLabel(
-                        isQL ? "Super Res: \(scaleLabel)x QL" : "Super Res: \(isActive ? "\(scaleLabel)x" : "Off")",
+                        isQL
+                            ? "\(String(localized: "Super Resolution")): \(scaleLabel)x QL"
+                            : "\(String(localized: "Super Resolution")): \(isActive ? "\(scaleLabel)x" : String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
@@ -114,7 +116,7 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.frameInterpolationLevel > 0
                     enhancementControlLabel(
-                        "Interpolation: \(isActive ? "\(viewModel.frameInterpolationLevel)x" : "Off")",
+                        "\(String(localized: "Frame Interpolation")): \(isActive ? "\(viewModel.frameInterpolationLevel)x" : String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
@@ -144,7 +146,7 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.motionBlurStrength > 0
                     enhancementControlLabel(
-                        "Motion Blur: \(isActive ? "\(viewModel.motionBlurStrength)" : "Off")",
+                        "\(String(localized: "Motion Blur")): \(isActive ? "\(viewModel.motionBlurStrength)" : String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
@@ -153,7 +155,7 @@ extension VTPlayerView {
                 .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
                 .popover(isPresented: $showMotionBlurPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : "Off")")
+                        Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : String(localized: "Off"))")
                             .font(.headline)
                             .contentTransition(.numericText())
                             .animation(.snappy(duration: 0.18), value: viewModel.motionBlurStrength)
@@ -183,7 +185,7 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.denoiseStrength > 0
                     enhancementControlLabel(
-                        "Denoise: \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")",
+                        "\(String(localized: "Denoise")): \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
@@ -192,7 +194,7 @@ extension VTPlayerView {
                 .help("Denoise — filters compression noise and high-frequency grain")
                 .popover(isPresented: $showDenoisePopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")")
+                        Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))")
                             .font(.headline)
                             .contentTransition(.numericText())
                             .animation(.snappy(duration: 0.18), value: viewModel.denoiseStrength)
@@ -236,7 +238,7 @@ extension VTPlayerView {
                         Divider()
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")")
+                            Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : String(localized: "Off"))")
                                 .font(.caption)
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
@@ -247,7 +249,7 @@ extension VTPlayerView {
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("HDR Boost: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : "Off")")
+                            Text("HDR Boost: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : String(localized: "Off"))")
                                 .font(.caption)
                                 .contentTransition(.numericText())
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
@@ -331,26 +333,6 @@ extension VTPlayerView {
         .keyboardShortcut(.space, modifiers: [])
     }
     
-    @ViewBuilder
-    var sharpnessControl: some View {
-        HStack(spacing: 4) {
-            Text(hoverSH
-                ? "Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : "Off")"
-                : "SH"
-            )
-            .font(.caption.weight(.medium))
-            .foregroundStyle(viewModel.sharpness > 0 ? .cyan : .secondary)
-            .frame(width: hoverSH ? 90 : 22, alignment: .leading)
-            Slider(value: $viewModel.sharpness, in: 0...2, step: 0.25)
-                .labelsHidden()
-                .frame(width: 60)
-                .opacity(hoverSH ? 1 : 0)
-                .allowsHitTesting(hoverSH)
-        }
-        .macOnHover { hoverSH = $0 }
-        .help("Adjust sharpness intensity (CIUnsharpMask)")
-    }
-
     @ViewBuilder
     var playbackSpeedControl: some View {
         Button(action: { showPlaybackSpeedPopover.toggle() }) {

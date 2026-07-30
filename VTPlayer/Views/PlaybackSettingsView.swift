@@ -97,7 +97,7 @@ struct PlaybackSettingsView: View {
                             }
                         )
                         .frame(width: 150)
-                        Text(viewModel.motionBlurStrength == 0 ? "Off" : "\(viewModel.motionBlurStrength)")
+                        Text(viewModel.motionBlurStrength == 0 ? String(localized: "Off") : "\(viewModel.motionBlurStrength)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)
@@ -119,7 +119,7 @@ struct PlaybackSettingsView: View {
                             }
                         )
                         .frame(width: 150)
-                        Text(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : "Off")
+                        Text(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .trailing)

@@ -567,7 +567,7 @@ extension VTPlayerView {
                         set: { defaultMBLevel = Int($0) }
                     ), in: 0...100, step: 1)
                     .frame(width: 140)
-                    AnimatedIOSSettingValue(text: defaultMBLevel == 0 ? "Off" : "\(defaultMBLevel)")
+                    AnimatedIOSSettingValue(text: defaultMBLevel == 0 ? String(localized: "Off") : "\(defaultMBLevel)")
                         .frame(width: 36, alignment: .trailing)
                 }
                 
