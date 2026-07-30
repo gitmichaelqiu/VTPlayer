@@ -100,7 +100,7 @@ struct EnhancementsSettingsTab: View {
     var body: some View {
         SettingsContainer(.enhancements) {
             VStack(alignment: .leading, spacing: 20) {
-                SettingsSection("Neural Engine Fluidity") {
+                SettingsSection("Neural Engine Enhancements") {
                     SettingsRow(
                         "Frame Interpolation",
                         helperText: "Temporal low-latency frame interpolation factor to boost frame rate."
