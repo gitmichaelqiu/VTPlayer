@@ -15,6 +15,9 @@ private struct AnimatedIOSSettingValue: View {
         Text(displayedText)
             .font(.body.monospacedDigit())
             .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: true, vertical: false)
             .contentTransition(.numericText())
             .onChange(of: text) { _, newText in
                 withAnimation(.snappy(duration: 0.18)) {
