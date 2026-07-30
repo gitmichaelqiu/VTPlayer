@@ -650,9 +650,6 @@ extension VTPlayerView {
                 )
 
             if defaultHDRBoost > 0 {
-                Divider()
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-
                 IOSSliderSettingRow(
                     title: "HDR Colorfulness",
                     value: $defaultHDRColorfulness,
@@ -673,7 +670,7 @@ extension VTPlayerView {
             }
         }
         .listStyle(.insetGrouped)
-        .listSectionSpacing(.custom(8))
+        .listSectionSpacing(.custom(16))
         .sheet(isPresented: $showMoreAppsSheet) {
             IOSMoreAppsSheet()
         }
