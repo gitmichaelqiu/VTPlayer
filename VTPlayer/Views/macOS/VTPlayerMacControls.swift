@@ -21,6 +21,10 @@ extension VTPlayerView {
         withAnimation(.snappy(duration: 0.18)) {
             viewModel.volume = min(1, max(0, viewModel.volume + amount))
         }
+        showVolumePopoverBriefly()
+    }
+
+    func showVolumePopoverBriefly() {
         showVolumePopover = true
         volumePopoverDismissTask?.cancel()
         volumePopoverDismissTask = Task { @MainActor in

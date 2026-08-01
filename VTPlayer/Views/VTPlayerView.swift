@@ -370,6 +370,7 @@ struct VTPlayerView: View {
             Button("") {
                 guard viewModel.videoURL != nil else { return }
                 viewModel.toggleMute()
+                showVolumePopoverBriefly()
             }
             .keyboardShortcut("m", modifiers: [])
             .frame(width: 0, height: 0)
