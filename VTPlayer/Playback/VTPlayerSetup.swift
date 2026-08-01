@@ -5,6 +5,7 @@ import VideoToolbox
 extension VTPlayerViewModel {
     func setupPlayer(with url: URL) {
         pendingResumePTS = nil
+        pendingExplicitSeekPTS = nil
         ignoreAutomaticTimeJumpsUntil = nil
         // Capability probing is asynchronous. Clear the previous video's
         // scale set immediately so its enabled menu items cannot leak into

@@ -511,6 +511,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var presentationClockLastPlayerPTS = -Double.infinity
     @ObservationIgnored var presentationClockInitialized = false
     @ObservationIgnored var pendingResumePTS: CMTime?
+    @ObservationIgnored var pendingExplicitSeekPTS: CMTime?
     @ObservationIgnored var ignoreAutomaticTimeJumpsUntil: DispatchTime?
     @ObservationIgnored var lastPresentationWall = DispatchTime.now()
     @ObservationIgnored var renderedTimelineAnchorPTS: CMTime?
@@ -1079,6 +1080,7 @@ final class VTPlayerViewModel {
     func seek(to seconds: Double) {
         ignoreAutomaticTimeJumpsUntil = nil
         pendingResumePTS = nil
+        pendingExplicitSeekPTS = CMTime(seconds: seconds, preferredTimescale: 600)
         seekGeneration &+= 1
         let requestGeneration = seekGeneration
         self.lastPublishedCurrentTime = seconds
@@ -1123,6 +1125,20 @@ final class VTPlayerViewModel {
             return
         }
         let currentTime = player.currentTime()
+        if let pendingExplicitSeekPTS {
+            let expectedSeconds = CMTimeGetSeconds(pendingExplicitSeekPTS)
+            let currentSeconds = CMTimeGetSeconds(currentTime)
+            guard expectedSeconds.isFinite, currentSeconds.isFinite,
+                  abs(currentSeconds - expectedSeconds) <= 0.25 else {
+                return
+            }
+            self.pendingExplicitSeekPTS = nil
+        } else if pendingResumePTS == nil {
+            // Do not let an unsolicited AVPlayer time jump rewrite the
+            // enhanced decoder timeline. Explicit seek/scrub paths register
+            // their target above; startup resume is tracked separately.
+            return
+        }
         if let pendingResumePTS {
             let expectedSeconds = CMTimeGetSeconds(pendingResumePTS)
             let currentSeconds = CMTimeGetSeconds(currentTime)
@@ -1157,6 +1173,7 @@ final class VTPlayerViewModel {
     func scrub(to seconds: Double) {
         ignoreAutomaticTimeJumpsUntil = nil
         pendingResumePTS = nil
+        pendingExplicitSeekPTS = CMTime(seconds: seconds, preferredTimescale: 600)
         seekGeneration &+= 1
         let requestGeneration = seekGeneration
         self.lastPublishedCurrentTime = seconds
