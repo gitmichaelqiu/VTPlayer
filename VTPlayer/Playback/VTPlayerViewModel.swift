@@ -281,7 +281,12 @@ final class VTPlayerViewModel {
     @ObservationIgnored var diagTimer = DispatchTime.now()
     @ObservationIgnored var processedFrameCache: [VTFrame] = []
     @ObservationIgnored var processedFrameCacheStart = 0
+    @ObservationIgnored var processedFrameCacheByteUsage = 0
     @ObservationIgnored var processedFrameByteEstimate = 0
+    @ObservationIgnored var producerDecodeWaitMilliseconds = 0.0
+    @ObservationIgnored var producerCacheAdmissionMilliseconds = 0.0
+    @ObservationIgnored var producerCacheInsertionMilliseconds = 0.0
+    @ObservationIgnored var producerTimingSampleCount = 0
     @ObservationIgnored let cacheLock = NSRecursiveLock()
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
@@ -309,6 +314,7 @@ final class VTPlayerViewModel {
     func clearProcessedFrameCache() {
         processedFrameCache.removeAll(keepingCapacity: true)
         processedFrameCacheStart = 0
+        processedFrameCacheByteUsage = 0
     }
 
     func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
@@ -375,15 +381,78 @@ final class VTPlayerViewModel {
         guard processedFrameCacheStart > 0 else { return }
         let totalCount = processedFrameCache.count
         if force || processedFrameCacheStart >= 64 || processedFrameCacheStart * 2 >= totalCount {
+            let releasedBytes = processedFrameCache[..<processedFrameCacheStart].reduce(into: 0) { total, frame in
+                total += CVPixelBufferGetDataSize(frame.buffer)
+            }
             processedFrameCache = Array(processedFrameCache[processedFrameCacheStart...])
             processedFrameCacheStart = 0
+            processedFrameCacheByteUsage = max(0, processedFrameCacheByteUsage - releasedBytes)
         }
     }
 
-    func processedFrameCacheMemoryUsage() -> Int {
-        processedFrameCache.reduce(into: 0) { total, frame in
-            total += CVPixelBufferGetDataSize(frame.buffer)
+    func cacheCanAccept(_ byteCount: Int) -> Bool {
+        guard byteCount <= frameCacheMemoryBudget else { return false }
+        return processedFrameCacheByteUsage <= frameCacheMemoryBudget - byteCount
+    }
+
+    @discardableResult
+    func insertProcessedFrameIntoCache(_ frame: VTFrame) -> Bool {
+        let byteCount = CVPixelBufferGetDataSize(frame.buffer)
+        guard cacheCanAccept(byteCount) else { return false }
+        if byteCount > processedFrameByteEstimate {
+            processedFrameByteEstimate = byteCount
         }
+
+        let pts = frame.presentationTimeStamp
+        if let last = processedFrameCache.last {
+            let comparison = CMTimeCompare(last.presentationTimeStamp, pts)
+            if comparison == 0 { return false }
+            if comparison < 0 {
+                processedFrameCache.append(frame)
+                processedFrameCacheByteUsage += byteCount
+                return true
+            }
+        } else {
+            processedFrameCache.append(frame)
+            processedFrameCacheByteUsage += byteCount
+            return true
+        }
+
+        var lo = processedFrameCacheStart
+        var hi = processedFrameCache.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if processedFrameCache[mid].presentationTimeStamp < pts {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        if lo < processedFrameCache.count,
+           CMTimeCompare(processedFrameCache[lo].presentationTimeStamp, pts) == 0 {
+            return false
+        }
+        processedFrameCache.insert(frame, at: lo)
+        processedFrameCacheByteUsage += byteCount
+        return true
+    }
+
+    func recordProducerTiming(
+        decodeWaitMilliseconds: Double = 0,
+        cacheAdmissionMilliseconds: Double = 0,
+        cacheInsertionMilliseconds: Double = 0
+    ) {
+        producerDecodeWaitMilliseconds += decodeWaitMilliseconds
+        producerCacheAdmissionMilliseconds += cacheAdmissionMilliseconds
+        producerCacheInsertionMilliseconds += cacheInsertionMilliseconds
+        producerTimingSampleCount += 1
+    }
+
+    func resetProducerTiming() {
+        producerDecodeWaitMilliseconds = 0
+        producerCacheAdmissionMilliseconds = 0
+        producerCacheInsertionMilliseconds = 0
+        producerTimingSampleCount = 0
     }
 
     var bufferedFrameLimit: Int {

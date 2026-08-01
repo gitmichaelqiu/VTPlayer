@@ -240,6 +240,7 @@ extension VTPlayerViewModel {
         diagnosticPresentedSourceCount = 0
         producedFramesCount = 0
         displayLinkTickCount = 0
+        resetProducerTiming()
         displayRateSamples.removeAll(keepingCapacity: true)
         displayRate1PercentLow = 0
         displayRateMeasurementStart = .now()
@@ -807,6 +808,26 @@ extension VTPlayerViewModel {
                 player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
             }
 
+            @MainActor
+            func waitForCacheCapacity(_ byteCount: Int) async -> Bool {
+                guard byteCount <= self.frameCacheMemoryBudget else { return false }
+                while !Task.isCancelled && gen == self.playbackGeneration {
+                    let hasRoom = self.lockCache {
+                        self.cacheCanAccept(byteCount)
+                    }
+                    if hasRoom { return true }
+                    self.lockCache {
+                        self.compactProcessedFrameCacheIfNeeded(force: true)
+                    }
+                    let hasRoomAfterCompaction = self.lockCache {
+                        self.cacheCanAccept(byteCount)
+                    }
+                    if hasRoomAfterCompaction { return true }
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                }
+                return false
+            }
+
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
 
@@ -847,6 +868,7 @@ extension VTPlayerViewModel {
 
                 // Read next decoded frame (hardware decoder, ~1ms per frame)
                 let vtFrame: VTFrame
+                let decodeWaitStart = DispatchTime.now()
                 do {
                     let next: VTFrame?
                     if let prefetchedTask = prefetchedFrameTask {
@@ -864,6 +886,9 @@ extension VTPlayerViewModel {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     continue
                 }
+                let decodeWaitMilliseconds = Double(
+                    DispatchTime.now().uptimeNanoseconds - decodeWaitStart.uptimeNanoseconds
+                ) / 1_000_000.0
 
                 let iteratorForPrefetch = frameIterator
                 prefetchedFrameTask = Task.detached(priority: .userInitiated) {
@@ -913,55 +938,28 @@ extension VTPlayerViewModel {
                         print("⚠️ Enhanced frame requires \(outputByteCount) bytes, exceeding the configured cache limit of \(self.frameCacheMemoryBudget) bytes.")
                         break
                     }
-                    while !Task.isCancelled && gen == self.playbackGeneration {
-                        let hasRoom = self.lockCache {
-                            self.processedFrameCacheMemoryUsage() + outputByteCount <= self.frameCacheMemoryBudget
+                    let cacheAdmissionStart = DispatchTime.now()
+                    guard await waitForCacheCapacity(outputByteCount) else { break }
+                    let cacheAdmissionMilliseconds = Double(
+                        DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
+                    ) / 1_000_000.0
+                    let cacheInsertionStart = DispatchTime.now()
+                    let insertedFrameCount = self.lockCache {
+                        outputFrames.reduce(into: 0) { count, frame in
+                            if self.insertProcessedFrameIntoCache(frame) {
+                                count += 1
+                            }
                         }
-                        if hasRoom { break }
-                        self.lockCache {
-                            self.compactProcessedFrameCacheIfNeeded(force: true)
-                        }
-                        let hasRoomAfterCompaction = self.lockCache {
-                            self.processedFrameCacheMemoryUsage() + outputByteCount <= self.frameCacheMemoryBudget
-                        }
-                        if hasRoomAfterCompaction { break }
-                        try? await Task.sleep(nanoseconds: 10_000_000)
                     }
-                    guard !Task.isCancelled, gen == self.playbackGeneration else { break }
-
-                    // Insert output frames in PTS-sorted order using binary
-                    // search.  The cache is already sorted and output frames
-                    // arrive roughly in order, so this is O(log n) per frame
-                    // instead of re-sorting the entire array every time.
-                    self.lockCache {
-                        for outFrame in outputFrames {
-                            let byteCount = CVPixelBufferGetDataSize(outFrame.buffer)
-                            if byteCount > self.processedFrameByteEstimate {
-                                self.processedFrameByteEstimate = byteCount
-                            }
-                            let pts = outFrame.presentationTimeStamp
-                            var lo = self.processedFrameCacheStart
-                            var hi = self.processedFrameCache.count
-                            while lo < hi {
-                                let mid = (lo + hi) / 2
-                                if self.processedFrameCache[mid].presentationTimeStamp < pts {
-                                    lo = mid + 1
-                                } else {
-                                    hi = mid
-                                }
-                            }
-                            if lo < self.processedFrameCache.count,
-                               CMTimeCompare(
-                                self.processedFrameCache[lo].presentationTimeStamp,
-                                pts
-                               ) == 0 {
-                                continue
-                            }
-                            self.processedFrameCache.insert(outFrame, at: lo)
-                        }
-                        self.compactProcessedFrameCacheIfNeeded()
-                    }
-                    self.producedFramesCount += outputFrames.count
+                    let cacheInsertionMilliseconds = Double(
+                        DispatchTime.now().uptimeNanoseconds - cacheInsertionStart.uptimeNanoseconds
+                    ) / 1_000_000.0
+                    self.recordProducerTiming(
+                        decodeWaitMilliseconds: decodeWaitMilliseconds,
+                        cacheAdmissionMilliseconds: cacheAdmissionMilliseconds,
+                        cacheInsertionMilliseconds: cacheInsertionMilliseconds
+                    )
+                    self.producedFramesCount += insertedFrameCount
                     resumeAfterFramePrerollIfReady()
 
                     // A completed source frame is the only safe point to
@@ -989,8 +987,31 @@ extension VTPlayerViewModel {
                         break
                     }
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
-                    self.lockCache { self.processedFrameCache.append(vtFrame) }
-                    self.producedFramesCount += 1
+                    let fallbackByteCount = CVPixelBufferGetDataSize(vtFrame.buffer)
+                    guard fallbackByteCount <= self.frameCacheMemoryBudget else {
+                        self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
+                        break
+                    }
+                    let cacheAdmissionStart = DispatchTime.now()
+                    guard await waitForCacheCapacity(fallbackByteCount) else { break }
+                    let cacheAdmissionMilliseconds = Double(
+                        DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
+                    ) / 1_000_000.0
+                    let cacheInsertionStart = DispatchTime.now()
+                    let inserted = self.lockCache {
+                        self.insertProcessedFrameIntoCache(vtFrame)
+                    }
+                    let cacheInsertionMilliseconds = Double(
+                        DispatchTime.now().uptimeNanoseconds - cacheInsertionStart.uptimeNanoseconds
+                    ) / 1_000_000.0
+                    self.recordProducerTiming(
+                        decodeWaitMilliseconds: decodeWaitMilliseconds,
+                        cacheAdmissionMilliseconds: cacheAdmissionMilliseconds,
+                        cacheInsertionMilliseconds: cacheInsertionMilliseconds
+                    )
+                    if inserted {
+                        self.producedFramesCount += 1
+                    }
                     resumeAfterFramePrerollIfReady()
                 }
             }
@@ -1216,11 +1237,13 @@ extension VTPlayerViewModel {
             let curFPS = self.fps
             var firstFrame: VTFrame? = nil
             var cacheCount = 0
+            var cacheBytes = 0
             self.lockCache {
                 if self.processedFrameCacheStart < self.processedFrameCache.count {
                     firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
                 }
                 cacheCount = max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
+                cacheBytes = self.processedFrameCacheByteUsage
             }
             
             let produced = producedFramesCount
@@ -1228,17 +1251,23 @@ extension VTPlayerViewModel {
             let presented = diagnosticPresentedFramesCount
             let interpolated = diagnosticPresentedInterpolatedCount
             let source = diagnosticPresentedSourceCount
+            let timingSamples = max(1, producerTimingSampleCount)
+            let decodeWait = producerDecodeWaitMilliseconds / Double(timingSamples)
+            let cacheAdmission = producerCacheAdmissionMilliseconds / Double(timingSamples)
+            let cacheInsertion = producerCacheInsertionMilliseconds / Double(timingSamples)
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
                 NSLog("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             } else {
                 NSLog("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             }
+            NSLog("PERF: cacheMB=\(cacheBytes / (1024 * 1024)) decodeWaitMs=\(String(format: "%.2f", decodeWait)) cacheWaitMs=\(String(format: "%.2f", cacheAdmission)) cacheInsertMs=\(String(format: "%.2f", cacheInsertion)) samples=\(producerTimingSampleCount)")
             producedFramesCount = 0
             displayLinkTickCount = 0
             diagnosticPresentedFramesCount = 0
             diagnosticPresentedInterpolatedCount = 0
             diagnosticPresentedSourceCount = 0
+            resetProducerTiming()
             diagTimer = now
         }
     }
