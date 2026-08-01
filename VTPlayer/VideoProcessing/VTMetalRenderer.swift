@@ -438,7 +438,7 @@ public final class VTMetalRenderer: MTKView {
         // the reference white at strength zero; increasing strength raises the
         // image into extended range, capped by the screen's live headroom.
         let hdrImage: CIImage
-        if isExtendedDynamicRangeActive, nativeHDRTransfer == nil {
+        if isExtendedDynamicRangeActive {
             let normalizedStrength = min(max(hdrStrength / 2.0, 0), 1)
             let measuredHeadroom = max(currentEDRHeadroom, potentialEDRHeadroom)
             #if os(iOS)
@@ -449,8 +449,15 @@ public final class VTMetalRenderer: MTKView {
             #else
             let availableHeadroom = measuredHeadroom
             #endif
-            let targetHeadroom = 1 + (availableHeadroom - 1) * normalizedStrength
-            let exposureEV = log2(targetHeadroom)
+            let exposureEV: CGFloat
+            if nativeHDRTransfer != nil {
+                // Native PQ/HLG already carries HDR luminance. Apply a
+                // bounded additional lift rather than remapping it as SDR.
+                exposureEV = CGFloat(normalizedStrength)
+            } else {
+                let targetHeadroom = 1 + (availableHeadroom - 1) * normalizedStrength
+                exposureEV = CGFloat(log2(targetHeadroom))
+            }
             // Exposure scales RGB uniformly, preserving the source hue and
             // chroma relationships. Do not add saturation or contrast here:
             // EDR describes luminance headroom, and SDR footage contains no

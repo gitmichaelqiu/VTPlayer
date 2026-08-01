@@ -283,7 +283,6 @@ public actor VTFrameProcessorCoordinator {
         }
     }
 
-    #if os(macOS)
     func isNativeHDR(_ pixelBuffer: CVPixelBuffer) -> Bool {
         guard let transferFunction = CVBufferCopyAttachment(
             pixelBuffer,
@@ -296,6 +295,7 @@ public actor VTFrameProcessorCoordinator {
             CFEqual(transferFunction, kCVImageBufferTransferFunction_ITU_R_2100_HLG)
     }
 
+    #if os(macOS)
     func configureRendererTransferSession(_ session: VTPixelTransferSession) {
         configureTransferSession(session)
         // Do not force BT.709 here. The source track's primaries and transfer
