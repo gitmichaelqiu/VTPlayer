@@ -269,11 +269,18 @@ extension VTPlayerViewModel {
     func startPlaybackLoop() {
         if producerTask != nil || activeCoordinator != nil || coordinatorTeardownTask != nil,
            pipelineRestartAnchorPTS == nil {
-            let renderedSeconds = CMTimeGetSeconds(lastRenderedPTS)
-            if renderedSeconds.isFinite, lastRenderedPTS.isValid, renderedSeconds >= 0 {
+            if let player {
+                let currentTime = player.currentTime()
+                if currentTime.isValid, currentTime.seconds.isFinite, currentTime.seconds >= 0 {
+                    // The player clock is authoritative at an enhancement
+                    // restart. The last rendered PTS can trail it by the
+                    // processing/cache latency and cause a visible rewind.
+                    pipelineRestartAnchorPTS = currentTime
+                } else {
+                    pipelineRestartAnchorPTS = lastRenderedPTS
+                }
+            } else {
                 pipelineRestartAnchorPTS = lastRenderedPTS
-            } else if let player {
-                pipelineRestartAnchorPTS = player.currentTime()
             }
         }
 

@@ -489,40 +489,19 @@ extension VTFrameProcessorCoordinator {
               let pool = instance.pixelBufferPool,
               !inputFrames.isEmpty else { return inputFrames }
 
+        // VTMotionBlur currently returns invalid green surfaces for native
+        // PQ/HLG buffers. Preserve HDR frames until the processor supports
+        // those transfer functions rather than corrupting the presentation.
+        guard !inputFrames.contains(where: { isNativeHDR($0.buffer) }) else {
+            return inputFrames
+        }
+
         var outputFrames: [VTFrame] = []
 
         for (idx, frame) in inputFrames.enumerated() {
-            let destBuf: CVPixelBuffer
-            if isNativeHDR(frame.buffer) {
-                var hdrBuffer: CVPixelBuffer?
-                let attributes: [CFString: Any] = [
-                    kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any],
-                    kCVPixelBufferMetalCompatibilityKey: true
-                ]
-                guard CVPixelBufferCreate(
-                    kCFAllocatorDefault,
-                    CVPixelBufferGetWidth(frame.buffer),
-                    CVPixelBufferGetHeight(frame.buffer),
-                    CVPixelBufferGetPixelFormatType(frame.buffer),
-                    attributes as CFDictionary,
-                    &hdrBuffer
-                ) == kCVReturnSuccess, let hdrBuffer else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                        userInfo: [NSLocalizedDescriptionKey: "HDR MB buffer allocation failed"])
-                }
-                destBuf = hdrBuffer
-            } else {
-                var pooledBuffer: CVPixelBuffer?
-                guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pooledBuffer) == kCVReturnSuccess,
-                      let pooledBuffer else {
-                    throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
-                        userInfo: [NSLocalizedDescriptionKey: "MB pool allocation failed"])
-                }
-                destBuf = pooledBuffer
-            }
-
-            guard CVPixelBufferGetWidth(destBuf) == CVPixelBufferGetWidth(frame.buffer),
-                  CVPixelBufferGetHeight(destBuf) == CVPixelBufferGetHeight(frame.buffer) else {
+            var outBuf: CVPixelBuffer?
+            guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &outBuf) == kCVReturnSuccess,
+                  let destBuf = outBuf else {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -3,
                     userInfo: [NSLocalizedDescriptionKey: "MB pool allocation failed"])
             }
