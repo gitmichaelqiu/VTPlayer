@@ -835,7 +835,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@"
+            "value" : "Super Res: %@"
           }
         },
         "zh-Hans" : {
@@ -1225,7 +1225,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ QL"
+            "value" : "Super Res: %@ QL"
           }
         },
         "zh-Hans" : {
