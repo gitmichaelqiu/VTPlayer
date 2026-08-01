@@ -46,10 +46,10 @@ private struct IOSSliderSettingRow: View {
                     let start = value
                     let end = defaultValue
                     resetTask = Task { @MainActor in
-                        let steps = 10
+                        let steps = 20
                         for step in 1...steps {
                             guard !Task.isCancelled else { return }
-                            try? await Task.sleep(nanoseconds: 10_000_000)
+                            try? await Task.sleep(nanoseconds: 5_000_000)
                             guard !Task.isCancelled else { return }
                             let linearProgress = Double(step) / Double(steps)
                             let progress = 1 - (1 - linearProgress) * (1 - linearProgress) * (1 - linearProgress)
