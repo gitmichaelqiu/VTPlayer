@@ -493,6 +493,7 @@ final class VTPlayerViewModel {
     var playbackGeneration: UInt64 = 0
     var seekGeneration: UInt64 = 0
     var isInitializingPipeline = false
+    @ObservationIgnored var pipelineRestartAnchorPTS: CMTime?
 
     // Audio sync monitoring (diagnostic only — never pauses player)
     var lastRenderedPTS: CMTime = .zero

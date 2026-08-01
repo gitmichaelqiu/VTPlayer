@@ -20,13 +20,6 @@ extension VTPlayerViewModel {
         validateEnhancementSelections()
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
-            #if os(macOS)
-            // A new pipeline has no frame yet. Keep native presentation alive
-            // until the replacement produces one instead of exposing a black
-            // Metal drawable during coordinator startup.
-            pipelinePresentationReady = false
-            setNativeVideoEnabled(true)
-            #endif
             if isPipelineActive {
                 startPlaybackLoop()
             } else {
@@ -234,6 +227,7 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        pipelineRestartAnchorPTS = nil
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0
@@ -271,6 +265,25 @@ extension VTPlayerViewModel {
     /// Serializes enhancement restarts. VideoToolbox sessions cannot safely be
     /// initialized while the previous producer still owns in-flight frames.
     func startPlaybackLoop() {
+        if producerTask != nil || activeCoordinator != nil || coordinatorTeardownTask != nil,
+           pipelineRestartAnchorPTS == nil {
+            let renderedSeconds = CMTimeGetSeconds(lastRenderedPTS)
+            if renderedSeconds.isFinite, lastRenderedPTS.isValid, renderedSeconds >= 0 {
+                pipelineRestartAnchorPTS = lastRenderedPTS
+            } else if let player {
+                pipelineRestartAnchorPTS = player.currentTime()
+            }
+        }
+
+        if let anchor = pipelineRestartAnchorPTS {
+            isInitializingPipeline = true
+            player?.pause()
+            enhancedAudioPlayer?.pause()
+            lockCache { clearProcessedFrameCache() }
+            lastRenderedPTS = anchor
+            resetPresentationClock(at: CMTimeGetSeconds(anchor))
+        }
+
         if let coordinatorTeardownTask {
             playbackGeneration += 1
             let restartGeneration = playbackGeneration
@@ -293,21 +306,6 @@ extension VTPlayerViewModel {
         playbackGeneration += 1
         let restartGeneration = playbackGeneration
 
-        // A superseded initializer may already have paused AVPlayer while it
-        // creates a VideoToolbox session.  Its generation no longer owns
-        // playback, so release that pause before waiting for teardown.  This
-        // keeps the native presentation moving during rapid setting changes
-        // and prevents an abandoned initialization gate from suppressing the
-        // audio-sync recovery task.
-        isInitializingPipeline = false
-        if isPlaying, !isPaused {
-            player?.rate = Float(playbackSpeed)
-        }
-        lockCache { clearProcessedFrameCache() }
-        if let player {
-            lastRenderedPTS = player.currentTime()
-            resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
-        }
         let oldProducer = producerTask
         let oldCoordinator = activeCoordinator
         producerTask?.cancel()
@@ -335,6 +333,8 @@ extension VTPlayerViewModel {
             return
         }
         let shouldResumePlayback = isPlaying && !isPaused
+        let restartAnchorPTS = pipelineRestartAnchorPTS
+        pipelineRestartAnchorPTS = nil
         stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false
@@ -368,10 +368,11 @@ extension VTPlayerViewModel {
 
         lockCache { clearProcessedFrameCache() }
         if let player = player {
-            let adjusted = CMTimeSubtract(player.currentTime(), frameDuration)
+            let startTime = restartAnchorPTS ?? player.currentTime()
+            let adjusted = CMTimeSubtract(startTime, frameDuration)
             lastPulledTime = adjusted > .zero ? adjusted : .zero
-            lastRenderedPTS = player.currentTime()
-            resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
+            lastRenderedPTS = startTime
+            resetPresentationClock(at: CMTimeGetSeconds(startTime))
         } else {
             lastPulledTime = .zero
             lastRenderedPTS = .zero
@@ -596,7 +597,10 @@ extension VTPlayerViewModel {
             // paused until the entire safe processed-frame cache is ready.
             var waitingForFramePreroll = false
             if let player = self.player {
-                let resumeTime = player.currentTime()
+                let resumeTime = restartAnchorPTS ?? player.currentTime()
+                if restartAnchorPTS != nil {
+                    _ = await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                }
                 let readerStart = CMTimeSubtract(resumeTime, frameDuration)
                 self.lastPulledTime = readerStart > .zero ? readerStart : .zero
                 self.lastRenderedPTS = CMTimeSubtract(
@@ -1193,6 +1197,7 @@ extension VTPlayerViewModel {
         audioSyncTask?.cancel()
         audioSyncTask = nil
         audioSyncLatency = 0
+        pipelineRestartAnchorPTS = nil
         lastRenderedPTS = .zero
         lockCache { clearProcessedFrameCache() }
         
