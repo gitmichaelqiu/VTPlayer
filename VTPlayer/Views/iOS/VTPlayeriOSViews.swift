@@ -650,7 +650,9 @@ extension VTPlayerView {
                     value: Binding(
                         get: { defaultHDRBoost },
                         set: { newValue in
-                            if defaultHDRBoost > 0 && newValue <= 0 {
+                            let wasEnabled = defaultHDRBoost > 0
+                            let isEnabled = newValue > 0
+                            if wasEnabled != isEnabled {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     defaultHDRBoost = newValue
                                 }
