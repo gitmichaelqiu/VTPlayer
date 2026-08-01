@@ -283,7 +283,7 @@ struct VTPlayerView: View {
                     .frame(minWidth: 0, idealWidth: 720)
                     .clipped()
                     .navigationTitle(viewModel.videoURL.map {
-                        showFileExtensions ? $0.lastPathComponent : $0.deletingPathExtension().lastPathComponent
+                        viewModel.displayName(for: $0, showingExtension: showFileExtensions)
                     } ?? "VTPlayer")
                     .inspector(isPresented: $viewModel.showSidebar) {
                         rightSidebar
@@ -312,7 +312,7 @@ struct VTPlayerView: View {
         } else {
             videoContent
                 .navigationTitle(viewModel.videoURL.map {
-                    showFileExtensions ? $0.lastPathComponent : $0.deletingPathExtension().lastPathComponent
+                    viewModel.displayName(for: $0, showingExtension: showFileExtensions)
                 } ?? "VTPlayer")
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
@@ -455,97 +455,9 @@ struct VTPlayerView: View {
     }
 
     func renameVideoFile(_ url: URL, to newBaseName: String) {
-        #if os(macOS)
-        let sourceURL = viewModel.resolveSecurityScopedBookmark(for: url)
-        let hasScopedAccess = sourceURL.startAccessingSecurityScopedResource()
-        defer {
-            if hasScopedAccess {
-                sourceURL.stopAccessingSecurityScopedResource()
-            }
-        }
-        #else
-        let sourceURL = url
-        #endif
-        let ext = url.pathExtension
-        let newName = newBaseName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !newName.isEmpty else { return }
-        let newFileName = newName + (ext.isEmpty ? "" : ".\(ext)")
-        let newURL = sourceURL.deletingLastPathComponent().appendingPathComponent(newFileName)
-        
-        do {
-            // This renames the original file in its source directory. It does
-            // not copy the video into the app sandbox.
-            try FileManager.default.moveItem(at: sourceURL, to: newURL)
-            
-            // Update recentVideos list
-            if let idx = viewModel.recentVideos.firstIndex(of: url) {
-                viewModel.recentVideos[idx] = newURL
-                #if os(iOS)
-                viewModel.saveRecentVideosIOS()
-                #endif
-            }
-
-            #if os(macOS)
-            viewModel.removeSecurityScopedBookmark(for: url)
-            viewModel.saveSecurityScopedBookmark(for: newURL)
-            #endif
-            
-            // Move Date Added timestamp in UserDefaults
-            let datesKey = "VTRecentVideosDates"
-            var dates = UserDefaults.standard.dictionary(forKey: datesKey) as? [String: Double] ?? [:]
-            if let dateVal = dates[url.lastPathComponent] {
-                dates[newURL.lastPathComponent] = dateVal
-                dates.removeValue(forKey: url.lastPathComponent)
-                UserDefaults.standard.set(dates, forKey: datesKey)
-            }
-            let openedKey = "VTRecentVideosOpenedDates"
-            var openedDates = UserDefaults.standard.dictionary(forKey: openedKey) as? [String: Double] ?? [:]
-            if let dateVal = openedDates[url.lastPathComponent] {
-                openedDates[newURL.lastPathComponent] = dateVal
-                openedDates.removeValue(forKey: url.lastPathComponent)
-                UserDefaults.standard.set(openedDates, forKey: openedKey)
-            }
-            
-            // Move Pin state if pinned
-            let pinnedKey = "VTPinnedVideos"
-            var pinned = UserDefaults.standard.stringArray(forKey: pinnedKey) ?? []
-            if let pIdx = pinned.firstIndex(of: url.lastPathComponent) {
-                pinned[pIdx] = newURL.lastPathComponent
-                UserDefaults.standard.set(pinned, forKey: pinnedKey)
-            }
-            
-            // Update UI set representation
-            if pinnedVideos.contains(url.lastPathComponent) {
-                pinnedVideos.remove(url.lastPathComponent)
-                pinnedVideos.insert(newURL.lastPathComponent)
-            }
-            
-            // Copy saved enhancement settings to the new lastPathComponent key
-            let settingsKeys = [
-                "VTLastSRLevel_", "VTLastFILevel_", "VTLastQSRLevel_",
-                "VTLastMBLevel_", "VTLastDNLevel_", "VTLastSharpness_",
-                "VTLastHDRBoost_", "VTLastHDRColorfulness_", "VTLastPosition_"
-            ]
-            for keyPrefix in settingsKeys {
-                let oldKey = keyPrefix + url.lastPathComponent
-                let newKey = keyPrefix + newURL.lastPathComponent
-                if let val = UserDefaults.standard.value(forKey: oldKey) {
-                    UserDefaults.standard.set(val, forKey: newKey)
-                    UserDefaults.standard.removeObject(forKey: oldKey)
-                }
-            }
-            
-            // Also update the specific dictionary key if it exists
-            let oldDictKey = "VTVideoSettings_" + url.lastPathComponent
-            let newDictKey = "VTVideoSettings_" + newURL.lastPathComponent
-            if let dict = UserDefaults.standard.dictionary(forKey: oldDictKey) {
-                UserDefaults.standard.set(dict, forKey: newDictKey)
-                UserDefaults.standard.removeObject(forKey: oldDictKey)
-            }
-            
-        } catch {
-            print("Failed to rename file: \(error)")
-        }
+        // Rename is intentionally app-local: the source URL and file on disk
+        // remain unchanged.
+        viewModel.renameDisplayName(for: url, to: newBaseName)
     }
 
     func togglePin(for url: URL) {

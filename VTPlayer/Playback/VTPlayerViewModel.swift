@@ -29,6 +29,22 @@ final class VTPlayerViewModel {
     var videoURL: URL?
     var isPlaying = false
     var isPaused = false
+    /// App-local names for recent videos. These never alter the source file.
+    var videoDisplayNames: [String: String] = UserDefaults.standard.dictionary(forKey: "VTVideoDisplayNames") as? [String: String] ?? [:]
+
+    func displayName(for url: URL, showingExtension: Bool) -> String {
+        let baseName = videoDisplayNames[url.standardizedFileURL.path]
+            ?? url.deletingPathExtension().lastPathComponent
+        guard showingExtension, !url.pathExtension.isEmpty else { return baseName }
+        return "\(baseName).\(url.pathExtension)"
+    }
+
+    func renameDisplayName(for url: URL, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        videoDisplayNames[url.standardizedFileURL.path] = trimmed
+        UserDefaults.standard.set(videoDisplayNames, forKey: "VTVideoDisplayNames")
+    }
     
     var lastPublishedCurrentTime = -Double.infinity
     @ObservationIgnored var isBuffering = false
@@ -732,7 +748,7 @@ final class VTPlayerViewModel {
     func saveSecurityScopedBookmark(for url: URL) {
         do {
             let bookmark = try url.bookmarkData(
-                options: [.withSecurityScope],
+                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )

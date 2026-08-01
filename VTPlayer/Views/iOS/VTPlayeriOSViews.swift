@@ -430,7 +430,7 @@ extension VTPlayerView {
                 VideoThumbnailView(url: url)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(showFileExtensions ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent)
+                    Text(viewModel.displayName(for: url, showingExtension: showFileExtensions))
                         .font(.body)
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
@@ -478,7 +478,7 @@ extension VTPlayerView {
             
             Button {
                 videoToRename = url
-                renameText = url.deletingPathExtension().lastPathComponent
+                renameText = viewModel.displayName(for: url, showingExtension: false)
                 showRenameAlert = true
             } label: {
                 Label("Rename File", systemImage: "pencil")
