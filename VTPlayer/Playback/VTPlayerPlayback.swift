@@ -723,8 +723,9 @@ extension VTPlayerViewModel {
                     DispatchTime.now().uptimeNanoseconds - admissionStart.uptimeNanoseconds
                 ) / 1_000_000.0
                 let insertionStart = DispatchTime.now()
+                guard !Task.isCancelled, gen == self.playbackGeneration else { return false }
                 let inserted = self.lockCache {
-                    guard gen == self.playbackGeneration, !Task.isCancelled else { return false }
+                    guard gen == self.playbackGeneration else { return false }
                     self.insertProcessedFrameIntoCache(frame)
                 }
                 let insertionMilliseconds = Double(
@@ -868,8 +869,9 @@ extension VTPlayerViewModel {
                         DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
                     ) / 1_000_000.0
                     let cacheInsertionStart = DispatchTime.now()
+                    guard !Task.isCancelled, gen == self.playbackGeneration else { break }
                     let insertedFrameCount = self.lockCache {
-                        guard gen == self.playbackGeneration, !Task.isCancelled else { return 0 }
+                        guard gen == self.playbackGeneration else { return 0 }
                         outputFrames.reduce(into: 0) { count, frame in
                             if self.insertProcessedFrameIntoCache(frame) {
                                 count += 1
@@ -910,8 +912,9 @@ extension VTPlayerViewModel {
                         DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
                     ) / 1_000_000.0
                     let cacheInsertionStart = DispatchTime.now()
+                    guard !Task.isCancelled, gen == self.playbackGeneration else { break }
                     let inserted = self.lockCache {
-                        guard gen == self.playbackGeneration, !Task.isCancelled else { return false }
+                        guard gen == self.playbackGeneration else { return false }
                         self.insertProcessedFrameIntoCache(vtFrame)
                     }
                     let cacheInsertionMilliseconds = Double(
