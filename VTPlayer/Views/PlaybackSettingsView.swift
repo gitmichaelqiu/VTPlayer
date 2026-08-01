@@ -72,7 +72,7 @@ struct PlaybackSettingsView: View {
                     .tint(.secondary)
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
                         Text("Off").tag(0)
-                        if viewModel.frameInterpolationIsSupported {
+                        if viewModel.frameInterpolationIsAvailable {
                             Text("2x").tag(2)
                             Text("4x").tag(4)
                         }
