@@ -39,6 +39,7 @@ final class VTPlayerViewModel {
     // Feature Levels (0 = Off; supported Low Latency scales vary by device)
     var superResolutionLevel: Float = 0
     var frameInterpolationLevel: Int = 0
+    var frameInterpolationIsSupported = false
 
     // New API Feature Levels
     var qualitySuperResolutionScaleFactor: Int = 0  // 0=off, 2, 4 (Quality SR)
@@ -171,7 +172,6 @@ final class VTPlayerViewModel {
     @ObservationIgnored var adaptiveSRFICacheStarvations = 0
     @ObservationIgnored var adaptiveSRFIHasPresentedFrame = false
     @ObservationIgnored var adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
-    @ObservationIgnored var fiInputFallbackSize: CGSize?
     /// Set only after the combined LL2 SR/FI processor rejects this video.
     @ObservationIgnored var useSequentialSRFIFallback = false
 

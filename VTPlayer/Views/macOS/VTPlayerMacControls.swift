@@ -132,10 +132,15 @@ extension VTPlayerView {
                             set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
                         )) {
                             Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
+                            Text("2x").tag(2).disabled(!viewModel.frameInterpolationIsSupported)
+                            Text("4x").tag(4).disabled(!viewModel.frameInterpolationIsSupported)
                         }
                         .pickerStyle(.inline)
+                        if !viewModel.frameInterpolationIsSupported {
+                            Text("Unavailable at this video's native resolution")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .padding(12)
                 }

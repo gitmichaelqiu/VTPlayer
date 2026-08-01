@@ -736,12 +736,32 @@
         }
       }
     },
+    "Frame interpolation is unavailable at this video's native resolution." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此视频的原生分辨率不支持帧生成。"
+          }
+        }
+      }
+    },
     "Frame cache" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "帧缓存"
+          }
+        }
+      }
+    },
+    "Unavailable at this video's native resolution" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此视频的原生分辨率不支持"
           }
         }
       }

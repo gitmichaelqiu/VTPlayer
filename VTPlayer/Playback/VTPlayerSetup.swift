@@ -9,6 +9,7 @@ extension VTPlayerViewModel {
         // the new video's loading window.
         srIsSupported = false
         srSupportedScales = "None"
+        frameInterpolationIsSupported = false
         availableSuperResolutionScales.removeAll()
         availableQualitySuperResolutionScales.removeAll()
         readyQualitySuperResolutionScales.removeAll()
@@ -20,7 +21,6 @@ extension VTPlayerViewModel {
         adaptiveSRFICacheStarvations = 0
         adaptiveSRFIHasPresentedFrame = false
         adaptiveSRFILastTransition = .now()
-        fiInputFallbackSize = nil
         let asset = AVURLAsset(url: url)
         let setupGeneration = playbackGeneration
         
@@ -53,6 +53,8 @@ extension VTPlayerViewModel {
                 // Get framerate
                 let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
                 let frameRate = Double(nominalFrameRate)
+                let frameInterpolationSupported = VTFrameProcessorCoordinator
+                    .isFrameInterpolationSupported(width: width, height: height)
                 
                 // Get format description
                 var formatStr = "Unknown"
@@ -117,7 +119,7 @@ extension VTPlayerViewModel {
                 }
                 #endif
 
-                NSLog("CAPABILITY: video=\(width)x\(height) LL reported=\(scalesStr) LL session2=\(ll2SessionSupported) LL menu=\(availableSRScales.sorted()) QL menu=\(availableQualityScales.sorted()) QL ready=\(readyQualityScales.sorted())")
+                NSLog("CAPABILITY: video=\(width)x\(height) FI=\(frameInterpolationSupported) LL reported=\(scalesStr) LL session2=\(ll2SessionSupported) LL menu=\(availableSRScales.sorted()) QL menu=\(availableQualityScales.sorted()) QL ready=\(readyQualityScales.sorted())")
 
                 // Quality SR has a second availability dimension: the
                 // per-resolution configuration may exist while its neural
@@ -161,6 +163,7 @@ extension VTPlayerViewModel {
                     self.videoHeight = height
                     self.sourceFrameRate = frameRate
                     self.videoFormat = formatStr
+                    self.frameInterpolationIsSupported = frameInterpolationSupported
                     self.srIsSupported = supported && !availableSRScales.isEmpty
                     self.srSupportedScales = availableScalesStr
                     self.availableSuperResolutionScales = availableSRScales

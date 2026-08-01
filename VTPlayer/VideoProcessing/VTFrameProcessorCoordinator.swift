@@ -46,6 +46,27 @@ public actor VTFrameProcessorCoordinator {
         VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: width, frameHeight: height)
     }
 
+    public static func isFrameInterpolationSupported(width: Int, height: Int) -> Bool {
+        guard VTLowLatencyFrameInterpolationConfiguration.isSupported,
+              VTLowLatencyFrameInterpolationConfiguration(
+                frameWidth: width,
+                frameHeight: height,
+                numberOfInterpolatedFrames: 1
+              ) != nil else {
+            return false
+        }
+        if #available(macOS 27.0, iOS 27.0, tvOS 27.0, visionOS 27.0, *) {
+            let maximumDimension = VTLowLatencyFrameInterpolationConfiguration
+                .maximumDimension(forSpatialScaleFactor: 1)
+            let maximumPixelCount = VTLowLatencyFrameInterpolationConfiguration
+                .maximumPixelCount(forSpatialScaleFactor: 1)
+            return maximumDimension > 0 && maximumPixelCount > 0 &&
+                width <= maximumDimension && height <= maximumDimension &&
+                Int64(width) * Int64(height) <= Int64(maximumPixelCount)
+        }
+        return true
+    }
+
     /// Tests the exact LL SR session used by the pipeline. The advertised
     /// scale-factor list is useful diagnostics, but on some OS/device
     /// combinations it does not agree with whether a concrete processor
@@ -742,6 +763,10 @@ public actor VTFrameProcessorCoordinator {
 
     public static func supportedSuperResolutionScaleFactors(width: Int, height: Int) -> [Float] {
         return []
+    }
+
+    public static func isFrameInterpolationSupported(width: Int, height: Int) -> Bool {
+        false
     }
 
     public static func canStartLowLatencyPipeline(width: Int, height: Int, scale: Float) async -> Bool {
