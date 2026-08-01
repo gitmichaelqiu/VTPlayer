@@ -33,7 +33,7 @@ jobs:
           VERSION=$(echo $TAG | sed 's/^v//')
           
           # 2. Construct the URL
-          URL="https://github.com/gitmichaelqiu/vtplayer/releases/download/$TAG/vtplayer.$VERSION.dmg"
+          URL="https://github.com/gitmichaelqiu/vtplayer/releases/download/$TAG/VTPlayer_macOS_v$VERSION.dmg"
           
           # 3. Download and Hash
           # -f makes curl fail on 404 so the workflow stops if the URL is wrong
