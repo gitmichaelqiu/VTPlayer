@@ -370,7 +370,11 @@ struct VTPlayerView: View {
             #if os(macOS)
             Button("") {
                 guard viewModel.videoURL != nil else { return }
+                let controlsWereHidden = !viewModel.showControls
                 viewModel.toggleMute()
+                if controlsWereHidden {
+                    volumePopoverRevealedControls = true
+                }
                 showVolumePopoverBriefly()
             }
             .keyboardShortcut("m", modifiers: [])
