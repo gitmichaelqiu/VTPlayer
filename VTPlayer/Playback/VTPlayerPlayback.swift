@@ -470,6 +470,24 @@ extension VTPlayerViewModel {
         #endif
     }
 
+    func pureFIInputFallback() -> CGSize? {
+        guard superResolutionLevel == 0,
+              qualitySuperResolutionScaleFactor == 0,
+              frameInterpolationLevel > 0,
+              videoWidth > 1920 || videoHeight > 1080 else {
+            return nil
+        }
+        let scale = min(1.0, 1920.0 / Double(videoWidth), 1080.0 / Double(videoHeight))
+        let width = max(2, Int((Double(videoWidth) * scale).rounded(.down)) & ~1)
+        let height = max(2, Int((Double(videoHeight) * scale).rounded(.down)) & ~1)
+        return CGSize(width: width, height: height)
+    }
+
+    func isFrameProcessorInitializationFailure(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.code == -19_730 || nsError.code == -12_911
+    }
+
     private func startPlaybackLoopNow() {
         guard coordinatorTeardownTask == nil else {
             startPlaybackLoop()
@@ -496,11 +514,7 @@ extension VTPlayerViewModel {
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
-        let adaptiveFISize: CGSize? = resolveAdaptiveSRFIInputSize() ?? {
-            guard frameInterpolationLevel > 0 else { return nil }
-            guard videoWidth > 1280 || videoHeight > 720 else { return nil }
-            return nil
-        }()
+        let adaptiveFISize = resolveAdaptiveSRFIInputSize() ?? fiInputFallbackSize
         let pipelineWidth = Int(adaptiveFISize?.width ?? CGFloat(videoWidth))
         let pipelineHeight = Int(adaptiveFISize?.height ?? CGFloat(videoHeight))
         let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
@@ -905,6 +919,30 @@ extension VTPlayerViewModel {
                         print("⚠️ FI: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
                     }
 
+                    let outputByteCount = outputFrames.reduce(into: 0) { total, frame in
+                        total += CVPixelBufferGetDataSize(frame.buffer)
+                    }
+                    guard outputByteCount <= self.frameCacheMemoryBudget else {
+                        self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
+                        print("⚠️ Enhanced frame requires \(outputByteCount) bytes, exceeding the configured cache limit of \(self.frameCacheMemoryBudget) bytes.")
+                        break
+                    }
+                    while !Task.isCancelled && gen == self.playbackGeneration {
+                        let hasRoom = self.lockCache {
+                            self.processedFrameCacheMemoryUsage() + outputByteCount <= self.frameCacheMemoryBudget
+                        }
+                        if hasRoom { break }
+                        self.lockCache {
+                            self.compactProcessedFrameCacheIfNeeded(force: true)
+                        }
+                        let hasRoomAfterCompaction = self.lockCache {
+                            self.processedFrameCacheMemoryUsage() + outputByteCount <= self.frameCacheMemoryBudget
+                        }
+                        if hasRoomAfterCompaction { break }
+                        try? await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                    guard !Task.isCancelled, gen == self.playbackGeneration else { break }
+
                     // Insert output frames in PTS-sorted order using binary
                     // search.  The cache is already sorted and output frames
                     // arrive roughly in order, so this is O(log n) per frame
@@ -955,6 +993,18 @@ extension VTPlayerViewModel {
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
+                    if self.isFrameProcessorInitializationFailure(error),
+                       fiLevel > 0,
+                       effectiveSRLevel == 0,
+                       effectiveQualitySR == 0,
+                       fiInputFallbackSize == nil,
+                       let fallbackSize = self.pureFIInputFallback() {
+                        self.fiInputFallbackSize = fallbackSize
+                        self.srInitializationError = "Native-resolution frame interpolation is unavailable; using \(Int(fallbackSize.width))x\(Int(fallbackSize.height)) input."
+                        print("⚠️ Native-resolution FI failed; restarting at \(Int(fallbackSize.width))x\(Int(fallbackSize.height)).")
+                        self.startPlaybackLoop()
+                        break
+                    }
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 &&
                         !self.useSequentialSRFIFallback && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true

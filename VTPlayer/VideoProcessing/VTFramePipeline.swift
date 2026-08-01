@@ -148,7 +148,8 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     }
                     
                     var outputSettings: [String: Any] = [
-                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                        kCVPixelBufferIOSurfacePropertiesKey as String: [:]
                     ]
                     if let outputSize {
                         outputSettings[kCVPixelBufferWidthKey as String] = Int(outputSize.width)

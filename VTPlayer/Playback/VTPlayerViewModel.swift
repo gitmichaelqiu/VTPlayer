@@ -171,6 +171,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var adaptiveSRFICacheStarvations = 0
     @ObservationIgnored var adaptiveSRFIHasPresentedFrame = false
     @ObservationIgnored var adaptiveSRFILastTransition = DispatchTime(uptimeNanoseconds: 0)
+    @ObservationIgnored var fiInputFallbackSize: CGSize?
     /// Set only after the combined LL2 SR/FI processor rejects this video.
     @ObservationIgnored var useSequentialSRFIFallback = false
 
@@ -294,17 +295,7 @@ final class VTPlayerViewModel {
         #endif
         let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheMemoryMB")
         let megabytes = configured > 0 ? configured : defaultMegabytes
-        let configuredBytes = min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
-        guard frameInterpolationLevel > 0,
-              Int64(videoWidth) * Int64(videoHeight) >= 3_840 * 2_160 else {
-            return configuredBytes
-        }
-
-        // UHD FI retains large IOSurfaces in the presentation cache while
-        // VideoToolbox also holds model and working surfaces. Keep enough
-        // unified memory available for those live processor resources.
-        let processorSafeBytes = Int(ProcessInfo.processInfo.physicalMemory / 12)
-        return min(configuredBytes, processorSafeBytes)
+        return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
     }
     /// The memory budget is the cache limit. A frame-count cap would make
     /// low-resolution videos start with only a few seconds of reserve.
@@ -380,12 +371,18 @@ final class VTPlayerViewModel {
         lastDiagnosticsPublish = now
     }
 
-    func compactProcessedFrameCacheIfNeeded() {
+    func compactProcessedFrameCacheIfNeeded(force: Bool = false) {
         guard processedFrameCacheStart > 0 else { return }
         let totalCount = processedFrameCache.count
-        if processedFrameCacheStart >= 64 || processedFrameCacheStart * 2 >= totalCount {
+        if force || processedFrameCacheStart >= 64 || processedFrameCacheStart * 2 >= totalCount {
             processedFrameCache = Array(processedFrameCache[processedFrameCacheStart...])
             processedFrameCacheStart = 0
+        }
+    }
+
+    func processedFrameCacheMemoryUsage() -> Int {
+        processedFrameCache.reduce(into: 0) { total, frame in
+            total += CVPixelBufferGetDataSize(frame.buffer)
         }
     }
 

@@ -129,7 +129,7 @@ extension VTFrameProcessorCoordinator {
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create denoise params"])
         }
 
-        _ = try await instance.processor.process(parameters: params)
+        for try await _ in instance.processor.process(parameters: params) {}
         return [VTFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp)]
     }
 
@@ -151,17 +151,8 @@ extension VTFrameProcessorCoordinator {
         } else {
             historyToUse = stages.keys.contains(.spatial) ? upscaledFrameHistory : frameHistory
         }
-        if historyToUse.count >= 2 {
-            prevSourceFP = historyToUse[1]
-        } else {
-            // First frame: use dummy
-            let offsetTime = CMTimeSubtract(sourcePTS, CMTime(value: 1, timescale: 30))
-            guard let dummy = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: offsetTime) else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create dummy frame"])
-            }
-            prevSourceFP = dummy
-        }
+        guard historyToUse.count >= 2 else { return [frame] }
+        prevSourceFP = historyToUse[1]
 
         #if os(macOS)
         let isCombined = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
@@ -199,7 +190,7 @@ extension VTFrameProcessorCoordinator {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create combined params"])
             }
 
-            _ = try await instance.processor.process(parameters: params)
+            for try await _ in instance.processor.process(parameters: params) {}
 
             return [
                 VTFrame(buffer: outBuf1, presentationTimeStamp: midPTS, isInterpolated: true),
@@ -212,7 +203,7 @@ extension VTFrameProcessorCoordinator {
         let numInterpolated = frameInterpolationLevel == 4 ? 3 : 1
 
         var destBufs: [CVPixelBuffer] = []
-        for _ in 0...numInterpolated {
+        for _ in 0..<numInterpolated {
             var buf: CVPixelBuffer?
             guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf) == kCVReturnSuccess,
                   let b = buf else {
@@ -236,12 +227,10 @@ extension VTFrameProcessorCoordinator {
             interpPTSList.append(CMTimeAdd(prevSourceFP.presentationTimeStamp,
                 CMTimeMultiplyByFloat64(diff, multiplier: 0.5)))
         }
-        interpPTSList.append(sourcePTS)
-
         let destFrames = destBufs.enumerated().compactMap { (i, buf) in
             VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: interpPTSList[i])
         }
-        guard destFrames.count == numInterpolated + 1 else {
+        guard destFrames.count == numInterpolated else {
             throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
         }
@@ -254,16 +243,13 @@ extension VTFrameProcessorCoordinator {
             throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create low-latency FI params"])
         }
-        _ = try await instance.processor.process(parameters: params)
+        for try await _ in instance.processor.process(parameters: params) {}
 
         var outputFrames: [VTFrame] = []
         for (i, buf) in destBufs.enumerated() {
-            outputFrames.append(VTFrame(
-                buffer: buf,
-                presentationTimeStamp: interpPTSList[i],
-                isInterpolated: i < numInterpolated
-            ))
+            outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i], isInterpolated: true))
         }
+        outputFrames.append(frame)
 
         return outputFrames
     }
@@ -303,7 +289,7 @@ extension VTFrameProcessorCoordinator {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create Quality SR params"])
                 }
-                _ = try await instance.processor.process(parameters: params)
+                for try await _ in instance.processor.process(parameters: params) {}
                 currentBuffer = outBuf1
             } else {
                 // In temporal-first mode, interpolated frames are synthetic
@@ -344,7 +330,7 @@ extension VTFrameProcessorCoordinator {
                     sourceFrame: sourceFP,
                     destinationFrame: destFP
                 )
-                _ = try await instance.processor.process(parameters: params)
+                for try await _ in instance.processor.process(parameters: params) {}
                 currentBuffer = outBuf1
 
                 // Stage 2: Second 2x step for 4x LL SR
@@ -366,7 +352,7 @@ extension VTFrameProcessorCoordinator {
                             sourceFrame: sourceFP2,
                             destinationFrame: destFP2
                         )
-                        _ = try await proc2.process(parameters: params2)
+                        for try await _ in proc2.process(parameters: params2) {}
                         currentBuffer = outBuf2
                     } else if let fallbackSession = fallbackTransferSession,
                               let fallbackPool = secondSpatialPool {
@@ -470,7 +456,7 @@ extension VTFrameProcessorCoordinator {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create MB params"])
             }
 
-            _ = try await instance.processor.process(parameters: params)
+            for try await _ in instance.processor.process(parameters: params) {}
             outputFrames.append(VTFrame(
                 buffer: destBuf,
                 presentationTimeStamp: frame.presentationTimeStamp,

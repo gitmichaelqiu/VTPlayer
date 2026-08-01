@@ -20,6 +20,7 @@ extension VTPlayerViewModel {
         adaptiveSRFICacheStarvations = 0
         adaptiveSRFIHasPresentedFrame = false
         adaptiveSRFILastTransition = .now()
+        fiInputFallbackSize = nil
         let asset = AVURLAsset(url: url)
         let setupGeneration = playbackGeneration
         
