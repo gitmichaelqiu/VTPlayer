@@ -364,6 +364,10 @@ extension VTPlayerViewModel {
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
+        // AVAssetReader may begin at the first keyframe after a requested
+        // restart time. Decode a short lead-in so the cache always contains
+        // a frame at the presentation anchor instead of leaving a gap.
+        let decodePreroll = CMTime(seconds: 4, preferredTimescale: 600)
         let pipelineWidth = videoWidth
         let pipelineHeight = videoHeight
         let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
@@ -394,7 +398,7 @@ extension VTPlayerViewModel {
         }
         if let player = player {
             let startTime = restartStartTime ?? player.currentTime()
-            let adjusted = CMTimeSubtract(startTime, frameDuration)
+            let adjusted = CMTimeSubtract(startTime, decodePreroll)
             lastPulledTime = adjusted > .zero ? adjusted : .zero
             lastRenderedPTS = startTime
             resetPresentationClock(at: CMTimeGetSeconds(startTime))
@@ -626,7 +630,7 @@ extension VTPlayerViewModel {
                 if restartStartTime != nil {
                     _ = await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 }
-                let readerStart = CMTimeSubtract(resumeTime, frameDuration)
+                let readerStart = CMTimeSubtract(resumeTime, decodePreroll)
                 self.lastPulledTime = readerStart > .zero ? readerStart : .zero
                 self.lastRenderedPTS = CMTimeSubtract(
                     resumeTime,
