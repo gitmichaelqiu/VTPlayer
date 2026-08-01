@@ -499,6 +499,12 @@ extension VTFrameProcessorCoordinator {
                     userInfo: [NSLocalizedDescriptionKey: "MB pool allocation failed"])
             }
 
+            // Motion blur can receive native HDR frames. Preserve the source
+            // transfer function/primaries on the destination before submitting
+            // it; otherwise VideoToolbox may treat the HDR surface as an
+            // untagged SDR buffer and return no usable output.
+            propagateColorAttachments(from: frame.buffer, to: destBuf)
+
             guard let sourceFP = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp),
                   let destFP = VTFrameProcessorFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp) else {
                 throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
@@ -542,12 +548,18 @@ extension VTFrameProcessorCoordinator {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to create MB params"])
             }
 
-            for try await _ in instance.processor.process(parameters: params) {}
-            outputFrames.append(VTFrame(
-                buffer: destBuf,
-                presentationTimeStamp: frame.presentationTimeStamp,
-                isInterpolated: frame.isInterpolated
-            ))
+            var producedOutput = false
+            for try await _ in instance.processor.process(parameters: params) {
+                producedOutput = true
+            }
+            outputFrames.append(producedOutput
+                ? VTFrame(
+                    buffer: destBuf,
+                    presentationTimeStamp: frame.presentationTimeStamp,
+                    isInterpolated: frame.isInterpolated
+                )
+                : frame
+            )
         }
 
         return outputFrames
