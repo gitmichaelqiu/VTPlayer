@@ -477,7 +477,7 @@ extension VTPlayerViewModel {
               videoWidth > 1920 || videoHeight > 1080 else {
             return nil
         }
-        let scale = min(1.0, 960.0 / Double(videoWidth), 540.0 / Double(videoHeight))
+        let scale = min(1.0, 1920.0 / Double(videoWidth), 1080.0 / Double(videoHeight))
         let width = max(2, Int((Double(videoWidth) * scale).rounded(.down)) & ~1)
         let height = max(2, Int((Double(videoHeight) * scale).rounded(.down)) & ~1)
         return CGSize(width: width, height: height)
