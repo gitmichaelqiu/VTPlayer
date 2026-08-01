@@ -275,16 +275,27 @@ extension VTPlayerViewModel {
                     let completionViewModel = self
                     self.pendingResumePTS = resumeTime
                     Task { @MainActor [weak completionViewModel] in
-                        let completed = await newPlayer.seek(
-                            to: resumeTime,
-                            toleranceBefore: .zero,
-                            toleranceAfter: .zero
-                        )
-                        guard completed,
+                        var settled = false
+                        for _ in 0..<20 {
+                            let completed = await newPlayer.seek(
+                                to: resumeTime,
+                                toleranceBefore: .zero,
+                                toleranceAfter: .zero
+                            )
+                            let observedTime = CMTimeGetSeconds(newPlayer.currentTime())
+                            if completed, observedTime.isFinite,
+                               abs(observedTime - CMTimeGetSeconds(resumeTime)) < 0.25 {
+                                settled = true
+                                break
+                            }
+                            try? await Task.sleep(nanoseconds: 50_000_000)
+                        }
+                        guard settled,
                               let completionViewModel,
                               completionViewModel.player === newPlayer,
                               completionViewModel.videoURL == url else { return }
                         completionViewModel.currentTime = CMTimeGetSeconds(newPlayer.currentTime())
+                        completionViewModel.pendingResumePTS = nil
                         completionViewModel.play()
                     }
                 }
