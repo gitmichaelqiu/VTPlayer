@@ -810,6 +810,7 @@
       }
     },
     "Low Latency" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -829,12 +830,18 @@
         }
       }
     },
-    "Quality %.1fx" : {
+    "Low Latency player scale %@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "高质量 %.1f倍"
+            "value" : "超分：%@"
           }
         }
       }
@@ -1193,11 +1200,38 @@
       }
     },
     "Quality" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "高质量"
+          }
+        }
+      }
+    },
+    "Quality %.1fx" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高质量 %.1f倍"
+          }
+        }
+      }
+    },
+    "Quality player scale %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ QL"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超分：%@ 质量"
           }
         }
       }
@@ -1208,16 +1242,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高质量缩放倍率"
-          }
-        }
-      }
-    },
-    "Super Res: %@ QL" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超分辨率：%@ 高质量"
           }
         }
       }

@@ -85,9 +85,9 @@ extension VTPlayerView {
                     let scaleLabel = scale.rounded() == scale ? String(Int(scale)) : String(format: "%.1f", scale)
                     let isActive = scale > 0
                     enhancementControlLabel(
-                        isQL
-                            ? String(format: String(localized: "Super Res: %@ QL"), scaleLabel)
-                            : "\(String(localized: "Super Res")): \(isActive ? "\(scaleLabel)x" : String(localized: "Off"))",
+                        isActive
+                            ? String(format: String(localized: isQL ? "Quality player scale %@" : "Low Latency player scale %@"), "\(scaleLabel)x")
+                            : "\(String(localized: "Super Res")): \(String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
