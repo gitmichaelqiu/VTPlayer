@@ -726,7 +726,7 @@ extension VTPlayerViewModel {
                 guard !Task.isCancelled, gen == self.playbackGeneration else { return false }
                 let inserted = self.lockCache {
                     guard gen == self.playbackGeneration else { return false }
-                    self.insertProcessedFrameIntoCache(frame)
+                    return self.insertProcessedFrameIntoCache(frame)
                 }
                 let insertionMilliseconds = Double(
                     DispatchTime.now().uptimeNanoseconds - insertionStart.uptimeNanoseconds
@@ -872,7 +872,7 @@ extension VTPlayerViewModel {
                     guard !Task.isCancelled, gen == self.playbackGeneration else { break }
                     let insertedFrameCount = self.lockCache {
                         guard gen == self.playbackGeneration else { return 0 }
-                        outputFrames.reduce(into: 0) { count, frame in
+                        return outputFrames.reduce(into: 0) { count, frame in
                             if self.insertProcessedFrameIntoCache(frame) {
                                 count += 1
                             }
@@ -915,7 +915,7 @@ extension VTPlayerViewModel {
                     guard !Task.isCancelled, gen == self.playbackGeneration else { break }
                     let inserted = self.lockCache {
                         guard gen == self.playbackGeneration else { return false }
-                        self.insertProcessedFrameIntoCache(vtFrame)
+                        return self.insertProcessedFrameIntoCache(vtFrame)
                     }
                     let cacheInsertionMilliseconds = Double(
                         DispatchTime.now().uptimeNanoseconds - cacheInsertionStart.uptimeNanoseconds
