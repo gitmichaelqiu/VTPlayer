@@ -426,12 +426,13 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                     let start = Double(value)
                     let end = Double(defaultValue)
                     resetTask = Task { @MainActor in
-                        let steps = 12
+                        let steps = 10
                         for step in 1...steps {
                             guard !Task.isCancelled else { return }
-                            try? await Task.sleep(nanoseconds: 15_000_000)
+                            try? await Task.sleep(nanoseconds: 10_000_000)
                             guard !Task.isCancelled else { return }
-                            let progress = Double(step) / Double(steps)
+                            let linearProgress = Double(step) / Double(steps)
+                            let progress = 1 - (1 - linearProgress) * (1 - linearProgress) * (1 - linearProgress)
                             value = V(start + (end - start) * progress)
                         }
                         resetTask = nil
