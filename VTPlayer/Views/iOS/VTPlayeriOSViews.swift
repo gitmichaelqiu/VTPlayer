@@ -34,6 +34,7 @@ private struct IOSSliderSettingRow: View {
     let step: Double
     let defaultValue: Double
     let valueText: (Double) -> String
+    @State private var resetTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 4) {
@@ -41,8 +42,19 @@ private struct IOSSliderSettingRow: View {
                 Text(title)
                 Spacer()
                 Button {
-                    withAnimation(.snappy(duration: 0.18)) {
-                        value = defaultValue
+                    resetTask?.cancel()
+                    let start = value
+                    let end = defaultValue
+                    resetTask = Task { @MainActor in
+                        let steps = 18
+                        for step in 1...steps {
+                            guard !Task.isCancelled else { return }
+                            try? await Task.sleep(nanoseconds: 16_000_000)
+                            guard !Task.isCancelled else { return }
+                            let progress = Double(step) / Double(steps)
+                            value = start + (end - start) * progress
+                        }
+                        resetTask = nil
                     }
                 } label: {
                     Image(systemName: "arrow.counterclockwise")

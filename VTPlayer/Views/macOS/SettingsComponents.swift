@@ -384,6 +384,7 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
 
     @Environment(\.settingsTab) var currentTab
     @EnvironmentObject var navigationState: SettingsNavigationState
+    @State private var resetTask: Task<Void, Never>?
 
     init(
         _ title: LocalizedStringResource,
@@ -421,8 +422,19 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                 Spacer()
 
                 Button("↺") {
-                    withAnimation {
-                        value = defaultValue
+                    resetTask?.cancel()
+                    let start = Double(value)
+                    let end = Double(defaultValue)
+                    resetTask = Task { @MainActor in
+                        let steps = 18
+                        for step in 1...steps {
+                            guard !Task.isCancelled else { return }
+                            try? await Task.sleep(nanoseconds: 16_000_000)
+                            guard !Task.isCancelled else { return }
+                            let progress = Double(step) / Double(steps)
+                            value = V(start + (end - start) * progress)
+                        }
+                        resetTask = nil
                     }
                 }
                 .help("Reset to default")
