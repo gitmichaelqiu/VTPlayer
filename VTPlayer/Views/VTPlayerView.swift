@@ -455,14 +455,27 @@ struct VTPlayerView: View {
     }
 
     func renameVideoFile(_ url: URL, to newBaseName: String) {
+        #if os(macOS)
+        let sourceURL = viewModel.resolveSecurityScopedBookmark(for: url)
+        let hasScopedAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasScopedAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        #else
+        let sourceURL = url
+        #endif
         let ext = url.pathExtension
         let newName = newBaseName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newName.isEmpty else { return }
         let newFileName = newName + (ext.isEmpty ? "" : ".\(ext)")
-        let newURL = url.deletingLastPathComponent().appendingPathComponent(newFileName)
+        let newURL = sourceURL.deletingLastPathComponent().appendingPathComponent(newFileName)
         
         do {
-            try FileManager.default.moveItem(at: url, to: newURL)
+            // This renames the original file in its source directory. It does
+            // not copy the video into the app sandbox.
+            try FileManager.default.moveItem(at: sourceURL, to: newURL)
             
             // Update recentVideos list
             if let idx = viewModel.recentVideos.firstIndex(of: url) {
@@ -471,6 +484,11 @@ struct VTPlayerView: View {
                 viewModel.saveRecentVideosIOS()
                 #endif
             }
+
+            #if os(macOS)
+            viewModel.removeSecurityScopedBookmark(for: url)
+            viewModel.saveSecurityScopedBookmark(for: newURL)
+            #endif
             
             // Move Date Added timestamp in UserDefaults
             let datesKey = "VTRecentVideosDates"

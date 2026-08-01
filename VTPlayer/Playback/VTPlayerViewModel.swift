@@ -732,7 +732,7 @@ final class VTPlayerViewModel {
     func saveSecurityScopedBookmark(for url: URL) {
         do {
             let bookmark = try url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                options: [.withSecurityScope],
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
