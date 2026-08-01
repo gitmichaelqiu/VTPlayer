@@ -368,7 +368,7 @@ extension VTPlayerView {
                     ContentUnavailableView {
                         Label("No Video Loaded", systemImage: "film")
                     } description: {
-                        Text("Open a local video file to test Apple Silicon Neural Engine enhancements.")
+                        Text("Open a video to enhance.")
                     } actions: {
                         VStack(spacing: 8) {
                             Button(action: { showFileImporter = true }) {

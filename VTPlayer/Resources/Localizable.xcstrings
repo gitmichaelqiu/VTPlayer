@@ -1032,12 +1032,12 @@
         }
       }
     },
-    "Open a local video file to test Apple Silicon Neural Engine enhancements." : {
+    "Open a video to enhance." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开本地视频文件以体验 Apple 芯片神经引擎增强功能。"
+            "value" : "打开一个视频以增强。"
           }
         }
       }
