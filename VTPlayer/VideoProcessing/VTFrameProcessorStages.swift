@@ -20,7 +20,10 @@ extension VTFrameProcessorCoordinator {
         }
     }
 
-    public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
+    public func processFrame(
+        _ frame: VTFrame,
+        onOutput: (@MainActor @Sendable (VTFrame) async -> Bool)? = nil
+    ) async throws -> [VTFrame] {
         guard beginProcessing() else { return [frame] }
         defer { finishProcessing() }
 
@@ -48,6 +51,31 @@ extension VTFrameProcessorCoordinator {
             orderedStages = PipelineStage.allCases
                 .filter { stages.keys.contains($0) }
                 .sorted()
+        }
+
+        let canStreamTemporalOutput = onOutput != nil &&
+            !(superResolutionLevel == 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation) &&
+            (temporalFirstForSRInterpolation || stages[.spatial] == nil) &&
+            motionBlurStrength <= 0 &&
+            qualitySuperResolutionScaleFactor <= 0 &&
+            stages[.temporal] != nil
+
+        if canStreamTemporalOutput, let temporalInstance = stages[.temporal], let onOutput {
+            if let denoiseInstance = stages[.denoise] {
+                currentFrames = try await processDenoise(instance: denoiseInstance, inputFrames: currentFrames)
+            }
+
+            _ = try await processTemporal(
+                instance: temporalInstance,
+                inputFrames: currentFrames,
+                colorSource: frame.buffer,
+                onOutput: { outputFrame in
+                    guard await onOutput(outputFrame) else {
+                        throw CancellationError()
+                    }
+                }
+            )
+            return []
         }
 
         for stage in orderedStages {
@@ -133,7 +161,12 @@ extension VTFrameProcessorCoordinator {
         return [VTFrame(buffer: destBuf, presentationTimeStamp: frame.presentationTimeStamp)]
     }
 
-    func processTemporal(instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {
+    func processTemporal(
+        instance: StageInstance,
+        inputFrames: [VTFrame],
+        colorSource: CVPixelBuffer? = nil,
+        onOutput: (@MainActor @Sendable (VTFrame) async throws -> Void)? = nil
+    ) async throws -> [VTFrame] {
         guard let pool = instance.pixelBufferPool,
               let frame = inputFrames.first else { return inputFrames }
 
@@ -151,7 +184,17 @@ extension VTFrameProcessorCoordinator {
         } else {
             historyToUse = stages.keys.contains(.spatial) ? upscaledFrameHistory : frameHistory
         }
-        guard historyToUse.count >= 2 else { return [frame] }
+        guard historyToUse.count >= 2 else {
+            if let onOutput {
+                try await emitStreamedTemporalOutput(
+                    frame,
+                    colorSource: colorSource ?? frame.buffer,
+                    onOutput: onOutput
+                )
+                return []
+            }
+            return [frame]
+        }
         prevSourceFP = historyToUse[1]
 
         #if os(macOS)
@@ -243,6 +286,27 @@ extension VTFrameProcessorCoordinator {
             throw NSError(domain: "VTFrameProcessorCoordinator", code: -4,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create low-latency FI params"])
         }
+        if let onOutput {
+            for try await completedFrame in instance.processor.process(parameters: params) {
+                guard let index = interpPTSList.firstIndex(where: {
+                    CMTimeCompare($0, completedFrame.timeStamp) == 0
+                }) else {
+                    continue
+                }
+                try await emitStreamedTemporalOutput(VTFrame(
+                    buffer: destBufs[index],
+                    presentationTimeStamp: interpPTSList[index],
+                    isInterpolated: true
+                ), colorSource: colorSource ?? frame.buffer, onOutput: onOutput)
+            }
+            try await emitStreamedTemporalOutput(
+                frame,
+                colorSource: colorSource ?? frame.buffer,
+                onOutput: onOutput
+            )
+            return []
+        }
+
         for try await _ in instance.processor.process(parameters: params) {}
 
         var outputFrames: [VTFrame] = []
@@ -252,6 +316,28 @@ extension VTFrameProcessorCoordinator {
         outputFrames.append(frame)
 
         return outputFrames
+    }
+
+    func emitStreamedTemporalOutput(
+        _ frame: VTFrame,
+        colorSource: CVPixelBuffer,
+        onOutput: @MainActor @Sendable (VTFrame) async throws -> Void
+    ) async throws {
+        var outputFrames = [frame]
+        if let spatialInstance = stages[.spatial] {
+            outputFrames = try await processSpatial(instance: spatialInstance, inputFrames: outputFrames)
+        }
+        #if os(macOS)
+        if let session = rendererTransferSession, let pool = rendererPixelBufferPool {
+            outputFrames = try outputFrames.map {
+                isNativeHDR($0.buffer) ? $0 : try convertForRenderer($0, session: session, pool: pool)
+            }
+        }
+        #endif
+        for outputFrame in outputFrames {
+            propagateColorAttachments(from: colorSource, to: outputFrame.buffer)
+            try await onOutput(outputFrame)
+        }
     }
 
     func processSpatial(instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {

@@ -681,6 +681,36 @@ extension VTPlayerViewModel {
                 return false
             }
 
+            @MainActor
+            func admitStreamedFrame(_ frame: VTFrame) async -> Bool {
+                let byteCount = CVPixelBufferGetDataSize(frame.buffer)
+                guard byteCount <= self.frameCacheMemoryBudget else {
+                    self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
+                    return false
+                }
+                let admissionStart = DispatchTime.now()
+                guard await waitForCacheCapacity(byteCount) else { return false }
+                let admissionMilliseconds = Double(
+                    DispatchTime.now().uptimeNanoseconds - admissionStart.uptimeNanoseconds
+                ) / 1_000_000.0
+                let insertionStart = DispatchTime.now()
+                let inserted = self.lockCache {
+                    self.insertProcessedFrameIntoCache(frame)
+                }
+                let insertionMilliseconds = Double(
+                    DispatchTime.now().uptimeNanoseconds - insertionStart.uptimeNanoseconds
+                ) / 1_000_000.0
+                self.recordProducerTiming(
+                    cacheAdmissionMilliseconds: admissionMilliseconds,
+                    cacheInsertionMilliseconds: insertionMilliseconds
+                )
+                if inserted {
+                    self.producedFramesCount += 1
+                    resumeAfterFramePrerollIfReady()
+                }
+                return !Task.isCancelled && gen == self.playbackGeneration
+            }
+
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
 
@@ -762,7 +792,12 @@ extension VTPlayerViewModel {
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()
                 do {
-                    let outputFrames = try await coordinator.processFrame(vtFrame)
+                    var streamedFrameCount = 0
+                    let outputFrames = try await coordinator.processFrame(vtFrame) { frame in
+                        guard await admitStreamedFrame(frame) else { return false }
+                        streamedFrameCount += 1
+                        return true
+                    }
                     let processEnd = DispatchTime.now()
 
                     guard gen == self.playbackGeneration else { break }
@@ -772,15 +807,21 @@ extension VTPlayerViewModel {
                     )
                     let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                     let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
+                    let outputFrameCount = streamedFrameCount + outputFrames.count
                     if frameInterpolationLevel > 0,
                        processingMilliseconds > sourceFrameBudgetMilliseconds {
                         let processingText = String(format: "%.1f", processingMilliseconds)
                         let budgetText = String(format: "%.1f", sourceFrameBudgetMilliseconds)
-                        print("PERF: FI deadline miss processing=\(processingText)ms budget=\(budgetText)ms outputs=\(outputFrames.count) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
+                        print("PERF: FI deadline miss processing=\(processingText)ms budget=\(budgetText)ms outputs=\(outputFrameCount) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
                     }
 
-                    if outputFrames.count < 2 && self.frameInterpolationLevel > 0 {
-                        print("⚠️ FI: expected >=2 output frames, got \(outputFrames.count) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
+                    if outputFrameCount < 2 && self.frameInterpolationLevel > 0 {
+                        print("⚠️ FI: expected >=2 output frames, got \(outputFrameCount) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
+                    }
+
+                    if streamedFrameCount > 0 {
+                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
+                        continue
                     }
 
                     let outputByteCount = outputFrames.reduce(into: 0) { total, frame in
