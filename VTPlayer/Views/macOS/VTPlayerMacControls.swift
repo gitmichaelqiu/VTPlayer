@@ -15,6 +15,22 @@ import UniformTypeIdentifiers
 #endif
 
 extension VTPlayerView {
+    #if os(macOS)
+    func adjustVolume(by amount: Double) {
+        guard viewModel.videoURL != nil else { return }
+        withAnimation(.snappy(duration: 0.18)) {
+            viewModel.volume = min(1, max(0, viewModel.volume + amount))
+        }
+        showVolumePopover = true
+        volumePopoverDismissTask?.cancel()
+        volumePopoverDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            showVolumePopover = false
+        }
+    }
+    #endif
+
     @ViewBuilder
     var controlBar: some View {
         VStack(spacing: 10) {

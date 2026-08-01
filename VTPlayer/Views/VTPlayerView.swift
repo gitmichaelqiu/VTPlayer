@@ -117,6 +117,9 @@ struct VTPlayerView: View {
     @State var showFrameInterpolationPopover = false
     @State var showPlaybackSpeedPopover = false
     @State var showVolumePopover = false
+    #if os(macOS)
+    @State var volumePopoverDismissTask: Task<Void, Never>?
+    #endif
     @State var isAboutCardExpanded = false
     @Environment(\.colorScheme) var colorScheme
     #if os(iOS)
@@ -369,6 +372,20 @@ struct VTPlayerView: View {
                 viewModel.toggleMute()
             }
             .keyboardShortcut("m", modifiers: [])
+            .frame(width: 0, height: 0)
+            .opacity(0)
+
+            Button("") {
+                adjustVolume(by: 0.05)
+            }
+            .keyboardShortcut(.upArrow, modifiers: [])
+            .frame(width: 0, height: 0)
+            .opacity(0)
+
+            Button("") {
+                adjustVolume(by: -0.05)
+            }
+            .keyboardShortcut(.downArrow, modifiers: [])
             .frame(width: 0, height: 0)
             .opacity(0)
             #endif
