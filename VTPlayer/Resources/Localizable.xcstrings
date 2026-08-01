@@ -23,28 +23,6 @@
     "1 GB" : {
       "shouldTranslate" : false
     },
-    "1.5 GB" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1.5 GB"
-          }
-        }
-      }
-    },
-    "2 GB" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2 GB"
-          }
-        }
-      }
-    },
     "2x" : {
       "shouldTranslate" : false
     },
@@ -141,16 +119,6 @@
         }
       }
     },
-    "Adjustments" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整"
-          }
-        }
-      }
-    },
     "Added recently" : {
       "localizations" : {
         "zh-Hans" : {
@@ -161,34 +129,12 @@
         }
       }
     },
-    "Adjust chroma saturation boost in the midtone range during HDR expansion." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整 HDR 扩展时中间调范围的色度饱和度增强。"
-          }
-        }
-      }
-    },
     "Adjust HDR color intensity." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "调整 HDR 色彩强度。"
-          }
-        }
-      }
-    },
-    "Adjust intensity of edge-enhancement contrast (radius is fixed at 0.5)." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整边缘增强对比度强度（半径固定为 0.5）。"
           }
         }
       }
@@ -213,23 +159,22 @@
         }
       }
     },
+    "Adjustments" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整"
+          }
+        }
+      }
+    },
     "Always use dark mode when playing" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放时始终使用深色模式"
-          }
-        }
-      }
-    },
-    "Apply a simulated motion blur filter." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用模拟运动模糊滤镜。"
           }
         }
       }
@@ -694,17 +639,6 @@
         }
       }
     },
-    "Filter out noise dynamically using temporal reference frames." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用时间参考帧动态过滤噪点。"
-          }
-        }
-      }
-    },
     "Filters & Adjustments" : {
       "localizations" : {
         "zh-Hans" : {
@@ -715,18 +649,17 @@
         }
       }
     },
-    "Force the application window to use dark mode styling during video playback, regardless of system theme." : {
-      "extractionState" : "stale",
+    "Frame cache" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放视频时始终以深色模式显示应用窗口，不受系统主题影响。"
+            "value" : "帧缓存"
           }
         }
       }
     },
-    "Frame Interpolation" : {
+    "Frame Interp" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -736,7 +669,7 @@
         }
       }
     },
-    "Frame Interp" : {
+    "Frame Interpolation" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -762,16 +695,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此视频的原生分辨率不支持帧生成。"
-          }
-        }
-      }
-    },
-    "Frame cache" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "帧缓存"
           }
         }
       }
@@ -856,16 +779,6 @@
         }
       }
     },
-    "Increase the video frame rate." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提高视频帧率。"
-          }
-        }
-      }
-    },
     "Let you right-click with the Option key." : {
       "localizations" : {
         "zh-Hans" : {
@@ -896,17 +809,6 @@
         }
       }
     },
-    "Luminance expansion from SDR into display's EDR headroom." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将 SDR 亮度扩展至显示器的 EDR 余量。"
-          }
-        }
-      }
-    },
     "Made by Michael Qiu." : {
       "localizations" : {
         "zh-Hans" : {
@@ -923,17 +825,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "增强帧预缓冲的最大内存。"
-          }
-        }
-      }
-    },
-    "Maximum memory used to prebuffer enhanced frames before playback begins." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放开始前用于预缓冲增强帧的最大内存。"
           }
         }
       }
@@ -1651,6 +1542,16 @@
         }
       }
     },
+    "Super Res" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超分"
+          }
+        }
+      }
+    },
     "Super resolution" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1667,16 +1568,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "超分辨率"
-          }
-        }
-      }
-    },
-    "Super Res" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超分"
           }
         }
       }
@@ -1727,17 +1618,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "目标帧率"
-          }
-        }
-      }
-    },
-    "Temporal low-latency frame interpolation factor to boost frame rate." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用于提高帧率的低延迟时间帧生成倍率。"
           }
         }
       }
@@ -1812,17 +1692,6 @@
         }
       }
     },
-    "Toggle visibility of file extensions (e.g. .mp4, .mkv)." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换文件扩展名显示（例如 .mp4、.mkv）。"
-          }
-        }
-      }
-    },
     "Unknown" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1869,17 +1738,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放时使用深色样式。"
-          }
-        }
-      }
-    },
-    "Use this as the default for new videos." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将此项用作新视频的默认设置。"
           }
         }
       }
