@@ -54,11 +54,34 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Update Cask File
+        env:
+          VERSION: ${{ steps.info.outputs.version }}
+          SHA: ${{ steps.info.outputs.sha }}
         run: |
           CASK_PATH="Casks/vtplayer.rb"
-          test -f "$CASK_PATH"
-          sed -i "s/version \".*\"/version \"${{ steps.info.outputs.version }}\"/" $CASK_PATH
-          sed -i "s/sha256 \".*\"/sha256 \"${{ steps.info.outputs.sha }}\"/" $CASK_PATH
+          mkdir -p "$(dirname "$CASK_PATH")"
+          cat > "$CASK_PATH" <<EOF
+          cask "vtplayer" do
+            version "$VERSION"
+            sha256 "$SHA"
+
+            url "https://github.com/gitmichaelqiu/VTPlayer/releases/download/v#{version}/VTPlayer_macOS_v#{version}.dmg"
+            name "VTPlayer"
+            desc "Real-time video enhancement player for macOS"
+            homepage "https://github.com/gitmichaelqiu/VTPlayer"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            auto_updates true
+            depends_on macos: ">= :ventura"
+
+            app "VTPlayer.app"
+          end
+          EOF
+          grep -q '^cask "vtplayer" do$' "$CASK_PATH"
 
       - name: Commit and Push to Tap
         run: |
