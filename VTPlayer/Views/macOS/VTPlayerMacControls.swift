@@ -25,12 +25,21 @@ extension VTPlayerView {
     }
 
     func showVolumePopoverBriefly() {
+        if !viewModel.showControls {
+            volumePopoverRevealedControls = true
+        }
         showVolumePopover = true
         volumePopoverDismissTask?.cancel()
         volumePopoverDismissTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard !Task.isCancelled else { return }
+            let shouldHideControls = volumePopoverRevealedControls
+            volumePopoverRevealedControls = false
             showVolumePopover = false
+            if shouldHideControls {
+                viewModel.inactivityTask?.cancel()
+                viewModel.showControls = false
+            }
         }
     }
     #endif

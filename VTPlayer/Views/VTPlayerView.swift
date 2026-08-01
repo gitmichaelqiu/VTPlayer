@@ -119,6 +119,7 @@ struct VTPlayerView: View {
     @State var showVolumePopover = false
     #if os(macOS)
     @State var volumePopoverDismissTask: Task<Void, Never>?
+    @State var volumePopoverRevealedControls = false
     #endif
     @State var isAboutCardExpanded = false
     @Environment(\.colorScheme) var colorScheme
