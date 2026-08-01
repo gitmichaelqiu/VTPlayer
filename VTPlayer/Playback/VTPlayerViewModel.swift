@@ -511,6 +511,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var presentationClockLastPlayerPTS = -Double.infinity
     @ObservationIgnored var presentationClockInitialized = false
     @ObservationIgnored var pendingResumePTS: CMTime?
+    @ObservationIgnored var ignoreAutomaticTimeJumpsUntil: DispatchTime?
     @ObservationIgnored var lastPresentationWall = DispatchTime.now()
     @ObservationIgnored var renderedTimelineAnchorPTS: CMTime?
     @ObservationIgnored var renderedTimelineAnchorWall = DispatchTime.now()
@@ -1076,6 +1077,8 @@ final class VTPlayerViewModel {
 
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
+        ignoreAutomaticTimeJumpsUntil = nil
+        pendingResumePTS = nil
         seekGeneration &+= 1
         let requestGeneration = seekGeneration
         self.lastPublishedCurrentTime = seconds
@@ -1115,6 +1118,10 @@ final class VTPlayerViewModel {
 
     func handleTimeJump() {
         guard let player = player else { return }
+        if let deadline = ignoreAutomaticTimeJumpsUntil,
+           DispatchTime.now().uptimeNanoseconds < deadline.uptimeNanoseconds {
+            return
+        }
         let currentTime = player.currentTime()
         if let pendingResumePTS {
             let expectedSeconds = CMTimeGetSeconds(pendingResumePTS)
@@ -1148,6 +1155,8 @@ final class VTPlayerViewModel {
 
     /// Seeks and draws the frame immediately during continuous scrubbing.
     func scrub(to seconds: Double) {
+        ignoreAutomaticTimeJumpsUntil = nil
+        pendingResumePTS = nil
         seekGeneration &+= 1
         let requestGeneration = seekGeneration
         self.lastPublishedCurrentTime = seconds

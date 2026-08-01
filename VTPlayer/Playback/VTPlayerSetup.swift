@@ -5,6 +5,7 @@ import VideoToolbox
 extension VTPlayerViewModel {
     func setupPlayer(with url: URL) {
         pendingResumePTS = nil
+        ignoreAutomaticTimeJumpsUntil = nil
         // Capability probing is asynchronous. Clear the previous video's
         // scale set immediately so its enabled menu items cannot leak into
         // the new video's loading window.
@@ -296,6 +297,9 @@ extension VTPlayerViewModel {
                               completionViewModel.videoURL == url else { return }
                         completionViewModel.currentTime = CMTimeGetSeconds(newPlayer.currentTime())
                         completionViewModel.pendingResumePTS = nil
+                        completionViewModel.ignoreAutomaticTimeJumpsUntil = DispatchTime(
+                            uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + 5_000_000_000
+                        )
                         completionViewModel.play()
                     }
                 }
