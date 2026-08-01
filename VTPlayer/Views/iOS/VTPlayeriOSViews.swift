@@ -499,7 +499,7 @@ extension VTPlayerView {
             Text("Download Required")
                 .foregroundStyle(.orange)
         case .downloading(let progress):
-            Text(String(format: "Downloading (%.0f%%)", progress * 100))
+            Text(String(format: String(localized: "Downloading (%.0f%%)"), progress * 100))
                 .foregroundStyle(.blue)
         case .failed:
             Text("Failed")

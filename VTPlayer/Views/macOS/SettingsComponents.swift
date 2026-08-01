@@ -436,13 +436,11 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                             get: { value },
                             set: { newValue in withAnimation(.snappy(duration: 0.18)) { value = newValue } }
                         ), in: range, step: V.Stride(step))
-                        .transaction { $0.disablesAnimations = true }
                     } else {
                         Slider(value: Binding(
                             get: { value },
                             set: { newValue in withAnimation(.snappy(duration: 0.18)) { value = newValue } }
                         ), in: range)
-                        .transaction { $0.disablesAnimations = true }
                     }
                 }
                 AnimatedSettingsValue(text: valueString(value))

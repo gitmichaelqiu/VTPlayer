@@ -549,6 +549,16 @@
         }
       }
     },
+    "Downloading (%.0f%%)" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载（%.0f%%）"
+          }
+        }
+      }
+    },
     "Enhanced frame cache" : {
       "localizations" : {
         "zh-Hans" : {
@@ -805,6 +815,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "低延迟"
+          }
+        }
+      }
+    },
+    "Low Latency %.1fx" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低延迟 %.1fx"
           }
         }
       }

@@ -59,7 +59,7 @@ struct PlaybackSettingsView: View {
                     )) {
                         Text("Off").tag(Float(0))
                         ForEach(viewModel.availableSuperResolutionScales.sorted(), id: \.self) { scale in
-                            Text(String(format: "Low Latency %.1fx", scale)).tag(scale)
+                            Text(String(format: String(localized: "Low Latency %.1fx"), scale)).tag(scale)
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(2) {
                             Text("Quality 2x").tag(Float(12))
