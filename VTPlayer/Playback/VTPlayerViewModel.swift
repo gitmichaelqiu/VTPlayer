@@ -294,7 +294,17 @@ final class VTPlayerViewModel {
         #endif
         let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheMemoryMB")
         let megabytes = configured > 0 ? configured : defaultMegabytes
-        return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
+        let configuredBytes = min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
+        guard frameInterpolationLevel > 0,
+              Int64(videoWidth) * Int64(videoHeight) >= 3_840 * 2_160 else {
+            return configuredBytes
+        }
+
+        // UHD FI retains large IOSurfaces in the presentation cache while
+        // VideoToolbox also holds model and working surfaces. Keep enough
+        // unified memory available for those live processor resources.
+        let processorSafeBytes = Int(ProcessInfo.processInfo.physicalMemory / 12)
+        return min(configuredBytes, processorSafeBytes)
     }
     /// The memory budget is the cache limit. A frame-count cap would make
     /// low-resolution videos start with only a few seconds of reserve.
