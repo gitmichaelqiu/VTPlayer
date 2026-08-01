@@ -481,7 +481,10 @@ extension VTPlayerView {
             .foregroundStyle(isActive ? .primary : .secondary)
             .padding(.vertical, 5)
             .padding(.horizontal, 10)
-            .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+            // Use the adaptive primary color so active controls remain
+            // distinguishable on the light appearance without changing the
+            // existing dark-appearance contrast.
+            .background(Color.primary.opacity(isActive ? 0.12 : 0.04))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
     
