@@ -363,7 +363,6 @@ extension VTPlayerViewModel {
         endActiveCoordinator(after: oldProducer)
 
         let sourceFPS = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30.0
-        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(sourceFPS))
         // AVAssetReader may begin at the first keyframe after a requested
         // restart time. Decode a short lead-in so the cache always contains
         // a frame at the presentation anchor instead of leaving a gap.

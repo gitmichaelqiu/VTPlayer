@@ -259,21 +259,27 @@ extension VTPlayerViewModel {
                         resumeTime = nil
                     }
 
-                    // Start processing only after the initial seek completes.
-                    // Otherwise the producer can prebuffer from zero and then
-                    // be reset when AVPlayer applies saved progress.
+                    // Start processing only after the initial seek completes
+                    // and AVPlayer reports the requested position. Otherwise
+                    // the producer can prebuffer from the saved position while
+                    // the player clock still briefly reports zero.
                     guard let resumeTime else {
                         self.play()
                         return
                     }
                     let completionViewModel = self
-                    newPlayer.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak completionViewModel] _ in
-                        Task { @MainActor [weak completionViewModel] in
-                            guard let completionViewModel,
-                                  completionViewModel.player === newPlayer,
-                                  completionViewModel.videoURL == url else { return }
-                            completionViewModel.play()
-                        }
+                    Task { @MainActor [weak completionViewModel] in
+                        let completed = await newPlayer.seek(
+                            to: resumeTime,
+                            toleranceBefore: .zero,
+                            toleranceAfter: .zero
+                        )
+                        guard completed,
+                              let completionViewModel,
+                              completionViewModel.player === newPlayer,
+                              completionViewModel.videoURL == url else { return }
+                        completionViewModel.currentTime = CMTimeGetSeconds(newPlayer.currentTime())
+                        completionViewModel.play()
                     }
                 }
             } catch {
