@@ -706,16 +706,6 @@
         }
       }
     },
-    "Frame interpolation is unavailable at this video's native resolution." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此视频的原生分辨率不支持帧生成。"
-          }
-        }
-      }
-    },
     "Frame Processing" : {
       "localizations" : {
         "zh-Hans" : {
