@@ -149,7 +149,7 @@
         }
       }
     },
-    "Adjust volume (0% - 100%)" : {
+    "Adjust volume (0–100 percent)" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -509,7 +509,7 @@
         }
       }
     },
-    "Display 1% Low" : {
+    "Display 1st Percentile Low" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -549,12 +549,12 @@
         }
       }
     },
-    "Downloading (%.0f%%)" : {
+    "Downloading %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在下载（%.0f%%）"
+            "value" : "正在下载（%@）"
           }
         }
       }
@@ -1834,12 +1834,12 @@
         }
       }
     },
-    "Volume: %lld%%" : {
+    "Volume: %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "音量：%lld%%"
+            "value" : "音量：%@"
           }
         }
       }

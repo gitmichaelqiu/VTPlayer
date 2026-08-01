@@ -663,7 +663,7 @@ extension VTPlayerViewModel {
                     self.isBuffering = true
                     waitingForFramePreroll = true
                     let audioPlayer = EnhancedAudioPlayer()
-                    if audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
                         audioPlayer.setVolume(Float(self.volume))
                         self.enhancedAudioPlayer = audioPlayer
                         self.setPrimaryAudioMuted(true)

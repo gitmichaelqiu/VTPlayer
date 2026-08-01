@@ -14,8 +14,11 @@ final class EnhancedAudioPlayer {
     private var playbackRate = 1.0
     private var volume: Float = 1.0
 
-    func prepare(url: URL, initialRate: Double) -> Bool {
-        let item = AVPlayerItem(url: url)
+    func prepare(url: URL, initialRate: Double) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        guard let audioTracks = try? await asset.loadTracks(withMediaType: .audio),
+              !audioTracks.isEmpty else { return false }
+        let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .timeDomain
         for track in item.tracks where track.assetTrack?.mediaType == .video {
             track.isEnabled = false
@@ -25,7 +28,7 @@ final class EnhancedAudioPlayer {
         player.volume = volume
         self.player = player
         playbackRate = min(2.0, max(0.5, initialRate))
-        return item.asset.tracks(withMediaType: .audio).isEmpty == false
+        return true
     }
 
     func frameRendered(at pts: CMTime) {

@@ -30,7 +30,9 @@ struct QLModelStatusView: View {
         case .notChecked: return "Not Checked"
         case .ready: return "Ready"
         case .downloadRequired: return "Download Required"
-        case .downloading(let progress): return String(format: String(localized: "Downloading (%.0f%%)"), progress * 100)
+        case .downloading(let progress):
+            let percent = progress.formatted(.percent.precision(.fractionLength(0)))
+            return String(localized: "Downloading %@", defaultValue: "Downloading \(percent)", comment: "Model download progress")
         case .failed(let error): return "Failed: \(error)"
         }
     }

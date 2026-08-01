@@ -425,10 +425,10 @@ extension VTPlayerView {
             )
         }
         .buttonStyle(.plain)
-        .help("Adjust volume (0% - 100%)")
+        .help("Adjust volume (0–100 percent)")
         .popover(isPresented: $showVolumePopover, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Volume: \(Int((viewModel.volume * 100).rounded()))%")
+                Text(String(localized: "Volume: %@", defaultValue: "Volume: \(viewModel.volume.formatted(.percent.precision(.fractionLength(0))))", comment: "Current volume"))
                     .font(.headline)
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.18), value: viewModel.volume)
