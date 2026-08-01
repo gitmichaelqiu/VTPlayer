@@ -86,7 +86,7 @@ extension VTPlayerView {
                     let isActive = scale > 0
                     enhancementControlLabel(
                         isQL
-                            ? "\(String(localized: "Super Res")): \(scaleLabel)x QL"
+                            ? String(format: String(localized: "Super Res: %@ QL"), scaleLabel)
                             : "\(String(localized: "Super Res")): \(isActive ? "\(scaleLabel)x" : String(localized: "Off"))",
                         isActive: isActive
                     )
@@ -118,8 +118,12 @@ extension VTPlayerView {
                             ForEach(viewModel.availableSuperResolutionScales.sorted(), id: \.self) { scale in
                                 Text(String(format: String(localized: "Low Latency %.1fx"), scale)).tag(scale)
                             }
-                            if viewModel.availableQualitySuperResolutionScales.contains(2) { Text("Quality 2x").tag(Float(12)) }
-                            if viewModel.availableQualitySuperResolutionScales.contains(4) { Text("Quality 4x").tag(Float(14)) }
+                            if viewModel.availableQualitySuperResolutionScales.contains(2) {
+                                Text(String(format: String(localized: "Quality %.1fx"), 2.0)).tag(Float(12))
+                            }
+                            if viewModel.availableQualitySuperResolutionScales.contains(4) {
+                                Text(String(format: String(localized: "Quality %.1fx"), 4.0)).tag(Float(14))
+                            }
                         }
                         .pickerStyle(.inline)
                     }

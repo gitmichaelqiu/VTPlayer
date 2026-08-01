@@ -62,10 +62,10 @@ struct PlaybackSettingsView: View {
                             Text(String(format: String(localized: "Low Latency %.1fx"), scale)).tag(scale)
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                            Text("Quality 2x").tag(Float(12))
+                            Text(String(format: String(localized: "Quality %.1fx"), 2.0)).tag(Float(12))
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                            Text("Quality 4x").tag(Float(14))
+                            Text(String(format: String(localized: "Quality %.1fx"), 4.0)).tag(Float(14))
                         }
                     }
                     .pickerStyle(.menu)

@@ -141,10 +141,13 @@ extension VTPlayerView {
                     LabeledContent("SR supported", value: String(localized: viewModel.srIsSupported ? "Yes" : "No"))
                     let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                     let activeScale = max(viewModel.superResolutionLevel, Float(viewModel.qualitySuperResolutionScaleFactor))
+                    let modeFormat = isQL
+                        ? String(localized: "Quality %.1fx")
+                        : String(localized: "Low Latency %.1fx")
                     LabeledContent(
                         "Active mode",
                         value: activeScale > 0
-                            ? String(format: "%@ %.1fx", String(localized: isQL ? "Quality" : "Low Latency"), activeScale)
+                            ? String(format: modeFormat, activeScale)
                             : String(localized: "Off")
                     )
                     if let error = viewModel.srInitializationError {

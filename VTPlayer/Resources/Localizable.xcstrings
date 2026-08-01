@@ -829,6 +829,16 @@
         }
       }
     },
+    "Quality %.1fx" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高质量 %.1f倍"
+          }
+        }
+      }
+    },
     "Made by Michael Qiu." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1192,32 +1202,22 @@
         }
       }
     },
-    "Quality 2x" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高质量 2 倍"
-          }
-        }
-      }
-    },
-    "Quality 4x" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高质量 4 倍"
-          }
-        }
-      }
-    },
     "Quality Scales" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "高质量缩放倍率"
+          }
+        }
+      }
+    },
+    "Super Res: %@ QL" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超分辨率：%@ 高质量"
           }
         }
       }
