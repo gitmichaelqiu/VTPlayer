@@ -72,18 +72,15 @@ struct PlaybackSettingsView: View {
                     .tint(.secondary)
                     Picker("Frame Interpolation", selection: $viewModel.frameInterpolationLevel) {
                         Text("Off").tag(0)
-                        Text("2x").tag(2).disabled(!viewModel.frameInterpolationIsSupported)
-                        Text("4x").tag(4).disabled(!viewModel.frameInterpolationIsSupported)
+                        if viewModel.frameInterpolationIsSupported {
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
+                        }
                     }
                     .onChange(of: viewModel.frameInterpolationLevel) { _, _ in
                         viewModel.updateEnhancements()
                     }
                     .tint(.secondary)
-                    if viewModel.videoWidth > 0, !viewModel.frameInterpolationIsSupported {
-                        Text("Frame interpolation is unavailable at this video's native resolution.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
 
                     HStack {
                         Text("Motion Blur")

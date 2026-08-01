@@ -104,7 +104,7 @@ extension VTPlayerViewModel {
 
     func applyDefaultPlaybackSettings() {
         superResolutionLevel = 0
-        frameInterpolationLevel = UserDefaults.standard.integer(forKey: "VTDefaultFILevel")
+        frameInterpolationLevel = 0
         playbackSpeed = 1.0
         volume = 1.0
         

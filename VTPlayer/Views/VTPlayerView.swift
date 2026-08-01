@@ -151,7 +151,6 @@ struct VTPlayerView: View {
     @AppStorage("VTAlwaysDarkOnPlayback") var alwaysDarkOnPlayback = false
     @AppStorage("VTDefaultContinueVideoPlayback") var defaultContinueVideoPlayback = true
     
-    @AppStorage("VTDefaultFILevel") var defaultFILevel = 0
     @AppStorage("VTDefaultMBLevel") var defaultMBLevel = 0
     @AppStorage("VTDefaultDNLevel") var defaultDNLevel = 0.0
     @AppStorage("VTDefaultSharpness") var defaultSharpness = 0.0

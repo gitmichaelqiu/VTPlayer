@@ -101,7 +101,6 @@ struct GeneralSettingsTab: View {
 }
 
 struct EnhancementsSettingsTab: View {
-    @AppStorage("VTDefaultFILevel") private var defaultFILevel = 0
     @AppStorage("VTDefaultMBLevel") private var defaultMBLevel = 0
     @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
     @AppStorage("VTDefaultSharpness") private var defaultSharpness = 0.0
@@ -113,23 +112,6 @@ struct EnhancementsSettingsTab: View {
         SettingsContainer(.enhancements) {
             VStack(alignment: .leading, spacing: 20) {
                 SettingsSection("Neural Engine Enhancements") {
-                    SettingsRow(
-                        "Frame Interpolation",
-                        helperText: "Increase the video frame rate."
-                    ) {
-                        Picker("", selection: $defaultFILevel) {
-                            Text("Off").tag(0)
-                            Text("2x").tag(2)
-                            Text("4x").tag(4)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 100)
-                        .padding(.trailing, -20)
-                    }
-
-                    Divider()
-
                     SliderSettingsRow(
                         "Enhanced frame cache",
                         helperText: "Maximum memory for enhanced-frame prebuffering.",
