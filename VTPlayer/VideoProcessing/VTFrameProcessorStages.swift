@@ -212,7 +212,7 @@ extension VTFrameProcessorCoordinator {
         let numInterpolated = frameInterpolationLevel == 4 ? 3 : 1
 
         var destBufs: [CVPixelBuffer] = []
-        for _ in 0..<numInterpolated {
+        for _ in 0...numInterpolated {
             var buf: CVPixelBuffer?
             guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buf) == kCVReturnSuccess,
                   let b = buf else {
@@ -236,11 +236,12 @@ extension VTFrameProcessorCoordinator {
             interpPTSList.append(CMTimeAdd(prevSourceFP.presentationTimeStamp,
                 CMTimeMultiplyByFloat64(diff, multiplier: 0.5)))
         }
+        interpPTSList.append(sourcePTS)
 
         let destFrames = destBufs.enumerated().compactMap { (i, buf) in
             VTFrameProcessorFrame(buffer: buf, presentationTimeStamp: interpPTSList[i])
         }
-        guard destFrames.count == numInterpolated else {
+        guard destFrames.count == numInterpolated + 1 else {
             throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create FI dest frames"])
         }
@@ -257,12 +258,12 @@ extension VTFrameProcessorCoordinator {
 
         var outputFrames: [VTFrame] = []
         for (i, buf) in destBufs.enumerated() {
-            outputFrames.append(VTFrame(buffer: buf, presentationTimeStamp: interpPTSList[i], isInterpolated: true))
+            outputFrames.append(VTFrame(
+                buffer: buf,
+                presentationTimeStamp: interpPTSList[i],
+                isInterpolated: i < numInterpolated
+            ))
         }
-        // Low-latency FI outputs only the requested in-between phases.
-        // The current source frame completes the 2x/4x presentation cadence.
-        outputFrames.append(frame)
-
 
         return outputFrames
     }

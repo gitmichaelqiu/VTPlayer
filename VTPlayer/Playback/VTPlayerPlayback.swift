@@ -15,11 +15,6 @@ extension VTPlayerViewModel {
         return Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000.0
     }
 
-    private func requiresProcessorReinitialization(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        return nsError.domain == VTFrameProcessorErrorDomain && nsError.code == -19730
-    }
-
     /// Updates coordinator when features are toggled without changing playback state.
     func updateEnhancements() {
         validateEnhancementSelections()
@@ -947,12 +942,6 @@ extension VTPlayerViewModel {
                     }
                 } catch {
                     guard gen == self.playbackGeneration else { break }
-                    if self.requiresProcessorReinitialization(error) {
-                        self.srInitializationError = "Video processor lost initialization; restarting enhancement pipeline."
-                        print("⚠️ VideoToolbox processor lost initialization; restarting pipeline instead of caching an unprocessed frame.")
-                        self.startPlaybackLoop()
-                        break
-                    }
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 &&
                         !self.useSequentialSRFIFallback && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true
