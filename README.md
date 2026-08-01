@@ -7,26 +7,22 @@
 <p align="center"><i>Sharper. Smoother. Better.</i></p>
 </h3>
 
-VTPlayer uses Apple's native VideoToolbox, AVFoundation, Metal, and SwiftUI APIs to upscale, interpolate, denoise, and enhance video in real time. Enhanced frames are presented on their processed PTS timeline; enhanced audio uses a separate audio-only AVPlayer transport anchored to the first rendered frame.
-
-The project targets macOS and iOS/iPadOS. Some enhancement modes are hardware- and video-dependent and are hidden when the current device or video cannot support them.
+VTPlayer uses Apple's native VideoToolbox to upscale, interpolate, denoise, and enhance video in real time. 
 
 ## 🪄 Features
 
 | Enhancement | Range |
 |-------------|-------|
-| **Super Resolution** | Hardware-dependent 2x, 4x, and supported fractional scales |
-| **Quality Super Resolution** | Hardware/model-dependent 2x, 4x |
+| **Super Resolution** | Hardware-dependent 1.5x, 2x |
+| **Quality Super Resolution** | Hardware-dependent 4x |
 | **Frame Interpolation** | Off, 2x, 4x |
-| **Motion Blur** | Off, 1–30 |
+| **Motion Blur** | Off, 1-100 |
 | **Denoise** | Off, 0.0–1.0 |
 | **Sharpness** | Off, 0.0–2.0 |
 | **SDR-to-HDR Boost** | Off, 0.0–2.0 |
 | **HDR Colorfulness** | Available when HDR Boost is active |
 
-Enhanced frame caching uses a configurable memory budget (256 MB–1 GB on iOS; 1–4 GB on macOS). Frames are not downsampled or recompressed to fit the budget.
-
-The interface supports English and Simplified Chinese localization. The app follows the system/application language selected by Apple platform settings.
+Enhanced frame caching uses a configurable memory budget (256 MB–1 GB on iOS; 1–4 GB on macOS).
 
 ## 📦 Installation
 
@@ -38,13 +34,13 @@ Your Apple device must be at least **OS 26.0**. All you need to do is:
 2. Drag the app to the *Applications* folder
 3. All set!
 
-<!-- ### Homebrew
+### Homebrew
 
 You can also choose to download it from Homebrew:
 
 ```bash
 brew install --cask gitmichaelqiu/tap/vtplayer
-``` -->
+```
 
 ### Open App
 
