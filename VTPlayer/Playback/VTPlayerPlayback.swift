@@ -376,8 +376,24 @@ extension VTPlayerViewModel {
         NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(frameInterpolationLevel)x sr=\(superResolutionLevel)x qsr=\(qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
 
         lockCache { clearProcessedFrameCache() }
+        let restartStartTime: CMTime?
+        if let player {
+            var candidate = restartAnchorPTS ?? player.currentTime()
+            let currentTime = player.currentTime()
+            if currentTime.isValid, currentTime.seconds.isFinite,
+               CMTimeCompare(currentTime, candidate) > 0 {
+                candidate = currentTime
+            }
+            if lastRenderedPTS.isValid, lastRenderedPTS.seconds.isFinite,
+               CMTimeCompare(lastRenderedPTS, candidate) > 0 {
+                candidate = lastRenderedPTS
+            }
+            restartStartTime = candidate
+        } else {
+            restartStartTime = restartAnchorPTS
+        }
         if let player = player {
-            let startTime = restartAnchorPTS ?? player.currentTime()
+            let startTime = restartStartTime ?? player.currentTime()
             let adjusted = CMTimeSubtract(startTime, frameDuration)
             lastPulledTime = adjusted > .zero ? adjusted : .zero
             lastRenderedPTS = startTime
@@ -606,8 +622,8 @@ extension VTPlayerViewModel {
             // paused until the entire safe processed-frame cache is ready.
             var waitingForFramePreroll = false
             if let player = self.player {
-                let resumeTime = restartAnchorPTS ?? player.currentTime()
-                if restartAnchorPTS != nil {
+                let resumeTime = restartStartTime ?? player.currentTime()
+                if restartStartTime != nil {
                     _ = await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 }
                 let readerStart = CMTimeSubtract(resumeTime, frameDuration)
