@@ -133,9 +133,10 @@ extension VTPlayerViewModel {
         }
         if frameInterpolationLevel > 0, !frameInterpolationIsAvailable {
             frameInterpolationLevel = 0
-            srInitializationError = qualitySuperResolutionScaleFactor == 4
-                ? "Frame interpolation is unavailable with Quality 4x on this device."
-                : "Frame interpolation is unavailable at this video's native resolution."
+            // Capability filtering already removes this combination from the
+            // menu. Keep the fallback silent instead of exposing an internal
+            // device/configuration detail as a confusing playback error.
+            srInitializationError = nil
         }
         if disabledSelection {
             srInitializationError = "Selected super-resolution mode is unavailable for this video on this device."
