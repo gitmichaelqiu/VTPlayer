@@ -778,7 +778,14 @@ extension VTPlayerViewModel {
 
             // Create VTFrameSequence to decode frames faster-than-real-time
             var iteratorStartTime = self.lastPulledTime
-            let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
+            let sourcePadding = await coordinator.sourceFramePadding()
+            let frameSequence = VTFrameSequence(
+                url: videoURL,
+                startTime: iteratorStartTime,
+                outputSize: adaptiveFISize,
+                extendedPixelsRight: sourcePadding.right,
+                extendedPixelsBottom: sourcePadding.bottom
+            )
             var frameIterator = frameSequence.makeAsyncIterator()
             var prefetchedFrameTask: Task<VTFrame?, Error>?
             var sourceFrameOrdinal = 0
@@ -815,7 +822,13 @@ extension VTPlayerViewModel {
                     prefetchedFrameTask?.cancel()
                     prefetchedFrameTask = nil
                     iteratorStartTime = self.lastPulledTime
-                    let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
+                    let newSequence = VTFrameSequence(
+                        url: videoURL,
+                        startTime: iteratorStartTime,
+                        outputSize: adaptiveFISize,
+                        extendedPixelsRight: sourcePadding.right,
+                        extendedPixelsBottom: sourcePadding.bottom
+                    )
                     frameIterator = newSequence.makeAsyncIterator()
                     sourceFrameOrdinal = 0
                     continue

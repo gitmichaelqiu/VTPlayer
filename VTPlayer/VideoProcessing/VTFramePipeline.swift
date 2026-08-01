@@ -30,15 +30,31 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
     private let url: URL
     private let startTime: CMTime
     private let outputSize: CGSize?
+    private let extendedPixelsRight: Int
+    private let extendedPixelsBottom: Int
     
-    public init(url: URL, startTime: CMTime = .zero, outputSize: CGSize? = nil) {
+    public init(
+        url: URL,
+        startTime: CMTime = .zero,
+        outputSize: CGSize? = nil,
+        extendedPixelsRight: Int = 0,
+        extendedPixelsBottom: Int = 0
+    ) {
         self.url = url
         self.startTime = startTime
         self.outputSize = outputSize
+        self.extendedPixelsRight = extendedPixelsRight
+        self.extendedPixelsBottom = extendedPixelsBottom
     }
     
     public func makeAsyncIterator() -> Iterator {
-        return Iterator(url: url, startTime: startTime, outputSize: outputSize)
+        return Iterator(
+            url: url,
+            startTime: startTime,
+            outputSize: outputSize,
+            extendedPixelsRight: extendedPixelsRight,
+            extendedPixelsBottom: extendedPixelsBottom
+        )
     }
     
     /// Thread-safe class-based iterator conforming to AsyncIteratorProtocol.
@@ -46,16 +62,32 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
         private let url: URL
         private let startTime: CMTime
         private let outputSize: CGSize?
+        private let extendedPixelsRight: Int
+        private let extendedPixelsBottom: Int
         private let state = StateLock()
         
-        init(url: URL, startTime: CMTime, outputSize: CGSize?) {
+        init(
+            url: URL,
+            startTime: CMTime,
+            outputSize: CGSize?,
+            extendedPixelsRight: Int,
+            extendedPixelsBottom: Int
+        ) {
             self.url = url
             self.startTime = startTime
             self.outputSize = outputSize
+            self.extendedPixelsRight = extendedPixelsRight
+            self.extendedPixelsBottom = extendedPixelsBottom
         }
         
         public func next() async throws -> VTFrame? {
-            return try await state.next(url: url, startTime: startTime, outputSize: outputSize)
+            return try await state.next(
+                url: url,
+                startTime: startTime,
+                outputSize: outputSize,
+                extendedPixelsRight: extendedPixelsRight,
+                extendedPixelsBottom: extendedPixelsBottom
+            )
         }
         
         /// Actor to encapsulate state and run reader initialization on background threads.
@@ -65,7 +97,13 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
             private var sourceColorAttachments: [(CFString, CFPropertyList)] = []
             private var isInitialized = false
             
-            func next(url: URL, startTime: CMTime, outputSize: CGSize?) async throws -> VTFrame? {
+            func next(
+                url: URL,
+                startTime: CMTime,
+                outputSize: CGSize?,
+                extendedPixelsRight: Int,
+                extendedPixelsBottom: Int
+            ) async throws -> VTFrame? {
                 if !isInitialized {
                     let asset = AVURLAsset(url: url)
                     let tracks = try await asset.loadTracks(withMediaType: .video)
@@ -115,6 +153,12 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     if let outputSize {
                         outputSettings[kCVPixelBufferWidthKey as String] = Int(outputSize.width)
                         outputSettings[kCVPixelBufferHeightKey as String] = Int(outputSize.height)
+                    }
+                    if extendedPixelsRight > 0 {
+                        outputSettings[kCVPixelBufferExtendedPixelsRightKey as String] = extendedPixelsRight
+                    }
+                    if extendedPixelsBottom > 0 {
+                        outputSettings[kCVPixelBufferExtendedPixelsBottomKey as String] = extendedPixelsBottom
                     }
                     let trackOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: outputSettings)
                     trackOutput.alwaysCopiesSampleData = false

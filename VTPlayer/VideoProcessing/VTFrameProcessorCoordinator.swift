@@ -152,6 +152,8 @@ public actor VTFrameProcessorCoordinator {
     var sourceHeight = 0
     var targetWidth = 0
     var targetHeight = 0
+    var sourceExtendedPixelsRight = 0
+    var sourceExtendedPixelsBottom = 0
 
     // Reference frame ring buffer (newest first)
     var frameHistory: [VTFrameProcessorFrame] = []
@@ -297,6 +299,8 @@ public actor VTFrameProcessorCoordinator {
         self.upscaledFrameHistory.removeAll()
         self.stages.removeAll()
         self.temporalFirstForSRInterpolation = false
+        self.sourceExtendedPixelsRight = 0
+        self.sourceExtendedPixelsBottom = 0
 
         var currentWidth = width
         var currentHeight = height
@@ -382,6 +386,12 @@ public actor VTFrameProcessorCoordinator {
                 }
                 let proc = VTFrameProcessor()
                 try proc.startSession(configuration: config)
+                sourceExtendedPixelsRight = (config.sourcePixelBufferAttributes[
+                    kCVPixelBufferExtendedPixelsRightKey as String
+                ] as? NSNumber)?.intValue ?? 0
+                sourceExtendedPixelsBottom = (config.sourcePixelBufferAttributes[
+                    kCVPixelBufferExtendedPixelsBottomKey as String
+                ] as? NSNumber)?.intValue ?? 0
                 let pool = makePool(width: currentWidth * scale, height: currentHeight * scale, from: config.destinationPixelBufferAttributes)
                 guard pool != nil else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
@@ -525,6 +535,12 @@ public actor VTFrameProcessorCoordinator {
                 }
                 let proc = VTFrameProcessor()
                 try proc.startSession(configuration: configuration)
+                sourceExtendedPixelsRight = (configuration.sourcePixelBufferAttributes[
+                    kCVPixelBufferExtendedPixelsRightKey as String
+                ] as? NSNumber)?.intValue ?? 0
+                sourceExtendedPixelsBottom = (configuration.sourcePixelBufferAttributes[
+                    kCVPixelBufferExtendedPixelsBottomKey as String
+                ] as? NSNumber)?.intValue ?? 0
                 let pool = makePool(width: currentWidth, height: currentHeight, from: configuration.destinationPixelBufferAttributes)
                 guard pool != nil else {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -2,
@@ -674,6 +690,8 @@ public actor VTFrameProcessorCoordinator {
         frameHistory.removeAll()
         outputHistory.removeAll()
         upscaledFrameHistory.removeAll()
+        sourceExtendedPixelsRight = 0
+        sourceExtendedPixelsBottom = 0
         isSessionActive = false
         endRequested = false
 
@@ -688,6 +706,10 @@ public actor VTFrameProcessorCoordinator {
         frameHistory.removeAll()
         outputHistory.removeAll()
         upscaledFrameHistory.removeAll()
+    }
+
+    public func sourceFramePadding() -> (right: Int, bottom: Int) {
+        (sourceExtendedPixelsRight, sourceExtendedPixelsBottom)
     }
 
     // MARK: - Helpers
@@ -764,6 +786,8 @@ public actor VTFrameProcessorCoordinator {
     }
     
     public func endSession() async {}
+
+    public func sourceFramePadding() -> (right: Int, bottom: Int) { (0, 0) }
     
     public func clearHistory() {}
 }
