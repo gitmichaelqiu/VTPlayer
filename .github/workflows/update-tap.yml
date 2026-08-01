@@ -44,8 +44,27 @@ jobs:
             --pattern "$ASSET" --output release.dmg
           SHA=$(shasum -a 256 release.dmg | awk '{print $1}')
 
+          # Keep the cask requirement synchronized with the Xcode project.
+          DEPLOYMENT_TARGETS=$(grep -E 'MACOSX_DEPLOYMENT_TARGET = [0-9.]+;' VTPlayer.xcodeproj/project.pbxproj \
+            | sed -E 's/.*= ([0-9.]+);/\1/' | sort -u)
+          if [ "$(printf '%s\n' "$DEPLOYMENT_TARGETS" | sed '/^$/d' | wc -l | tr -d ' ')" != "1" ]; then
+            echo "Expected one macOS deployment target, found: $DEPLOYMENT_TARGETS" >&2
+            exit 1
+          fi
+          MACOS_VERSION="$DEPLOYMENT_TARGETS"
+          case "${MACOS_VERSION%%.*}" in
+            26) MACOS_TOKEN="tahoe" ;;
+            15) MACOS_TOKEN="sequoia" ;;
+            14) MACOS_TOKEN="sonoma" ;;
+            13) MACOS_TOKEN="ventura" ;;
+            12) MACOS_TOKEN="monterey" ;;
+            11) MACOS_TOKEN="big_sur" ;;
+            *) echo "No Homebrew macOS token mapping for $MACOS_VERSION" >&2; exit 1 ;;
+          esac
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "macos_token=$MACOS_TOKEN" >> $GITHUB_OUTPUT
 
       - name: Checkout Tap Repo
         uses: actions/checkout@v4
@@ -57,6 +76,7 @@ jobs:
         env:
           VERSION: ${{ steps.info.outputs.version }}
           SHA: ${{ steps.info.outputs.sha }}
+          MACOS_TOKEN: ${{ steps.info.outputs.macos_token }}
         run: |
           CASK_PATH="Casks/vtplayer.rb"
           mkdir -p "$(dirname "$CASK_PATH")"
@@ -76,7 +96,7 @@ jobs:
             end
 
             auto_updates true
-            depends_on macos: ">= :ventura"
+            depends_on macos: ">= :$MACOS_TOKEN"
 
             app "VTPlayer.app"
           end
