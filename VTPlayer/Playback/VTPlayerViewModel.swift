@@ -470,13 +470,12 @@ final class VTPlayerViewModel {
     }
 
     var initialPrerollFrameCount: Int {
-        #if os(iOS)
-        let multiplier = frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0
-        let outputRate = max(sourceFrameRate * multiplier, 1.0)
-        return min(bufferedFrameLimit, max(2, Int((outputRate * 0.75).rounded(.up))))
-        #else
-        return bufferedFrameLimit
-        #endif
+        // Startup only needs a small presentation reserve. Waiting for the
+        // full cache capacity makes high-resolution videos appear frozen while
+        // the producer fills several gigabytes, even though the consumer can
+        // already render continuously. Keep the reserve bounded and reuse the
+        // same conservative depth used when resuming from a pause.
+        return min(bufferedFrameLimit, resumeBufferFrameCount)
     }
 
     var outputPresentationInterval: Double {
