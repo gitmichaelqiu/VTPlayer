@@ -59,13 +59,14 @@ struct PlaybackSettingsView: View {
                     )) {
                         Text("Off").tag(Float(0))
                         ForEach(viewModel.availableSuperResolutionScales.sorted(), id: \.self) { scale in
-                            Text(String(format: String(localized: "Low Latency %.1fx"), scale)).tag(scale)
+                            let label = scale.rounded() == scale ? String(Int(scale)) : String(format: "%.1f", scale)
+                            Text(String(format: String(localized: "Low Latency %@"), "\(label)x")).tag(scale)
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                            Text(String(format: String(localized: "Quality %.1fx"), 2.0)).tag(Float(12))
+                            Text(String(format: String(localized: "Quality %@"), "2x")).tag(Float(12))
                         }
                         if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                            Text(String(format: String(localized: "Quality %.1fx"), 4.0)).tag(Float(14))
+                            Text(String(format: String(localized: "Quality %@"), "4x")).tag(Float(14))
                         }
                     }
                     .pickerStyle(.menu)

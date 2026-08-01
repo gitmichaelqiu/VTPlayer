@@ -287,13 +287,16 @@ extension VTPlayerView {
                 
                 let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
                 let scale = max(viewModel.superResolutionLevel, Float(viewModel.qualitySuperResolutionScaleFactor))
+                let scaleLabel = scale.rounded() == scale
+                    ? String(Int(scale))
+                    : String(format: "%.1f", scale)
                 let modeFormat = isQL
-                    ? String(localized: "Quality %.1fx")
-                    : String(localized: "Low Latency %.1fx")
+                    ? String(localized: "Quality %@")
+                    : String(localized: "Low Latency %@")
                 LabeledContent(
                     "Active State",
                     value: scale > 0
-                        ? String(format: modeFormat, scale)
+                        ? String(format: modeFormat, "\(scaleLabel)x")
                         : String(localized: "Off")
                 )
                     .foregroundStyle(scale > 0 ? .blue : .secondary)

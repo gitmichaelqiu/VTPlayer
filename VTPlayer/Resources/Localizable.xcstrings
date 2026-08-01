@@ -806,12 +806,12 @@
         }
       }
     },
-    "Low Latency %.1fx" : {
+    "Low Latency %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "低延迟 %.1fx"
+            "value" : "低延迟 %@"
           }
         }
       }
@@ -1185,12 +1185,12 @@
         }
       }
     },
-    "Quality %.1fx" : {
+    "Quality %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "高质量 %.1f倍"
+            "value" : "高质量 %@"
           }
         }
       }
