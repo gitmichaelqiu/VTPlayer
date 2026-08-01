@@ -34,7 +34,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "一款使用硬件加速的视频提升播放器。"
+            "value" : "一款使用硬件加速的画面赠强播放器。"
           }
         }
       }
@@ -144,7 +144,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "调整播放速度（0.5 倍至 2 倍）"
+            "value" : "调整播放速度"
           }
         }
       }
@@ -154,7 +154,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "调整音量（0% 至 100%）"
+            "value" : "调整音量"
           }
         }
       }
@@ -384,7 +384,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跨空间控制应用和程序坞。"
+            "value" : "控制每个桌面的 App 和 Dock。"
           }
         }
       }
@@ -394,7 +394,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "控制每个空间中显示的应用和程序坞。"
+            "value" : "控制每个桌面的 App 和 Dock。"
           }
         }
       }
@@ -404,7 +404,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "复制名称"
+            "value" : "复制文件名"
           }
         }
       }
@@ -494,7 +494,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "诊断"
+            "value" : "信息"
           }
         }
       }
@@ -514,7 +514,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示帧率 1% 低值"
+            "value" : " 1% 低帧率"
           }
         }
       }
@@ -764,7 +764,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "HDR 色彩鲜艳度"
+            "value" : "HDR 鲜艳度"
           }
         }
       }
@@ -774,7 +774,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "HDR 色彩鲜艳度：%@"
+            "value" : "HDR 鲜艳度：%@"
           }
         }
       }
@@ -794,7 +794,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "让你按住 Option 键即可右键单击。"
+            "value" : "用 Option 键模拟右键。"
           }
         }
       }
@@ -805,17 +805,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "链接"
-          }
-        }
-      }
-    },
-    "Low Latency" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "低延迟"
           }
         }
       }
@@ -851,7 +840,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "由 Michael Qiu 制作。"
+            "value" : "Michael Qiu 开发。"
           }
         }
       }
@@ -941,7 +930,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "名称"
+            "value" : "文件名"
           }
         }
       }
@@ -951,7 +940,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "神经引擎增强"
+            "value" : "神经处理增强"
           }
         }
       }
@@ -981,7 +970,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有结果"
+            "value" : "无结果"
           }
         }
       }
@@ -1194,18 +1183,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "QL 模型"
-          }
-        }
-      }
-    },
-    "Quality" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高质量"
+            "value" : "质量模型"
           }
         }
       }
@@ -1391,7 +1369,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按住 Option 键即可右键单击。"
+            "value" : "用 Option 键模拟右键。"
           }
         }
       }
@@ -1561,7 +1539,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SR 状态"
+            "value" : "超分状态"
           }
         }
       }
@@ -1571,7 +1549,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "支持 SR"
+            "value" : "支持超分"
           }
         }
       }
@@ -1581,7 +1559,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "支持 SR"
+            "value" : "支持超分"
           }
         }
       }
