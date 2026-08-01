@@ -550,6 +550,7 @@
       }
     },
     "Downloading %@" : {
+      "comment" : "Model download progress",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1835,6 +1836,7 @@
       }
     },
     "Volume: %@" : {
+      "comment" : "Current volume",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
