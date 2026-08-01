@@ -4,6 +4,7 @@ import VideoToolbox
 
 extension VTPlayerViewModel {
     func setupPlayer(with url: URL) {
+        pendingResumePTS = nil
         // Capability probing is asynchronous. Clear the previous video's
         // scale set immediately so its enabled menu items cannot leak into
         // the new video's loading window.
@@ -177,6 +178,10 @@ extension VTPlayerViewModel {
                         Task { @MainActor [weak self] in
                             guard let self,
                                   self.videoURL == url else { return }
+                            if let pendingResumePTS = self.pendingResumePTS,
+                               abs(seconds - CMTimeGetSeconds(pendingResumePTS)) < 0.25 {
+                                self.pendingResumePTS = nil
+                            }
                             self.publishCurrentTime(seconds)
                         }
                     }
@@ -268,6 +273,7 @@ extension VTPlayerViewModel {
                         return
                     }
                     let completionViewModel = self
+                    self.pendingResumePTS = resumeTime
                     Task { @MainActor [weak completionViewModel] in
                         let completed = await newPlayer.seek(
                             to: resumeTime,

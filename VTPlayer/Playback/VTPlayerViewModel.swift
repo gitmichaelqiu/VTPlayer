@@ -510,6 +510,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var presentationClockAnchorWall = DispatchTime.now()
     @ObservationIgnored var presentationClockLastPlayerPTS = -Double.infinity
     @ObservationIgnored var presentationClockInitialized = false
+    @ObservationIgnored var pendingResumePTS: CMTime?
     @ObservationIgnored var lastPresentationWall = DispatchTime.now()
     @ObservationIgnored var renderedTimelineAnchorPTS: CMTime?
     @ObservationIgnored var renderedTimelineAnchorWall = DispatchTime.now()
@@ -1115,6 +1116,15 @@ final class VTPlayerViewModel {
     func handleTimeJump() {
         guard let player = player else { return }
         let currentTime = player.currentTime()
+        if let pendingResumePTS {
+            let expectedSeconds = CMTimeGetSeconds(pendingResumePTS)
+            let currentSeconds = CMTimeGetSeconds(currentTime)
+            if expectedSeconds.isFinite, currentSeconds.isFinite,
+               abs(currentSeconds - expectedSeconds) > 0.25 {
+                return
+            }
+            self.pendingResumePTS = nil
+        }
         enhancedAudioPlayer?.seek(to: currentTime, shouldPlay: isPlaying && !isPaused)
         
         lockCache { self.clearProcessedFrameCache() }
