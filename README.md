@@ -7,20 +7,26 @@
 <p align="center"><i>Sharper. Smoother. Better.</i></p>
 </h3>
 
-VTPlayer uses Apple's native APIs to upscale, interpolate, denoise, and enhance video in real time.
+VTPlayer uses Apple's native VideoToolbox, AVFoundation, Metal, and SwiftUI APIs to upscale, interpolate, denoise, and enhance video in real time. Enhanced frames are presented on their processed PTS timeline; enhanced audio uses a separate audio-only AVPlayer transport anchored to the first rendered frame.
 
-App available for all Apple platforms.
+The project targets macOS and iOS/iPadOS. Some enhancement modes are hardware- and video-dependent and are hidden when the current device or video cannot support them.
 
 ## 🪄 Features
 
 | Enhancement | Range |
 |-------------|-------|
-| **Super Resolution** | Hardware dependent |
+| **Super Resolution** | Hardware-dependent 2x, 4x, and supported fractional scales |
+| **Quality Super Resolution** | Hardware/model-dependent 2x, 4x |
 | **Frame Interpolation** | Off, 2x, 4x |
 | **Motion Blur** | Off, 1–30 |
 | **Denoise** | Off, 0.0–1.0 |
 | **Sharpness** | Off, 0.0–2.0 |
 | **SDR-to-HDR Boost** | Off, 0.0–2.0 |
+| **HDR Colorfulness** | Available when HDR Boost is active |
+
+Enhanced frame caching uses a configurable memory budget (256 MB–1 GB on iOS; 1–4 GB on macOS). Frames are not downsampled or recompressed to fit the budget.
+
+The interface supports English and Simplified Chinese localization. The app follows the system/application language selected by Apple platform settings.
 
 ## 📦 Installation
 
