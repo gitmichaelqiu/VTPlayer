@@ -371,10 +371,16 @@
     },
     "Continue video playback" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume video playback"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "继续播放视频"
+            "value" : "恢复播放进度"
           }
         }
       }
@@ -444,7 +450,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "默认设置"
+            "value" : "默认"
           }
         }
       }
@@ -565,7 +571,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "增强帧缓存"
+            "value" : "帧缓存"
           }
         }
       }
@@ -1650,7 +1656,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "为桌面空间命名和整理的必备工具。"
+            "value" : "命名和组织桌面空间的必备工具。"
           }
         }
       }
