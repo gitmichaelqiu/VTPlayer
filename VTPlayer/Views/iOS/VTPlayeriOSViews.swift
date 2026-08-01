@@ -649,11 +649,7 @@ extension VTPlayerView {
                     title: "HDR Boost",
                     value: Binding(
                         get: { defaultHDRBoost },
-                        set: { newValue in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                defaultHDRBoost = newValue
-                            }
-                        }
+                        set: { defaultHDRBoost = $0 }
                     ),
                     range: 0.0...2.0,
                     step: 0.05,
