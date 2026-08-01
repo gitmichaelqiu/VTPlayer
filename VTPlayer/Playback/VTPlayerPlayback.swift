@@ -785,8 +785,10 @@ extension VTPlayerViewModel {
             var iteratorStartTime = self.lastPulledTime
             let frameSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
             var frameIterator = frameSequence.makeAsyncIterator()
+            var prefetchedFrameTask: Task<VTFrame?, Error>?
             var sourceFrameOrdinal = 0
             var combinedProcessFallbackAttempted = false
+            defer { prefetchedFrameTask?.cancel() }
 
             @MainActor
             func resumeAfterFramePrerollIfReady(force: Bool = false) {
@@ -815,6 +817,8 @@ extension VTPlayerViewModel {
                 // recreate the iterator at the new position. Without this, the
                 // producer would keep feeding stale frames from the old position.
                 if self.lastPulledTime != iteratorStartTime {
+                    prefetchedFrameTask?.cancel()
+                    prefetchedFrameTask = nil
                     iteratorStartTime = self.lastPulledTime
                     let newSequence = VTFrameSequence(url: videoURL, startTime: iteratorStartTime, outputSize: adaptiveFISize)
                     frameIterator = newSequence.makeAsyncIterator()
@@ -836,7 +840,14 @@ extension VTPlayerViewModel {
                 // Read next decoded frame (hardware decoder, ~1ms per frame)
                 let vtFrame: VTFrame
                 do {
-                    guard let next = try await frameIterator.next() else {
+                    let next: VTFrame?
+                    if let prefetchedTask = prefetchedFrameTask {
+                        next = try await prefetchedTask.value
+                        prefetchedFrameTask = nil
+                    } else {
+                        next = try await frameIterator.next()
+                    }
+                    guard let next else {
                         break  // EOF
                     }
                     vtFrame = next
@@ -844,6 +855,11 @@ extension VTPlayerViewModel {
                     print("VTFrameSequence error: \(error.localizedDescription)")
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     continue
+                }
+
+                let iteratorForPrefetch = frameIterator
+                prefetchedFrameTask = Task.detached(priority: .userInitiated) {
+                    try await iteratorForPrefetch.next()
                 }
 
                 sourceFrameOrdinal += 1
