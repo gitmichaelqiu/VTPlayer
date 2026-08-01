@@ -376,11 +376,16 @@ public actor VTFrameProcessorCoordinator {
         // Every other LL SR + FI mode runs temporal processing at source
         // resolution and applies LL SR to each output frame. In particular,
         // FI4 must not interpolate already-upscaled 2x surfaces.
+        // QSR4 followed by FI makes the temporal processor operate on a
+        // 4x surface and can starve the display. Interpolate at source
+        // resolution, then apply the complete QSR4 pass to every output.
         #if os(macOS)
-        let useTemporalFirstForSRInterpolation = superResolutionLevel > 0 &&
-            frameInterpolationLevel > 0 && !inCombinedMode
+        let useTemporalFirstForSRInterpolation =
+            ((superResolutionLevel > 0 && !inCombinedMode) || qualitySuperResolutionScaleFactor == 4) &&
+            frameInterpolationLevel > 0
         #else
-        let useTemporalFirstForSRInterpolation = false
+        let useTemporalFirstForSRInterpolation =
+            qualitySuperResolutionScaleFactor == 4 && frameInterpolationLevel > 0
         #endif
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
 
