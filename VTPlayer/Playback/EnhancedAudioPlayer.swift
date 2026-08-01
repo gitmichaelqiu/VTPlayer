@@ -1,44 +1,52 @@
 import AVFoundation
 import Foundation
 
-/// Audio transport driven by the enhanced renderer's media timeline.
+/// Audio-only transport for the enhanced renderer's media timeline.
+///
+/// AVPlayer is used instead of AVAudioPlayer so enhanced playback uses the
+/// same hardware/media decode path as native playback. The item's video track
+/// is disabled; only its audio clock is driven from the first rendered frame.
 @MainActor
 final class EnhancedAudioPlayer {
-    private var player: AVAudioPlayer?
+    private var player: AVPlayer?
     private var started = false
     private var paused = false
     private var playbackRate = 1.0
     private var volume: Float = 1.0
 
     func prepare(url: URL, initialRate: Double) -> Bool {
-        guard let player = try? AVAudioPlayer(contentsOf: url) else { return false }
-        player.enableRate = true
-        player.rate = Float(initialRate)
+        let item = AVPlayerItem(url: url)
+        item.audioTimePitchAlgorithm = .timeDomain
+        for track in item.tracks where track.assetTrack?.mediaType == .video {
+            track.isEnabled = false
+        }
+        let player = AVPlayer(playerItem: item)
+        player.automaticallyWaitsToMinimizeStalling = false
         player.volume = volume
-        guard player.prepareToPlay() else { return false }
         self.player = player
-        playbackRate = initialRate
-        return true
+        playbackRate = min(2.0, max(0.5, initialRate))
+        return item.asset.tracks(withMediaType: .audio).isEmpty == false
     }
 
     func frameRendered(at pts: CMTime) {
         guard let player else { return }
+        guard started == false else { return }
 
-        guard started else {
-            started = true
-            player.currentTime = min(max(0, CMTimeGetSeconds(pts)), player.duration)
-            player.rate = Float(playbackRate)
-            if !paused {
+        started = true
+        let seconds = CMTimeGetSeconds(pts)
+        let anchor = seconds.isFinite ? max(0, seconds) : 0
+        player.seek(
+            to: CMTime(seconds: anchor, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        ) { [weak self, weak player] _ in
+            guard let self, let player else { return }
+            Task { @MainActor in
+                guard !self.paused else { return }
+                player.rate = Float(self.playbackRate)
                 player.play()
             }
-            return
         }
-
-        // Keep the audio transport at the user's selected rate. Continuously
-        // modulating AVAudioPlayer.rate from rendered-frame timing introduces
-        // audible pitch/rate artifacts and makes enhanced audio sound worse
-        // than native playback. The first rendered PTS anchors the transport;
-        // seeks and pipeline restarts explicitly re-anchor it when needed.
     }
 
     func pause() {
@@ -67,15 +75,19 @@ final class EnhancedAudioPlayer {
 
     func seek(to time: CMTime, shouldPlay: Bool) {
         guard let player else { return }
-        player.currentTime = min(max(0, CMTimeGetSeconds(time)), player.duration)
-        if shouldPlay && !paused {
-            player.rate = Float(playbackRate)
-            player.play()
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak player] _ in
+            guard let self, let player else { return }
+            Task { @MainActor in
+                guard shouldPlay && !self.paused else { return }
+                player.rate = Float(self.playbackRate)
+                player.play()
+            }
         }
     }
 
     func stop() {
-        player?.stop()
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
         player = nil
         started = false
         paused = false
