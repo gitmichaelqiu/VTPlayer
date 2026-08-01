@@ -37,6 +37,11 @@ extension VTPlayerView {
             volumePopoverRevealedControls = false
             showVolumePopover = false
             if shouldHideControls {
+                // Let the popover finish its dismissal transition before
+                // hiding the bar; otherwise its presentation update can
+                // immediately reveal the controls again.
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard !Task.isCancelled, !showVolumePopover else { return }
                 viewModel.inactivityTask?.cancel()
                 viewModel.showControls = false
             }
