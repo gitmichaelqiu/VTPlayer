@@ -91,6 +91,7 @@ final class VTPlayerViewModel {
             }
             if let player = player {
                 player.rate = Float(isPaused ? 0.0 : clamped)
+                enhancedAudioPlayer?.setRate(clamped)
                 resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
             }
         }

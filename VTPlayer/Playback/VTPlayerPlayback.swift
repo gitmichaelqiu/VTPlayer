@@ -25,9 +25,27 @@ extension VTPlayerViewModel {
             } else {
                 stopPlaybackLoopOnly()
                 if let player {
+                    // The native layer is reinserted by SwiftUI after the
+                    // pipeline view is removed. Re-enable the track once more
+                    // on the next main-actor turn so disabling the last
+                    // enhancement cannot leave AVPlayer presenting a black
+                    // frame until the user restarts playback.
+                    #if os(macOS)
+                    setNativeVideoEnabled(true)
+                    #endif
                     player.play()
                     player.rate = Float(playbackSpeed)
                     self.isPaused = false
+                    #if os(macOS)
+                    Task { @MainActor [weak self, weak player] in
+                        guard let self, let player else { return }
+                        await Task.yield()
+                        guard self.videoURL != nil, !self.isPaused else { return }
+                        self.setNativeVideoEnabled(true)
+                        player.play()
+                        player.rate = Float(self.playbackSpeed)
+                    }
+                    #endif
                 }
             }
         } else if isPlaying && isPaused {
