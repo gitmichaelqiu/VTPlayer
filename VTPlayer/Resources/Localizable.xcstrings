@@ -141,6 +141,16 @@
         }
       }
     },
+    "Adjustments" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整"
+          }
+        }
+      }
+    },
     "Added recently" : {
       "localizations" : {
         "zh-Hans" : {
@@ -717,6 +727,16 @@
       }
     },
     "Frame Interpolation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帧生成"
+          }
+        }
+      }
+    },
+    "Frame Interp" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1647,6 +1667,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "超分辨率"
+          }
+        }
+      }
+    },
+    "Super Res" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超分"
           }
         }
       }

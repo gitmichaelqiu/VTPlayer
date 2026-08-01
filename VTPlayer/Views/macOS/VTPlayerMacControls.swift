@@ -70,8 +70,8 @@ extension VTPlayerView {
                     let isActive = scale > 0
                     enhancementControlLabel(
                         isQL
-                            ? "\(String(localized: "Super Resolution")): \(scaleLabel)x QL"
-                            : "\(String(localized: "Super Resolution")): \(isActive ? "\(scaleLabel)x" : String(localized: "Off"))",
+                            ? "\(String(localized: "Super Res")): \(scaleLabel)x QL"
+                            : "\(String(localized: "Super Res")): \(isActive ? "\(scaleLabel)x" : String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
@@ -116,7 +116,7 @@ extension VTPlayerView {
                 } label: {
                     let isActive = viewModel.frameInterpolationLevel > 0
                     enhancementControlLabel(
-                        "\(String(localized: "Frame Interpolation")): \(isActive ? "\(viewModel.frameInterpolationLevel)x" : String(localized: "Off"))",
+                        "\(String(localized: "Frame Interp")): \(isActive ? "\(viewModel.frameInterpolationLevel)x" : String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
@@ -223,7 +223,7 @@ extension VTPlayerView {
                 // Image Adjustments Popover Button
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
                     enhancementControlLabel(
-                        String(localized: "Image Adjustments"),
+                        String(localized: "Adjustments"),
                         isActive: viewModel.sharpness > 0 || viewModel.hdrStrength > 0
                     )
                 }
