@@ -16,6 +16,9 @@ jobs:
   update-cask:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout VTPlayer Source
+        uses: actions/checkout@v4
+
       - name: Get Release Info and Calculate Hash
         id: info
         env:
