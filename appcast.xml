@@ -11,7 +11,7 @@
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/gitmichaelqiu/VTPlayer/releases/download/v1.0.0/VTPlayer_macOS_v1.0.0.dmg" length="22698235" type="application/octet-stream" sparkle:edSignature="W465rFQschUTJn28b+ZdfFKFo43s2OY9ubzsixRGdSXub+bPrmNYVJ3x0RAyIrVYTKVSqQY1Xby1OTW/XiQsDw=="/>
+            <enclosure url="https://github.com/gitmichaelqiu/VTPlayer/releases/download/v1.0.0/VTPlayer_macOS_v1.0.0.dmg" length="22698480" type="application/octet-stream" sparkle:edSignature="rCZq7apdG6udb9MWgRq/JspFjb00D9/Q9kO9aeLCADLawtYlzw/37RYqwr30U6miEXmr52lzrNeUC4vAJ5pTCg=="/>
             <sparkle:releaseNotesLink>https://github.com/gitmichaelqiu/VTPlayer/releases/tag/v1.0.0</sparkle:releaseNotesLink>
         </item>
     </channel>
