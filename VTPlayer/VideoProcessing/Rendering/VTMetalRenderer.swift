@@ -21,25 +21,25 @@ import UIKit
 @MainActor
 public final class VTMetalRenderer: MTKView {
 
-    private var commandQueue: MTLCommandQueue?
-    private var ciContext: CIContext?
+    internal var commandQueue: MTLCommandQueue?
+    internal var ciContext: CIContext?
 
     // The current pixel buffer to render
-    private var currentPixelBuffer: CVPixelBuffer?
-    private var needsDrawableUpdate = true
-    private enum NativeHDRTransfer: Equatable {
+    internal var currentPixelBuffer: CVPixelBuffer?
+    internal var needsDrawableUpdate = true
+    internal enum NativeHDRTransfer: Equatable {
         case pq
         case hlg
     }
-    private var nativeHDRTransfer: NativeHDRTransfer?
+    internal var nativeHDRTransfer: NativeHDRTransfer?
     #if os(macOS)
-    private var renderingActive = false
-    private var pausedLayoutRedrawPending = false
-    private var lastLayoutSize: CGSize = .zero
+    internal var renderingActive = false
+    internal var pausedLayoutRedrawPending = false
+    internal var lastLayoutSize: CGSize = .zero
     #endif
     #if os(iOS)
-    private var edrRefreshAttempts = 0
-    private var pausedLayoutRedrawPending = false
+    internal var edrRefreshAttempts = 0
+    internal var pausedLayoutRedrawPending = false
     #endif
 
     public var sharpness: Float = 0.0 {
@@ -67,11 +67,11 @@ public final class VTMetalRenderer: MTKView {
 
     /// Whether the current drawable is configured to present extended-range
     /// content. This is false on displays without EDR headroom.
-    public private(set) var isExtendedDynamicRangeActive = false
+    public internal(set) var isExtendedDynamicRangeActive = false
 
-    private let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
+    internal let extendedLinearDisplayP3ColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
 
-    private var nativeHDRColorSpace: CGColorSpace? {
+    internal var nativeHDRColorSpace: CGColorSpace? {
         switch nativeHDRTransfer {
         case .pq:
             return CGColorSpace(name: CGColorSpace.itur_2100_PQ)
@@ -82,7 +82,7 @@ public final class VTMetalRenderer: MTKView {
         }
     }
 
-    private lazy var midtoneChromaKernel: CIColorKernel? = CIColorKernel(source: """
+    internal lazy var midtoneChromaKernel: CIColorKernel? = CIColorKernel(source: """
         kernel vec4 midtoneChromaCompensation(__sample image, float amount) {
             float luma = dot(image.rgb, vec3(0.2126, 0.7152, 0.0722));
             float shadowWeight = smoothstep(0.08, 0.25, luma);

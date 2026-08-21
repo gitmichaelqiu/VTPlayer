@@ -286,3 +286,6 @@ extension VTPlayerView {
                 .foregroundStyle(.red)
         }
     }
+
+    #endif
+}

@@ -10,7 +10,7 @@ import MediaPlayer
 extension VTPlayerViewModel {
     /// Converts monotonic uptime deltas without trapping if a timestamp was
     /// reset after the caller captured `now` during a pipeline transition.
-    private func elapsedUptimeSeconds(since start: DispatchTime, until end: DispatchTime) -> Double {
+    internal func elapsedUptimeSeconds(since start: DispatchTime, until end: DispatchTime) -> Double {
         guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return 0 }
         return Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000.0
     }
@@ -355,4 +355,5 @@ extension VTPlayerViewModel {
         }
     }
 
+#endif
 }

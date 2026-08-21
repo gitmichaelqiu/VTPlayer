@@ -364,6 +364,4 @@ extension VTPlayerView {
         }
     }
 
-    @ViewBuilder
-#endif
 }

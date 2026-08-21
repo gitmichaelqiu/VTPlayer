@@ -8,7 +8,7 @@ import MediaPlayer
 #endif
 
 extension VTPlayerViewModel {
-    private func startPlaybackLoopNow() {
+    internal func startPlaybackLoopNow() {
         guard coordinatorTeardownTask == nil else {
             startPlaybackLoop()
             return

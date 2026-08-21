@@ -17,13 +17,9 @@ import AppKit
 import UIKit
 #endif
 
-/// A high-performance Metal-backed view for rendering CVPixelBuffer frames.
-@MainActor
-public final class VTMetalRenderer: MTKView {
-
 @MainActor
 extension VTMetalRenderer {
-    private func setupMetal() {
+    internal func setupMetal() {
         guard let device = self.device else { return }
 
         self.framebufferOnly = false
@@ -57,7 +53,7 @@ extension VTMetalRenderer {
     /// An EDR layer must use a floating-point pixel format and an extended
     /// linear color space; merely raising CI exposure in an SDR drawable is
     /// clipped before it reaches an XDR display.
-    private func configureExtendedDynamicRangePresentation() {
+    internal func configureExtendedDynamicRangePresentation() {
         guard let metalLayer = layer as? CAMetalLayer else { return }
 
         let previousPixelFormat = colorPixelFormat
@@ -65,7 +61,7 @@ extension VTMetalRenderer {
 
         // Use potential headroom to opt in. On iOS, `currentEDRHeadroom` can
         // remain at 1.0 until an EDR layer is already visible.
-        let nativeHDRColorSpace = nativeHDRColorSpace
+        let nativeHDRColorSpace = self.nativeHDRColorSpace
         let hasHDRIntent = nativeHDRColorSpace != nil || hdrStrength > 0
         #if os(iOS)
         // iOS may not report EDR headroom until its layer already requests it.
@@ -134,7 +130,7 @@ extension VTMetalRenderer {
         #endif
     }
 
-    private func updateNativeHDRPresentation(for pixelBuffer: CVPixelBuffer) {
+    internal func updateNativeHDRPresentation(for pixelBuffer: CVPixelBuffer) {
         let transfer: NativeHDRTransfer?
         if let attachment = CVBufferCopyAttachment(
             pixelBuffer,
@@ -159,7 +155,7 @@ extension VTMetalRenderer {
 
     /// The usable headroom can change with the selected display, brightness,
     /// power state, and system HDR settings, so it is queried at presentation.
-    private var currentEDRHeadroom: Float {
+    internal var currentEDRHeadroom: Float {
         #if os(macOS)
         guard let screen = window?.screen else { return 1.0 }
         return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
@@ -171,7 +167,7 @@ extension VTMetalRenderer {
         #endif
     }
 
-    private var potentialEDRHeadroom: Float {
+    internal var potentialEDRHeadroom: Float {
         #if os(macOS)
         guard let screen = window?.screen else { return 1.0 }
         return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
@@ -183,7 +179,7 @@ extension VTMetalRenderer {
         #endif
     }
 
-    private func requestRedrawForImageAdjustment() {
+    internal func requestRedrawForImageAdjustment() {
         needsDrawableUpdate = true
         #if os(macOS)
         if isPaused {
@@ -232,7 +228,7 @@ extension VTMetalRenderer {
     /// in backing pixels so enabling the processing pipeline does not render
     /// at half resolution on a Retina display.
     @discardableResult
-    private func updateDrawableSizeForBackingScale() -> Bool {
+    internal func updateDrawableSizeForBackingScale() -> Bool {
         guard let window else { return false }
         let scale = window.backingScaleFactor
         layer?.contentsScale = scale
@@ -246,7 +242,7 @@ extension VTMetalRenderer {
     /// A sidebar resize can otherwise leave its previous drawable stretched by
     /// AppKit until another video frame arrives. Schedule one coalesced draw
     /// after layout, when the resized drawable is available.
-    private func requestPausedLayoutRedraw() {
+    internal func requestPausedLayoutRedraw() {
         guard !pausedLayoutRedrawPending else { return }
         pausedLayoutRedrawPending = true
         DispatchQueue.main.async { [weak self] in
@@ -256,4 +252,5 @@ extension VTMetalRenderer {
             self.draw()
         }
     }
+#endif
 }

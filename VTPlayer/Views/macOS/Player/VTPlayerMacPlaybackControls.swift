@@ -17,6 +17,7 @@ import UniformTypeIdentifiers
 
 extension VTPlayerView {
     #if os(macOS)
+    @ViewBuilder
     var playPauseButton: some View {
         Button(action: { viewModel.togglePlayPause() }) {
             Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")

@@ -59,7 +59,6 @@ extension VTPlayerViewModel {
         }
     }
     #endif
-    #endif
 
     @MainActor
     func tickDisplayLink() {

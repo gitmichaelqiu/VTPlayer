@@ -455,5 +455,4 @@ extension VTFrameProcessorCoordinator {
     }
 
 }
-}
 #endif

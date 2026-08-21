@@ -97,4 +97,3 @@ extension VTPlayerViewModel {
     }
 
 }
-}
