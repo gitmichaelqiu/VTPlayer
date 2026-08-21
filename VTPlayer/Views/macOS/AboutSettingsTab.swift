@@ -3,204 +3,6 @@ import SwiftUI
 import Combine
 import AppKit
 
-struct GeneralSettingsTab: View {
-    @AppStorage("VTShowFileExtensions") private var showFileExtensions = true
-    @AppStorage("VTAlwaysDarkOnPlayback") private var alwaysDarkOnPlayback = false
-    @AppStorage("VTDefaultContinueVideoPlayback") private var defaultContinueVideoPlayback = true
-    @State private var automaticallyChecksForUpdates = false
-    @State private var automaticallyDownloadsUpdates = false
-
-    var body: some View {
-        SettingsContainer(.general) {
-            VStack(alignment: .leading, spacing: 20) {
-                SettingsSection("User Interface") {
-                    SettingsRow(
-                        "Show file extensions",
-                        helperText: "Show or hide file extensions."
-                    ) {
-                        Toggle("", isOn: $showFileExtensions)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
-
-                    Divider()
-
-                    SettingsRow(
-                        "Continue video playback",
-                        helperText: "Resume new videos from their saved position."
-                    ) {
-                        Toggle("", isOn: $defaultContinueVideoPlayback)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
-
-                    Divider()
-
-                    SettingsRow(
-                        "Always use dark mode when playing",
-                        helperText: "Use dark styling during playback."
-                    ) {
-                        Toggle("", isOn: $alwaysDarkOnPlayback)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
-                }
-
-                SettingsSection("Updates") {
-                    SettingsRow(
-                        "Automatically check for updates"
-                    ) {
-                        Toggle("", isOn: $automaticallyChecksForUpdates)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .disabled(!VTPlayerUpdater.shared.isConfigured)
-                            .onChange(of: automaticallyChecksForUpdates) { _, value in
-                                VTPlayerUpdater.shared.automaticallyChecksForUpdates = value
-                            }
-                    }
-
-                    if automaticallyChecksForUpdates {
-                        VStack(spacing: 0) {
-                            Divider()
-
-                            SettingsRow(
-                                "Automatically download updates"
-                            ) {
-                                Toggle("", isOn: $automaticallyDownloadsUpdates)
-                                    .labelsHidden()
-                                    .toggleStyle(.switch)
-                                    .disabled(!VTPlayerUpdater.shared.isConfigured)
-                                    .onChange(of: automaticallyDownloadsUpdates) { _, value in
-                                        VTPlayerUpdater.shared.automaticallyDownloadsUpdates = value
-                                    }
-                            }
-                        }
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
-                    Divider()
-
-                    SettingsRow(
-                        "Check for updates",
-                    ) {
-                        Button("Check Now") {
-                            VTPlayerUpdater.shared.checkForUpdates()
-                        }
-                        .disabled(!VTPlayerUpdater.shared.isConfigured)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: automaticallyChecksForUpdates)
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .onAppear {
-                automaticallyChecksForUpdates = VTPlayerUpdater.shared.automaticallyChecksForUpdates
-                automaticallyDownloadsUpdates = VTPlayerUpdater.shared.automaticallyDownloadsUpdates
-            }
-        }
-    }
-}
-
-struct EnhancementsSettingsTab: View {
-    @AppStorage("VTDefaultMBLevel") private var defaultMBLevel = 0
-    @AppStorage("VTDefaultDNLevel") private var defaultDNLevel = 0.0
-    @AppStorage("VTDefaultSharpness") private var defaultSharpness = 0.0
-    @AppStorage("VTDefaultHDRBoost") private var defaultHDRBoost = 0.0
-    @AppStorage("VTDefaultHDRColorfulness") private var defaultHDRColorfulness = 0.0
-    @AppStorage("VTEnhancedFrameCacheMemoryMB") private var enhancedFrameCacheMemoryMB = 1_024
-
-    var body: some View {
-        SettingsContainer(.enhancements) {
-            VStack(alignment: .leading, spacing: 20) {
-                SettingsSection("Neural Engine Enhancements") {
-                    SliderSettingsRow(
-                        "Enhanced frame cache",
-                        helperText: "Maximum memory for enhanced-frame prebuffering.",
-                        value: Binding(
-                            get: { Double(min(max(enhancedFrameCacheMemoryMB, 256), 4_096)) },
-                            set: { enhancedFrameCacheMemoryMB = Int($0.rounded()) }
-                        ),
-                        range: 256.0...4_096.0,
-                        defaultValue: 1_024.0,
-                        step: 256.0,
-                        valueString: {
-                            $0 >= 1_024
-                                ? String(format: "%.1f GB", $0 / 1_024.0)
-                                : String(format: "%.0f MB", $0)
-                        }
-                    )
-                }
-
-                SettingsSection("Postprocessing") {
-                    SliderSettingsRow(
-                        "Motion Blur",
-                        helperText: "Apply motion blur.",
-                        value: Binding(
-                            get: { Double(defaultMBLevel) },
-                            set: { defaultMBLevel = Int($0) }
-                        ),
-                        range: 0.0...100.0,
-                        defaultValue: 0.0,
-                        step: 5.0,
-                        valueString: { $0 > 0 ? String(format: "%.0f", $0) : String(localized: "Off") }
-                    )
-
-                    Divider()
-
-                    SliderSettingsRow(
-                        "Denoise",
-                        helperText: "Reduce video noise.",
-                        value: $defaultDNLevel,
-                        range: 0.0...1.0,
-                        defaultValue: 0.0,
-                        step: 0.05,
-                        valueString: { $0 > 0 ? String(format: "%.2f", $0) : String(localized: "Off") }
-                    )
-                }
-
-                SettingsSection("Color & Image Adjustments") {
-                    VStack(spacing: 0) {
-                        SliderSettingsRow(
-                            "Sharpness",
-                            value: $defaultSharpness,
-                            range: 0.0...2.0,
-                            defaultValue: 0.0,
-                            step: 0.05
-                        )
-
-                        Divider()
-
-                        SliderSettingsRow(
-                            "HDR Boost",
-                            helperText: "Expand luminance for HDR displays.",
-                            value: $defaultHDRBoost,
-                            range: 0.0...2.0,
-                            defaultValue: 0.0,
-                            step: 0.05
-                        )
-
-                        if defaultHDRBoost > 0 {
-                            Divider()
-                                .transition(.opacity)
-
-                            SliderSettingsRow(
-                                "HDR Colorfulness",
-                                helperText: "Adjust HDR color intensity.",
-                                value: $defaultHDRColorfulness,
-                                range: 0.0...1.0,
-                                defaultValue: 0.0,
-                                step: 0.05
-                            )
-                            .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.2), value: defaultHDRBoost)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-    }
-}
-
 struct AboutSettingsTab: View {
     var appName: String {
         Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "VTPlayer"
@@ -234,11 +36,11 @@ struct AboutSettingsTab: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(appName)
                             .font(.custom("Syncopate-Bold", size: 24))
-                        
+
                         Text("v\(appVersion)")
                             .font(.title3)
                             .foregroundColor(.secondary)
-                        
+
                         Text("© \(currentYear) Michael Yicheng Qiu")
                             .font(.footnote)
                             .foregroundColor(.secondary.opacity(0.8))
@@ -249,7 +51,7 @@ struct AboutSettingsTab: View {
                     Text("Links")
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
                         AboutLinkRow(title: "Report an issue", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
                         AboutLinkRow(title: "VTPlayer's GitHub", url: "https://github.com/gitmichaelqiu/VTPlayer")
@@ -327,9 +129,9 @@ struct AboutSettingsTab: View {
 struct AboutLinkRow: View {
     let title: LocalizedStringKey
     let url: String
-    
+
     @State private var isHovering = false
-    
+
     var body: some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 4) {
@@ -485,9 +287,9 @@ class SettingsHostingController: NSHostingController<AnyView> {
 
 class SettingsWindowManager: NSObject, NSWindowDelegate {
     static let shared = SettingsWindowManager()
-    
+
     private var settingsWindowController: NSWindowController?
-    
+
     func showSettings(tab: SettingsTab = .general) {
         if let window = settingsWindowController?.window {
             // Recreate the hosting root when a specific tab is requested;
@@ -502,14 +304,14 @@ class SettingsWindowManager: NSObject, NSWindowDelegate {
                 return
             }
         }
-        
+
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: defaultSettingsWindowWidth, height: defaultSettingsWindowHeight),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        
+
         window.identifier = NSUserInterfaceItemIdentifier("SettingsWindow")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -519,18 +321,18 @@ class SettingsWindowManager: NSObject, NSWindowDelegate {
         window.maxSize = NSSize(width: CGFloat(defaultSettingsWindowWidth), height: CGFloat(defaultSettingsWindowHeight))
         window.collectionBehavior = [.participatesInCycle]
         window.level = .normal
-        
+
         let settingsVC = SettingsHostingController(initialTab: tab)
         window.contentViewController = settingsVC
-        
+
         let windowController = NSWindowController(window: window)
         window.delegate = self
         settingsWindowController = windowController
-        
+
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
-    
+
     func windowWillClose(_ notification: Notification) {
         settingsWindowController = nil
     }
