@@ -79,20 +79,32 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
 
         aggregate.recordDrawAttempt()
         aggregate.recordDrawAttempt()
-        aggregate.recordDrawableAcquisition()
+        aggregate.recordDrawableAcquisition(start: start, end: end)
         aggregate.recordCPUEncode(start: start, end: end)
 
-        let snapshot = aggregate.consumeSnapshot()
+        let completedGPU = RendererGPUPerformanceSnapshot(
+            completedFrames: 1,
+            totalNanoseconds: 1_250_000
+        )
+        let snapshot = aggregate.consumeSnapshot(completedGPU: completedGPU)
 
         XCTAssertEqual(snapshot.drawAttempts, 2)
         XCTAssertEqual(snapshot.drawableAcquisitions, 1)
         XCTAssertEqual(snapshot.encodedFrames, 1)
+        XCTAssertEqual(snapshot.averageDrawableAcquisitionMilliseconds, 2.5, accuracy: 0.001)
         XCTAssertEqual(snapshot.averageCPUEncodeMilliseconds, 2.5, accuracy: 0.001)
-        XCTAssertEqual(aggregate.consumeSnapshot(), RendererPerformanceSnapshot(
+        XCTAssertEqual(snapshot.averageGPUMilliseconds, 1.25, accuracy: 0.001)
+        XCTAssertEqual(aggregate.consumeSnapshot(completedGPU: RendererGPUPerformanceSnapshot(
+            completedFrames: 0,
+            totalNanoseconds: 0
+        )), RendererPerformanceSnapshot(
             drawAttempts: 0,
             drawableAcquisitions: 0,
             encodedFrames: 0,
-            totalCPUEncodeNanoseconds: 0
+            totalDrawableAcquisitionNanoseconds: 0,
+            totalCPUEncodeNanoseconds: 0,
+            completedGPUFrames: 0,
+            totalGPUNanoseconds: 0
         ))
     }
 }

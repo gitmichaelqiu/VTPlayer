@@ -10,6 +10,7 @@ import MetalKit
 import CoreVideo
 import CoreImage
 import QuartzCore
+import Synchronization
 
 #if os(macOS)
 import AppKit
@@ -21,11 +22,24 @@ struct RendererPerformanceSnapshot: Equatable {
     let drawAttempts: Int
     let drawableAcquisitions: Int
     let encodedFrames: Int
+    let totalDrawableAcquisitionNanoseconds: UInt64
     let totalCPUEncodeNanoseconds: UInt64
+    let completedGPUFrames: Int
+    let totalGPUNanoseconds: UInt64
+
+    var averageDrawableAcquisitionMilliseconds: Double {
+        guard drawableAcquisitions > 0 else { return 0 }
+        return Double(totalDrawableAcquisitionNanoseconds) / Double(drawableAcquisitions) / 1_000_000.0
+    }
 
     var averageCPUEncodeMilliseconds: Double {
         guard encodedFrames > 0 else { return 0 }
         return Double(totalCPUEncodeNanoseconds) / Double(encodedFrames) / 1_000_000.0
+    }
+
+    var averageGPUMilliseconds: Double {
+        guard completedGPUFrames > 0 else { return 0 }
+        return Double(totalGPUNanoseconds) / Double(completedGPUFrames) / 1_000_000.0
     }
 }
 
@@ -33,14 +47,17 @@ struct RendererPerformanceAggregate {
     private var drawAttempts = 0
     private var drawableAcquisitions = 0
     private var encodedFrames = 0
+    private var totalDrawableAcquisitionNanoseconds: UInt64 = 0
     private var totalCPUEncodeNanoseconds: UInt64 = 0
 
     mutating func recordDrawAttempt() {
         drawAttempts += 1
     }
 
-    mutating func recordDrawableAcquisition() {
+    mutating func recordDrawableAcquisition(start: DispatchTime, end: DispatchTime = .now()) {
         drawableAcquisitions += 1
+        guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
+        totalDrawableAcquisitionNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
     }
 
     mutating func recordCPUEncode(start: DispatchTime, end: DispatchTime = .now()) {
@@ -49,18 +66,54 @@ struct RendererPerformanceAggregate {
         totalCPUEncodeNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
     }
 
-    mutating func consumeSnapshot() -> RendererPerformanceSnapshot {
+    mutating func consumeSnapshot(completedGPU: RendererGPUPerformanceSnapshot) -> RendererPerformanceSnapshot {
         let snapshot = RendererPerformanceSnapshot(
             drawAttempts: drawAttempts,
             drawableAcquisitions: drawableAcquisitions,
             encodedFrames: encodedFrames,
-            totalCPUEncodeNanoseconds: totalCPUEncodeNanoseconds
+            totalDrawableAcquisitionNanoseconds: totalDrawableAcquisitionNanoseconds,
+            totalCPUEncodeNanoseconds: totalCPUEncodeNanoseconds,
+            completedGPUFrames: completedGPU.completedFrames,
+            totalGPUNanoseconds: completedGPU.totalNanoseconds
         )
         drawAttempts = 0
         drawableAcquisitions = 0
         encodedFrames = 0
+        totalDrawableAcquisitionNanoseconds = 0
         totalCPUEncodeNanoseconds = 0
         return snapshot
+    }
+}
+
+struct RendererGPUPerformanceSnapshot: Equatable, Sendable {
+    let completedFrames: Int
+    let totalNanoseconds: UInt64
+}
+
+private struct RendererGPUPerformanceStorage: Sendable {
+    var completedFrames = 0
+    var totalNanoseconds: UInt64 = 0
+}
+
+private final class RendererGPUPerformanceRecorder: @unchecked Sendable {
+    private let storage = Mutex(RendererGPUPerformanceStorage())
+
+    func recordCompletion(durationNanoseconds: UInt64) {
+        storage.withLock { storage in
+            storage.completedFrames += 1
+            storage.totalNanoseconds += durationNanoseconds
+        }
+    }
+
+    func consumeSnapshot() -> RendererGPUPerformanceSnapshot {
+        storage.withLock { storage in
+            let snapshot = RendererGPUPerformanceSnapshot(
+                completedFrames: storage.completedFrames,
+                totalNanoseconds: storage.totalNanoseconds
+            )
+            storage = RendererGPUPerformanceStorage()
+            return snapshot
+        }
     }
 }
 
@@ -71,6 +124,7 @@ public final class VTMetalRenderer: MTKView {
     internal var commandQueue: MTLCommandQueue?
     internal var ciContext: CIContext?
     internal var performanceAggregate = RendererPerformanceAggregate()
+    private let gpuPerformanceRecorder = RendererGPUPerformanceRecorder()
 
     // The current pixel buffer to render
     internal var currentPixelBuffer: CVPixelBuffer?
@@ -197,16 +251,17 @@ public final class VTMetalRenderer: MTKView {
     }
 
     internal func consumePerformanceSnapshot() -> RendererPerformanceSnapshot {
-        performanceAggregate.consumeSnapshot()
+        performanceAggregate.consumeSnapshot(completedGPU: gpuPerformanceRecorder.consumeSnapshot())
     }
 
     public override func draw(_ rect: CGRect) {
         performanceAggregate.recordDrawAttempt()
+        let drawableAcquisitionStart = DispatchTime.now()
         guard let drawable = currentDrawable,
               let queue = commandQueue else {
             return
         }
-        performanceAggregate.recordDrawableAcquisition()
+        performanceAggregate.recordDrawableAcquisition(start: drawableAcquisitionStart)
 
         #if os(macOS)
         // Only advance the presentation queue when this draw has a drawable;
@@ -228,6 +283,7 @@ public final class VTMetalRenderer: MTKView {
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
             encoder.endEncoding()
             commandBuffer.present(drawable)
+            trackGPUCompletion(of: commandBuffer)
             commandBuffer.commit()
             performanceAggregate.recordCPUEncode(start: encodeStart)
             needsDrawableUpdate = false
@@ -346,9 +402,22 @@ public final class VTMetalRenderer: MTKView {
         )
 
         commandBuffer.present(drawable)
+        trackGPUCompletion(of: commandBuffer)
         commandBuffer.commit()
         performanceAggregate.recordCPUEncode(start: encodeStart)
         needsDrawableUpdate = false
+    }
+
+    private func trackGPUCompletion(of commandBuffer: MTLCommandBuffer) {
+        let recorder = gpuPerformanceRecorder
+        commandBuffer.addCompletedHandler { commandBuffer in
+            let start = commandBuffer.gpuStartTime
+            let end = commandBuffer.gpuEndTime
+            guard start.isFinite, end.isFinite, end >= start else { return }
+            let duration = (end - start) * 1_000_000_000
+            guard duration <= Double(UInt64.max) else { return }
+            recorder.recordCompletion(durationNanoseconds: UInt64(duration))
+        }
     }
 
     #if os(iOS)
