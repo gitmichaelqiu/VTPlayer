@@ -1137,6 +1137,38 @@ final class VTPlayerViewModel {
         }
     }
 
+    /// Rewinds after natural completion before building a new paused pipeline.
+    func rewindAfterPlaybackEnd(for endingPlayer: AVPlayer) async {
+        guard player === endingPlayer else { return }
+
+        pause()
+
+        let zero = CMTime.zero
+        pendingResumePTS = nil
+        pendingExplicitSeekPTS = zero
+        seekGeneration &+= 1
+        let requestGeneration = seekGeneration
+        lastPublishedCurrentTime = 0
+        currentTime = 0
+        lastRenderedPTS = .zero
+        lastPulledTime = .zero
+        resetPresentationClock(at: 0)
+        lockCache { clearProcessedFrameCache() }
+        await activeCoordinator?.clearHistory()
+
+        let completed = await endingPlayer.seek(
+            to: zero,
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        )
+        guard completed,
+              requestGeneration == seekGeneration,
+              player === endingPlayer else { return }
+
+        pendingExplicitSeekPTS = nil
+        startPlaybackLoop()
+    }
+
     func handleTimeJump() {
         guard let player = player else { return }
         if let deadline = ignoreAutomaticTimeJumpsUntil,

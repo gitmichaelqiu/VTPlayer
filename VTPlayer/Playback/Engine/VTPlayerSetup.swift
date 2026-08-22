@@ -196,10 +196,8 @@ extension VTPlayerViewModel {
                         queue: .main
                     ) { [self] _ in
                         Task { @MainActor [weak self] in
-                            guard let self else { return }
-                            self.pause()
-                            self.seek(to: 0)
-                            self.startPlaybackLoop()
+                            guard let self, self.player === newPlayer else { return }
+                            await self.rewindAfterPlaybackEnd(for: newPlayer)
                         }
                     }
                     self.playerItemObserver = observer
