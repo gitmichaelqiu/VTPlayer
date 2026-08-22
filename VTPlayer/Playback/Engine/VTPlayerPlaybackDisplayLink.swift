@@ -203,6 +203,7 @@ extension VTPlayerViewModel {
             let drawRate = Double(rendererPerformance.drawAttempts) / diagElapsed
             let drawableRate = Double(rendererPerformance.drawableAcquisitions) / diagElapsed
             let drawableSize = renderer.drawableSize
+            let rendererScheduling = renderer.schedulingSnapshot()
             #endif
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
@@ -212,7 +213,7 @@ extension VTPlayerViewModel {
             }
             NSLog("PERF: cacheMB=\(cacheBytes / (1024 * 1024)) decodeWaitMs=\(String(format: "%.2f", decodeWait)) cacheWaitMs=\(String(format: "%.2f", cacheAdmission)) cacheInsertMs=\(String(format: "%.2f", cacheInsertion)) samples=\(producerTimingSampleCount)")
             #if os(macOS)
-            NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) encodes=\(rendererPerformance.encodedFrames)")
+            NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
             #endif
             producedFramesCount = 0
             displayLinkTickCount = 0

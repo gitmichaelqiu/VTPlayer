@@ -90,6 +90,13 @@ struct RendererGPUPerformanceSnapshot: Equatable, Sendable {
     let totalNanoseconds: UInt64
 }
 
+struct RendererSchedulingSnapshot: Equatable {
+    let preferredFramesPerSecond: Int
+    let presentsWithTransaction: Bool
+    let displaySyncEnabled: Bool
+    let screenMaximumFramesPerSecond: Int
+}
+
 private struct RendererGPUPerformanceStorage: Sendable {
     var completedFrames = 0
     var totalNanoseconds: UInt64 = 0
@@ -253,6 +260,18 @@ public final class VTMetalRenderer: MTKView {
     internal func consumePerformanceSnapshot() -> RendererPerformanceSnapshot {
         performanceAggregate.consumeSnapshot(completedGPU: gpuPerformanceRecorder.consumeSnapshot())
     }
+
+    #if os(macOS)
+    internal func schedulingSnapshot() -> RendererSchedulingSnapshot {
+        let metalLayer = layer as? CAMetalLayer
+        return RendererSchedulingSnapshot(
+            preferredFramesPerSecond: preferredFramesPerSecond,
+            presentsWithTransaction: presentsWithTransaction,
+            displaySyncEnabled: metalLayer?.displaySyncEnabled ?? true,
+            screenMaximumFramesPerSecond: window?.screen?.maximumFramesPerSecond ?? 0
+        )
+    }
+    #endif
 
     public override func draw(_ rect: CGRect) {
         performanceAggregate.recordDrawAttempt()

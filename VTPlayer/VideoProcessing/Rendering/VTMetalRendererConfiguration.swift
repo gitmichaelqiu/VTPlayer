@@ -31,6 +31,7 @@ extension VTMetalRenderer {
         self.enableSetNeedsDisplay = false
         self.isPaused = true
         self.preferredFramesPerSecond = 60
+        configureMacOSPresentationScheduling()
         #else
         self.enableSetNeedsDisplay = true
         self.isPaused = true // We manually trigger drawing when a new frame is received
@@ -198,6 +199,7 @@ extension VTMetalRenderer {
     #if os(macOS)
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        configureMacOSPresentationScheduling()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()
         if window != nil, renderingActive {
@@ -209,6 +211,15 @@ extension VTMetalRenderer {
         super.viewDidChangeBackingProperties()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()
+    }
+
+    /// Keep video presentation outside SwiftUI's layer transactions while
+    /// retaining display synchronization for tear-free playback.
+    internal func configureMacOSPresentationScheduling() {
+        presentsWithTransaction = false
+        guard let metalLayer = layer as? CAMetalLayer else { return }
+        metalLayer.presentsWithTransaction = false
+        metalLayer.displaySyncEnabled = true
     }
 
     public override func layout() {
