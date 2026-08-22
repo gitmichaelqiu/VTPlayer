@@ -198,6 +198,11 @@ extension VTPlayerViewModel {
             let decodeWait = producerDecodeWaitMilliseconds / Double(timingSamples)
             let cacheAdmission = producerCacheAdmissionMilliseconds / Double(timingSamples)
             let cacheInsertion = producerCacheInsertionMilliseconds / Double(timingSamples)
+            #if os(macOS)
+            let rendererPerformance = renderer.consumePerformanceSnapshot()
+            let drawRate = Double(rendererPerformance.drawAttempts) / diagElapsed
+            let drawableRate = Double(rendererPerformance.drawableAcquisitions) / diagElapsed
+            #endif
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
                 NSLog("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
@@ -205,6 +210,9 @@ extension VTPlayerViewModel {
                 NSLog("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             }
             NSLog("PERF: cacheMB=\(cacheBytes / (1024 * 1024)) decodeWaitMs=\(String(format: "%.2f", decodeWait)) cacheWaitMs=\(String(format: "%.2f", cacheAdmission)) cacheInsertMs=\(String(format: "%.2f", cacheInsertion)) samples=\(producerTimingSampleCount)")
+            #if os(macOS)
+            NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) encodes=\(rendererPerformance.encodedFrames)")
+            #endif
             producedFramesCount = 0
             displayLinkTickCount = 0
             diagnosticPresentedFramesCount = 0

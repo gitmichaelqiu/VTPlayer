@@ -17,12 +17,60 @@ import AppKit
 import UIKit
 #endif
 
+struct RendererPerformanceSnapshot: Equatable {
+    let drawAttempts: Int
+    let drawableAcquisitions: Int
+    let encodedFrames: Int
+    let totalCPUEncodeNanoseconds: UInt64
+
+    var averageCPUEncodeMilliseconds: Double {
+        guard encodedFrames > 0 else { return 0 }
+        return Double(totalCPUEncodeNanoseconds) / Double(encodedFrames) / 1_000_000.0
+    }
+}
+
+struct RendererPerformanceAggregate {
+    private var drawAttempts = 0
+    private var drawableAcquisitions = 0
+    private var encodedFrames = 0
+    private var totalCPUEncodeNanoseconds: UInt64 = 0
+
+    mutating func recordDrawAttempt() {
+        drawAttempts += 1
+    }
+
+    mutating func recordDrawableAcquisition() {
+        drawableAcquisitions += 1
+    }
+
+    mutating func recordCPUEncode(start: DispatchTime, end: DispatchTime = .now()) {
+        encodedFrames += 1
+        guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
+        totalCPUEncodeNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
+    }
+
+    mutating func consumeSnapshot() -> RendererPerformanceSnapshot {
+        let snapshot = RendererPerformanceSnapshot(
+            drawAttempts: drawAttempts,
+            drawableAcquisitions: drawableAcquisitions,
+            encodedFrames: encodedFrames,
+            totalCPUEncodeNanoseconds: totalCPUEncodeNanoseconds
+        )
+        drawAttempts = 0
+        drawableAcquisitions = 0
+        encodedFrames = 0
+        totalCPUEncodeNanoseconds = 0
+        return snapshot
+    }
+}
+
 /// A high-performance Metal-backed view for rendering CVPixelBuffer frames.
 @MainActor
 public final class VTMetalRenderer: MTKView {
 
     internal var commandQueue: MTLCommandQueue?
     internal var ciContext: CIContext?
+    internal var performanceAggregate = RendererPerformanceAggregate()
 
     // The current pixel buffer to render
     internal var currentPixelBuffer: CVPixelBuffer?
@@ -148,11 +196,17 @@ public final class VTMetalRenderer: MTKView {
         #endif
     }
 
+    internal func consumePerformanceSnapshot() -> RendererPerformanceSnapshot {
+        performanceAggregate.consumeSnapshot()
+    }
+
     public override func draw(_ rect: CGRect) {
+        performanceAggregate.recordDrawAttempt()
         guard let drawable = currentDrawable,
               let queue = commandQueue else {
             return
         }
+        performanceAggregate.recordDrawableAcquisition()
 
         #if os(macOS)
         // Only advance the presentation queue when this draw has a drawable;
@@ -164,6 +218,7 @@ public final class VTMetalRenderer: MTKView {
         guard needsDrawableUpdate else { return }
 
         if currentPixelBuffer == nil {
+            let encodeStart = DispatchTime.now()
             guard let commandBuffer = queue.makeCommandBuffer() else { return }
             let renderPassDescriptor = MTLRenderPassDescriptor()
             renderPassDescriptor.colorAttachments[0].texture = drawable.texture
@@ -174,6 +229,7 @@ public final class VTMetalRenderer: MTKView {
             encoder.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
+            performanceAggregate.recordCPUEncode(start: encodeStart)
             needsDrawableUpdate = false
             return
         }
@@ -263,6 +319,7 @@ public final class VTMetalRenderer: MTKView {
         let transformedImage = hdrImage.transformed(by: transform)
 
         // Render the image to the drawable texture
+        let encodeStart = DispatchTime.now()
         guard let commandBuffer = queue.makeCommandBuffer() else { return }
 
         // Clear the drawable texture first (to avoid trailing graphics on aspect-ratio borders)
@@ -290,6 +347,7 @@ public final class VTMetalRenderer: MTKView {
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        performanceAggregate.recordCPUEncode(start: encodeStart)
         needsDrawableUpdate = false
     }
 
