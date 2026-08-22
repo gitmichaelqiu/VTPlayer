@@ -396,7 +396,10 @@ final class VTPlayerViewModel {
             let releasedBytes = processedFrameCache[..<processedFrameCacheStart].reduce(into: 0) { total, frame in
                 total += CVPixelBufferGetDataSize(frame.buffer)
             }
-            processedFrameCache = Array(processedFrameCache[processedFrameCacheStart...])
+            // Keep the cache storage and release only the consumed pixel
+            // buffers. Rebuilding the array here briefly duplicates every
+            // queued frame reference, which is costly for a large 4x cache.
+            processedFrameCache.removeFirst(processedFrameCacheStart)
             processedFrameCacheStart = 0
             processedFrameCacheByteUsage = max(0, processedFrameCacheByteUsage - releasedBytes)
         }
