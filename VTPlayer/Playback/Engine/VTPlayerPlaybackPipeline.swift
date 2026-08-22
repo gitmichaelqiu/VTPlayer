@@ -162,6 +162,16 @@ extension VTPlayerViewModel {
                 }
             }
 
+            guard isCurrentPipeline() else { return }
+
+            // Pause before any capability or model work suspends. A low
+            // latency support probe can take long enough for native video to
+            // advance before the pipeline restores its captured anchor.
+            self.isInitializingPipeline = true
+            let wasRate = self.player?.rate ?? 0
+            self.player?.pause()
+            pausedForInitialization = true
+
             // Check Quality SR model availability before starting (macOS only)
             var effectiveQualitySR = qualitySR
             var effectiveSRLevel = srLevel
@@ -253,15 +263,6 @@ extension VTPlayerViewModel {
             )
             guard isCurrentPipeline() else { return }
             self.activeCoordinator = coordinator
-
-            // Pause the player during coordinator init so the audio clock
-            // doesn't advance while the cache is empty.  Without this, the
-            // consumer stalls (empty cache) while audio keeps running,
-            // creating an audible gap followed by a video jump.
-            self.isInitializingPipeline = true
-            let wasRate = self.player?.rate ?? 0
-            self.player?.pause()
-            pausedForInitialization = true
 
             do {
                 if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
