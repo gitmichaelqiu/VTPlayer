@@ -249,6 +249,7 @@ extension VTPlayerViewModel {
         audioSyncTask = nil
         audioSyncLatency = 0
         pipelineRestartAnchorPTS = nil
+        isInitializingPipeline = false
         presentedFramesCount = 0
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0

@@ -11,15 +11,31 @@
 		9F99D8700000000000000001 /* VTPlayerIcon_Dark.png in Resources */ = {isa = PBXBuildFile; fileRef = 9F99D8710000000000000001 /* VTPlayerIcon_Dark.png */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A11000000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4668B1522FE2CEDA002FF95C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4668B1592FE2CEDA002FF95C;
+			remoteInfo = VTPlayer;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		4668B15A2FE2CEDA002FF95C /* VTPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VTPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F99D8710000000000000001 /* VTPlayerIcon_Dark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = VTPlayerIcon_Dark.png; sourceTree = "<group>"; };
+		A11000000000000000000001 /* VTPlayerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VTPlayerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4668B15C2FE2CEDA002FF95C /* VTPlayer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VTPlayer;
+			sourceTree = "<group>";
+		};
+		A11000000000000000000002 /* VTPlayerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VTPlayerTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +49,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A11000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -40,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				4668B15C2FE2CEDA002FF95C /* VTPlayer */,
+				A11000000000000000000002 /* VTPlayerTests */,
 				9F99D8710000000000000001 /* VTPlayerIcon_Dark.png */,
 				4668B15B2FE2CEDA002FF95C /* Products */,
 			);
@@ -49,6 +73,7 @@
 			isa = PBXGroup;
 			children = (
 				4668B15A2FE2CEDA002FF95C /* VTPlayer.app */,
+				A11000000000000000000001 /* VTPlayerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,6 +104,26 @@
 			productReference = 4668B15A2FE2CEDA002FF95C /* VTPlayer.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A11000000000000000000003 /* VTPlayerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A11000000000000000000008 /* Build configuration list for PBXNativeTarget "VTPlayerTests" */;
+			buildPhases = (
+				A11000000000000000000004 /* Sources */,
+				A11000000000000000000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1100000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A11000000000000000000002 /* VTPlayerTests */,
+			);
+			name = VTPlayerTests;
+			productName = VTPlayerTests;
+			productReference = A11000000000000000000001 /* VTPlayerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -90,6 +135,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					4668B1592FE2CEDA002FF95C = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					A11000000000000000000003 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -113,6 +161,7 @@
 			projectRoot = "";
 			targets = (
 				4668B1592FE2CEDA002FF95C /* VTPlayer */,
+				A11000000000000000000003 /* VTPlayerTests */,
 			);
 		};
 /* End PBXProject section */
@@ -136,7 +185,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A11000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1100000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4668B1592FE2CEDA002FF95C /* VTPlayer */;
+			targetProxy = A11000000000000000000009 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4668B1632FE2CEDC002FF95C /* Debug */ = {
@@ -372,6 +436,40 @@
 			};
 			name = Release;
 		};
+		A11000000000000000000006 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mqiu.VTPlayerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VTPlayer.app/Contents/MacOS/VTPlayer";
+			};
+			name = Debug;
+		};
+		A11000000000000000000007 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mqiu.VTPlayerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VTPlayer.app/Contents/MacOS/VTPlayer";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -389,6 +487,15 @@
 			buildConfigurations = (
 				4668B1662FE2CEDC002FF95C /* Debug */,
 				4668B1672FE2CEDC002FF95C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A11000000000000000000008 /* Build configuration list for PBXNativeTarget "VTPlayerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A11000000000000000000006 /* Debug */,
+				A11000000000000000000007 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

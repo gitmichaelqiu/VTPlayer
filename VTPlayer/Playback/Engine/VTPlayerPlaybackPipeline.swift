@@ -7,6 +7,23 @@ import MetalKit
 import MediaPlayer
 #endif
 
+@MainActor
+struct PlaybackPipelineSnapshot {
+    let generation: UInt64
+    let videoURL: URL?
+    let player: AVPlayer?
+
+    func matches(
+        activeGeneration: UInt64,
+        activeVideoURL: URL?,
+        activePlayer: AVPlayer?
+    ) -> Bool {
+        generation == activeGeneration &&
+            videoURL == activeVideoURL &&
+            player === activePlayer
+    }
+}
+
 extension VTPlayerViewModel {
     internal func startPlaybackLoopNow() {
         guard coordinatorTeardownTask == nil else {
@@ -15,6 +32,8 @@ extension VTPlayerViewModel {
         }
         let shouldResumePlayback = isPlaying && !isPaused
         let restartAnchorPTS = pipelineRestartAnchorPTS
+        let pipelineURL = videoURL
+        let pipelinePlayer = player
         pipelineRestartAnchorPTS = nil
         stopEnhancedAudioPlayback()
         #if os(macOS)
@@ -27,6 +46,11 @@ extension VTPlayerViewModel {
         qualityModelRetryTask?.cancel()
         qualityModelRetryTask = nil
         let gen = playbackGeneration
+        let pipelineSnapshot = PlaybackPipelineSnapshot(
+            generation: gen,
+            videoURL: pipelineURL,
+            player: pipelinePlayer
+        )
         let oldProducer = producerTask
         producerTask?.cancel()
         producerTask = nil
@@ -107,6 +131,16 @@ extension VTPlayerViewModel {
         producerTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
             var pausedForInitialization = false
+
+            @MainActor
+            func isCurrentPipeline() -> Bool {
+                !Task.isCancelled &&
+                    pipelineSnapshot.matches(
+                        activeGeneration: self.playbackGeneration,
+                        activeVideoURL: self.videoURL,
+                        activePlayer: self.player
+                    )
+            }
 
             defer {
                 // A replacement loop has a newer generation. Never let a
@@ -197,6 +231,7 @@ extension VTPlayerViewModel {
             if effectiveSRLevel > 0 {
                 let canStartPipeline = await VTFrameProcessorCoordinator
                     .canStartLowLatencyPipeline(width: pipelineWidth, height: pipelineHeight, scale: effectiveSRLevel)
+                guard isCurrentPipeline() else { return }
                 if !canStartPipeline {
                     self.srInitializationError = "Low Latency SR does not support \(pipelineWidth)x\(pipelineHeight) on this device; enhancement disabled."
                     effectiveSRLevel = 0
@@ -216,7 +251,7 @@ extension VTPlayerViewModel {
                 denoiseStrength: dnStrength,
                 qualityPrioritization: qualPrior
             )
-            guard !Task.isCancelled, gen == self.playbackGeneration else { return }
+            guard isCurrentPipeline() else { return }
             self.activeCoordinator = coordinator
 
             // Pause the player during coordinator init so the audio clock
@@ -235,7 +270,10 @@ extension VTPlayerViewModel {
                 }
                 try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
             } catch {
-                guard gen == self.playbackGeneration else { return }
+                guard isCurrentPipeline() else {
+                    await coordinator.endSession()
+                    return
+                }
                 await coordinator.endSession()
 
                 // The combined processor is capability- and
@@ -263,6 +301,10 @@ extension VTPlayerViewModel {
                     do {
                         try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
                     } catch {
+                        guard isCurrentPipeline() else {
+                            await coordinator.endSession()
+                            return
+                        }
                         self.srInitializationError = "Sequential SR + FI fallback unavailable: \(error.localizedDescription)"
                         print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
                         self.activeCoordinator = nil
@@ -287,8 +329,10 @@ extension VTPlayerViewModel {
                 }
             }
 
-            guard let videoURL = self.videoURL else {
-                self.activeCoordinator = nil
+            guard isCurrentPipeline(), let videoURL = pipelineURL else {
+                if self.activeCoordinator === coordinator {
+                    self.activeCoordinator = nil
+                }
                 await coordinator.endSession()
                 return
             }
@@ -296,10 +340,14 @@ extension VTPlayerViewModel {
             // Re-sync after coordinator setup, then keep audio and video
             // paused until the entire safe processed-frame cache is ready.
             var waitingForFramePreroll = false
-            if let player = self.player {
+            if let player = pipelinePlayer {
                 let resumeTime = restartStartTime ?? player.currentTime()
                 if restartStartTime != nil {
                     _ = await player.seek(to: resumeTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                }
+                guard isCurrentPipeline() else {
+                    await coordinator.endSession()
+                    return
                 }
                 let readerStart = CMTimeSubtract(resumeTime, decodePreroll)
                 self.lastPulledTime = readerStart > .zero ? readerStart : .zero
@@ -318,14 +366,22 @@ extension VTPlayerViewModel {
                     waitingForFramePreroll = true
                     let audioPlayer = EnhancedAudioPlayer()
                     if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                        guard isCurrentPipeline() else {
+                            audioPlayer.stop()
+                            await coordinator.endSession()
+                            return
+                        }
                         audioPlayer.setVolume(Float(self.volume))
                         self.enhancedAudioPlayer = audioPlayer
                         self.setPrimaryAudioMuted(true)
                     }
                 } else {
                     player.pause()
-                    if resumeTime <= .zero, let url = self.videoURL,
-                       let firstFrame = await self.readSingleFrame(from: url, at: .zero) {
+                    if resumeTime <= .zero, let firstFrame = await self.readSingleFrame(from: videoURL, at: .zero) {
+                        guard isCurrentPipeline() else {
+                            await coordinator.endSession()
+                            return
+                        }
                         self.renderer.render(pixelBuffer: firstFrame.buffer)
                     }
                 }
@@ -337,6 +393,10 @@ extension VTPlayerViewModel {
             // Create VTFrameSequence to decode frames faster-than-real-time
             var iteratorStartTime = self.lastPulledTime
             let sourcePadding = await coordinator.sourceFramePadding()
+            guard isCurrentPipeline() else {
+                await coordinator.endSession()
+                return
+            }
             let frameSequence = VTFrameSequence(
                 url: videoURL,
                 startTime: iteratorStartTime,
@@ -616,6 +676,11 @@ extension VTPlayerViewModel {
             }
         }
 
+        guard pipelineSnapshot.matches(
+            activeGeneration: playbackGeneration,
+            activeVideoURL: videoURL,
+            activePlayer: player
+        ) else { return }
         startDisplayLinkIfNeeded()
 
         audioSyncTask?.cancel()

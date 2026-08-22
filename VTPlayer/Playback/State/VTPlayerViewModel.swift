@@ -1167,7 +1167,7 @@ final class VTPlayerViewModel {
             }
             self.pendingResumePTS = nil
         }
-        enhancedAudioPlayer?.seek(to: currentTime, shouldPlay: isPlaying && !isPaused)
+        enhancedAudioPlayer?.awaitRenderedFrameAnchor(shouldPlay: isPlaying && !isPaused)
         
         lockCache { self.clearProcessedFrameCache() }
         self.lastPulledTime = currentTime
