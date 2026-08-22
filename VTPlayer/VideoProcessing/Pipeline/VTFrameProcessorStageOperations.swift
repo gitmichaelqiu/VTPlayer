@@ -209,13 +209,6 @@ extension VTFrameProcessorCoordinator {
         if let spatialInstance = stages[.spatial] {
             outputFrames = try await processSpatial(instance: spatialInstance, inputFrames: outputFrames)
         }
-        #if os(macOS)
-        if let session = rendererTransferSession, let pool = rendererPixelBufferPool {
-            outputFrames = try outputFrames.map {
-                isNativeHDR($0.buffer) ? $0 : try convertForRenderer($0, session: session, pool: pool)
-            }
-        }
-        #endif
         for outputFrame in outputFrames {
             propagateColorAttachments(from: colorSource, to: outputFrame.buffer)
             try await onOutput(outputFrame)

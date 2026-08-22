@@ -76,16 +76,6 @@ extension VTFrameProcessorCoordinator {
             CFEqual(transferFunction, kCVImageBufferTransferFunction_ITU_R_2100_HLG)
     }
 
-    #if os(macOS)
-    func configureRendererTransferSession(_ session: VTPixelTransferSession) {
-        configureTransferSession(session)
-        // Do not force BT.709 here. The source track's primaries and transfer
-        // function are propagated onto each decoded frame, and VideoToolbox
-        // must use those values when converting processed output. A global
-        // BT.709 destination changes chroma for non-709 SDR and HDR sources.
-    }
-    #endif
-
     // MARK: - Start Session
 
     public func startSession(width: Int, height: Int) throws {
@@ -408,26 +398,6 @@ extension VTFrameProcessorCoordinator {
         self.targetWidth = currentWidth
         self.targetHeight = currentHeight
 
-        #if os(macOS)
-        if hasQualitySR || hasLLSR || frameInterpolationLevel > 0 {
-            var transferSession: VTPixelTransferSession?
-            guard VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transferSession) == kCVReturnSuccess,
-                  let transferSession else {
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create presentation transfer session"])
-            }
-            configureRendererTransferSession(transferSession)
-            guard let rendererPool = makePool(width: currentWidth, height: currentHeight, from: [
-                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
-                kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]
-            ]) else {
-                VTPixelTransferSessionInvalidate(transferSession)
-                throw NSError(domain: "VTFrameProcessorCoordinator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create presentation pool"])
-            }
-            rendererTransferSession = transferSession
-            rendererPixelBufferPool = rendererPool
-        }
-        #endif
-
         self.isSessionActive = true
     }
 
@@ -455,11 +425,8 @@ extension VTFrameProcessorCoordinator {
     }
 
     func completeEndSession() {
-           var hasResources = isSessionActive || !stages.isEmpty || secondSpatialProcessor != nil ||
+        let hasResources = isSessionActive || !stages.isEmpty || secondSpatialProcessor != nil ||
             fallbackTransferSession != nil || interpolatedTransferSession != nil
-        #if os(macOS)
-        hasResources = hasResources || rendererTransferSession != nil || rendererPixelBufferPool != nil
-        #endif
         guard hasResources else { return }
 
         for (_, instance) in stages {
@@ -483,14 +450,6 @@ extension VTFrameProcessorCoordinator {
         }
         interpolatedTransferSession = nil
         interpolatedTransferPool = nil
-
-        #if os(macOS)
-        if let session = rendererTransferSession {
-            VTPixelTransferSessionInvalidate(session)
-        }
-        rendererTransferSession = nil
-        rendererPixelBufferPool = nil
-        #endif
 
         temporalFirstForSRInterpolation = false
 

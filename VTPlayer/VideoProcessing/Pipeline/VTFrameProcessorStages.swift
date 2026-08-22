@@ -87,30 +87,8 @@ extension VTFrameProcessorCoordinator {
             }
         }
 
-        #if os(macOS)
-        if let session = rendererTransferSession, let pool = rendererPixelBufferPool {
-            currentFrames = try currentFrames.map {
-                isNativeHDR($0.buffer) ? $0 : try convertForRenderer($0, session: session, pool: pool)
-            }
-        }
-        #endif
-
         return currentFrames
     }
-
-    #if os(macOS)
-    func convertForRenderer(_ frame: VTFrame, session: VTPixelTransferSession, pool: CVPixelBufferPool) throws -> VTFrame {
-        var output: CVPixelBuffer?
-        guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &output) == kCVReturnSuccess,
-              let output else {
-            throw NSError(domain: "VTFrameProcessorCoordinator", code: -3, userInfo: [NSLocalizedDescriptionKey: "SR presentation pool allocation failed"])
-        }
-        guard VTPixelTransferSessionTransferImage(session, from: frame.buffer, to: output) == kCVReturnSuccess else {
-            throw NSError(domain: "VTFrameProcessorCoordinator", code: -4, userInfo: [NSLocalizedDescriptionKey: "SR presentation color conversion failed"])
-        }
-        return VTFrame(buffer: output, presentationTimeStamp: frame.presentationTimeStamp, isInterpolated: frame.isInterpolated)
-    }
-    #endif
 
     func processStage(_ stage: PipelineStage, instance: StageInstance, inputFrames: [VTFrame]) async throws -> [VTFrame] {
         switch stage {

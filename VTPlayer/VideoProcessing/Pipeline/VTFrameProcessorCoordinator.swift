@@ -185,12 +185,6 @@ public actor VTFrameProcessorCoordinator {
     // Fallback transfer session (for unsupported 2nd stage SR scaler)
     var fallbackTransferSession: VTPixelTransferSession?
 
-    #if os(macOS)
-    // Convert processed Y'CbCr output before handing it to Core Image/Metal.
-    var rendererTransferSession: VTPixelTransferSession?
-    var rendererPixelBufferPool: CVPixelBufferPool?
-    #endif
-
     // FI must run at source resolution when it is paired with LL SR. Running
     // the temporal processor after 4x SR makes it operate on sixteen times
     // as many pixels and cannot sustain the generated-frame cadence.
