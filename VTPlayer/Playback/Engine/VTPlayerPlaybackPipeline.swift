@@ -541,6 +541,10 @@ extension VTPlayerViewModel {
                     // seek and restart from the same group.
                     cachedCursorTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
                     self.lastPulledTime = cachedCursorTime
+                    // Raw cached groups can be read much faster than the UI
+                    // run loop. Yield once per source group so MTKView keeps
+                    // receiving its requested display callbacks.
+                    await Task.yield()
                 }
                 cachedReadTask?.cancel()
                 resumeAfterFramePrerollIfReady(force: true)
