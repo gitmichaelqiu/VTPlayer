@@ -22,6 +22,7 @@ nonisolated struct EnhancedFrameCacheStatus: Equatable, Sendable {
     var coverageBitmap: [Bool]
     var availableGroupIndices: Set<Int>
     var byteCount: Int64
+    var preparationIdentifier: UUID?
 
     var missingGroupIndices: [Int] {
         coverageBitmap.indices.filter { coverageBitmap[$0] && !availableGroupIndices.contains($0) }
@@ -93,6 +94,7 @@ actor EnhancedFrameDiskCache {
     private let fileManager: FileManager
     private var partialDirectory: URL?
     private var preparedManifest: Manifest?
+    private var activePreparationIdentifier: UUID?
 
     init(rootDirectory: URL? = nil, fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -134,7 +136,8 @@ actor EnhancedFrameDiskCache {
         key: EnhancedFrameCacheKey,
         coverageBitmap: [Bool],
         diskBudgetBytes: Int64,
-        requiredAdditionalBytes: Int64
+        requiredAdditionalBytes: Int64,
+        preparationIdentifier: UUID = UUID()
     ) throws -> EnhancedFrameCacheStatus {
         try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         let existingDirectory = directory(for: key)
@@ -180,17 +183,22 @@ actor EnhancedFrameDiskCache {
         )
         partialDirectory = partial
         preparedManifest = manifest
+        activePreparationIdentifier = preparationIdentifier
         try writeManifest(manifest, to: partial)
-        return status(for: manifest)
+        return status(for: manifest, preparationIdentifier: preparationIdentifier)
     }
 
     func writeGroup(
         _ frames: [VTFrame],
         for groupIndex: Int,
-        sourcePresentationTime: CMTime? = nil
+        sourcePresentationTime: CMTime? = nil,
+        preparationIdentifier: UUID? = nil
     ) throws {
         guard let partialDirectory, var manifest = preparedManifest else {
             throw EnhancedFrameDiskCacheError.cacheNotPrepared
+        }
+        guard preparationIdentifier == nil || preparationIdentifier == activePreparationIdentifier else {
+            throw CancellationError()
         }
         guard manifest.coverageBitmap.indices.contains(groupIndex), manifest.coverageBitmap[groupIndex] else { return }
 
@@ -219,9 +227,15 @@ actor EnhancedFrameDiskCache {
         try writeManifest(manifest, to: partialDirectory)
     }
 
-    func finalizePreparation(actualGroupCount: Int? = nil) throws -> EnhancedFrameCacheStatus {
+    func finalizePreparation(
+        actualGroupCount: Int? = nil,
+        preparationIdentifier: UUID? = nil
+    ) throws -> EnhancedFrameCacheStatus {
         guard let partialDirectory, var manifest = preparedManifest else {
             throw EnhancedFrameDiskCacheError.cacheNotPrepared
+        }
+        guard preparationIdentifier == nil || preparationIdentifier == activePreparationIdentifier else {
+            throw CancellationError()
         }
         if let actualGroupCount {
             guard actualGroupCount >= 0, actualGroupCount <= manifest.coverageBitmap.count else {
@@ -250,15 +264,18 @@ actor EnhancedFrameDiskCache {
         }
         self.partialDirectory = nil
         self.preparedManifest = nil
+        self.activePreparationIdentifier = nil
         return status(for: manifest)
     }
 
-    func discardPreparation() throws {
+    func discardPreparation(preparationIdentifier: UUID? = nil) throws {
+        guard preparationIdentifier == nil || preparationIdentifier == activePreparationIdentifier else { return }
         if let partialDirectory, fileManager.fileExists(atPath: partialDirectory.path) {
             try fileManager.removeItem(at: partialDirectory)
         }
         partialDirectory = nil
         preparedManifest = nil
+        activePreparationIdentifier = nil
     }
 
     func readGroup(_ groupIndex: Int, for key: EnhancedFrameCacheKey) throws -> [VTFrame]? {
@@ -291,12 +308,16 @@ actor EnhancedFrameDiskCache {
         rootDirectory.appendingPathComponent(key.directoryName, isDirectory: true)
     }
 
-    private func status(for manifest: Manifest) -> EnhancedFrameCacheStatus {
+    private func status(
+        for manifest: Manifest,
+        preparationIdentifier: UUID? = nil
+    ) -> EnhancedFrameCacheStatus {
         EnhancedFrameCacheStatus(
             key: manifest.key,
             coverageBitmap: manifest.coverageBitmap,
             availableGroupIndices: Set(manifest.groups.map(\.groupIndex)),
-            byteCount: manifest.byteCount
+            byteCount: manifest.byteCount,
+            preparationIdentifier: preparationIdentifier
         )
     }
 

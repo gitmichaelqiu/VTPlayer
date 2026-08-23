@@ -98,15 +98,26 @@ actor EnhancedFrameCachePreparer {
     ) async throws -> EnhancedFrameCachePreparationResult {
         let fingerprint = try EnhancedFrameDiskCache.sourceFingerprint(for: url)
         let key = EnhancedFrameCacheKey(sourceFingerprint: fingerprint, configuration: configuration)
+        let preparationIdentifier = UUID()
         let coverage = Array(repeating: true, count: max(1, estimatedGroupCount))
+        if let cached = try await diskCache.cachedStatus(for: key),
+           cached.missingGroupIndices.isEmpty {
+            return EnhancedFrameCachePreparationResult(
+                key: key,
+                benchmark: benchmark,
+                status: cached,
+                totalGroupCount: cached.coverageBitmap.count
+            )
+        }
         let existing = try await diskCache.prepare(
             key: key,
             coverageBitmap: coverage,
             diskBudgetBytes: diskBudgetBytes,
-            requiredAdditionalBytes: estimatedRequiredBytes
+            requiredAdditionalBytes: estimatedRequiredBytes,
+            preparationIdentifier: preparationIdentifier
         )
         if existing.missingGroupIndices.isEmpty {
-            try await diskCache.discardPreparation()
+            try await diskCache.discardPreparation(preparationIdentifier: preparationIdentifier)
             return EnhancedFrameCachePreparationResult(
                 key: key,
                 benchmark: benchmark,
@@ -138,7 +149,8 @@ actor EnhancedFrameCachePreparer {
                     try await diskCache.writeGroup(
                         output,
                         for: groupIndex,
-                        sourcePresentationTime: frame.presentationTimeStamp
+                        sourcePresentationTime: frame.presentationTimeStamp,
+                        preparationIdentifier: preparationIdentifier
                     )
                     writtenBytes += Int64(output.reduce(0) { $0 + CVPixelBufferGetDataSize($1.buffer) })
                 } else if !(await coordinator.advanceSourceHistory(forCachedGroup: frame)) {
@@ -153,7 +165,10 @@ actor EnhancedFrameCachePreparer {
                 }
             }
             await coordinator.endSession()
-            let status = try await diskCache.finalizePreparation(actualGroupCount: groupIndex)
+            let status = try await diskCache.finalizePreparation(
+                actualGroupCount: groupIndex,
+                preparationIdentifier: preparationIdentifier
+            )
             await progress(1, status.byteCount)
             return EnhancedFrameCachePreparationResult(
                 key: key,
@@ -163,7 +178,7 @@ actor EnhancedFrameCachePreparer {
             )
         } catch {
             await coordinator.endSession()
-            try? await diskCache.discardPreparation()
+            try? await diskCache.discardPreparation(preparationIdentifier: preparationIdentifier)
             throw error
         }
     }

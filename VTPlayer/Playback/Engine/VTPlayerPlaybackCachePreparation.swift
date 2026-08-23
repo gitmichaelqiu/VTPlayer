@@ -3,6 +3,14 @@ import CoreMedia
 import Foundation
 
 extension VTPlayerViewModel {
+    func cancelEnhancedCachePreparation() {
+        guard enhancedCachePreparationTask != nil else { return }
+        enhancedCachePreparationGeneration &+= 1
+        enhancedCachePreparationTask?.cancel()
+        enhancedCachePreparationTask = nil
+        enhancedCachePreparationState = .idle
+    }
+
     func applyPipelineEnhancements() {
         validateEnhancementSelections()
         #if os(macOS)
@@ -20,7 +28,7 @@ extension VTPlayerViewModel {
         stopPlaybackLoopOnly()
         enhancedCachePreparationState = .benchmarking
 
-        enhancedCachePreparationTask?.cancel()
+        cancelEnhancedCachePreparation()
         enhancedCachePreparationGeneration &+= 1
         let preparationGeneration = enhancedCachePreparationGeneration
         enhancedCachePreparationTask = Task { @MainActor [weak self] in

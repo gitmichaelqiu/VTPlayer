@@ -137,6 +137,47 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertEqual(nextGroup, 1)
     }
 
+    func testStalePreparationCannotWriteOrDiscardNewPreparation() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let firstPreparation = UUID()
+        let secondPreparation = UUID()
+
+        _ = try await cache.prepare(
+            key: cacheKey("stale-preparation"),
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0,
+            preparationIdentifier: firstPreparation
+        )
+        _ = try await cache.prepare(
+            key: cacheKey("stale-preparation"),
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0,
+            preparationIdentifier: secondPreparation
+        )
+
+        do {
+            try await cache.writeGroup(
+                [try makeFrame(value: 1, time: .zero, interpolated: false)],
+                for: 0,
+                preparationIdentifier: firstPreparation
+            )
+            XCTFail("Expected stale preparation rejection")
+        } catch is CancellationError {
+            XCTAssertTrue(true)
+        }
+        try await cache.discardPreparation(preparationIdentifier: firstPreparation)
+        try await cache.writeGroup(
+            [try makeFrame(value: 2, time: .zero, interpolated: false)],
+            for: 0,
+            preparationIdentifier: secondPreparation
+        )
+        _ = try await cache.finalizePreparation(preparationIdentifier: secondPreparation)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
     }

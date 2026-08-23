@@ -20,12 +20,7 @@ extension VTPlayerViewModel {
     func updateEnhancements() {
         validateEnhancementSelections()
         #if os(macOS)
-        if enhancedCachePreparationTask != nil {
-            enhancedCachePreparationGeneration &+= 1
-            enhancedCachePreparationTask?.cancel()
-            enhancedCachePreparationTask = nil
-            enhancedCachePreparationState = .idle
-        }
+        cancelEnhancedCachePreparation()
         return
         #else
         appliedPipelineConfiguration = draftPipelineConfiguration
@@ -236,6 +231,7 @@ extension VTPlayerViewModel {
     }
 
     func stopPlaybackLoopOnly() {
+        cancelEnhancedCachePreparation()
         stopEnhancedAudioPlayback()
         #if os(macOS)
         pipelinePresentationReady = false

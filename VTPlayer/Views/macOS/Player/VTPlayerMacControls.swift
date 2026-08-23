@@ -370,16 +370,26 @@ extension VTPlayerView {
     private var applyEnhancementsControl: some View {
         switch viewModel.enhancedCachePreparationState {
         case .benchmarking:
-            ProgressView("Measuring")
-                .controlSize(.small)
-                .fixedSize()
+            Button(action: { viewModel.cancelEnhancedCachePreparation() }) {
+                Label("Cancel Measuring", systemImage: "xmark.circle")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         case let .preparing(progress, bytesWritten):
-            VStack(alignment: .leading, spacing: 2) {
-                ProgressView(value: progress)
-                    .frame(width: 92)
-                Text("Preparing \(Int(progress * 100))% · \(ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    ProgressView(value: progress)
+                        .frame(width: 92)
+                    Text("Preparing \(Int(progress * 100))% · \(ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Button(action: { viewModel.cancelEnhancedCachePreparation() }) {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.plain)
+                .help("Cancel cache preparation")
             }
             .fixedSize()
         default:
