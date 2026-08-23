@@ -521,7 +521,13 @@ extension VTPlayerViewModel {
             let sparseCacheStatus: EnhancedFrameCacheStatus?
             if let preparedFrameCacheKey, preparedFrameCacheMode == .sparse {
                 sparseCacheStatus = try? await self.enhancedFrameDiskCache.cachedStatus(for: preparedFrameCacheKey)
-                NSLog("CACHE: playback mode=sparse coverage=%d%%", sparseCacheStatus?.coverageBitmap.filter { $0 }.count ?? 0)
+                let coveragePercent: Int
+                if let bitmap = sparseCacheStatus?.coverageBitmap, !bitmap.isEmpty {
+                    coveragePercent = Int((Double(bitmap.filter { $0 }.count) / Double(bitmap.count) * 100).rounded())
+                } else {
+                    coveragePercent = 0
+                }
+                NSLog("CACHE: playback mode=sparse coverage=%d%%", coveragePercent)
             } else {
                 sparseCacheStatus = nil
             }

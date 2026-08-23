@@ -4,6 +4,14 @@ import VideoToolbox
 
 extension VTPlayerViewModel {
     func setupPlayer(with url: URL) {
+        // A prepared cache is specific to both the source fingerprint and the
+        // applied processing configuration. Never let a previous title select
+        // cache-backed playback while this title is still loading metadata.
+        preparedEnhancedFrameCacheKey = nil
+        preparedEnhancedFrameCacheMode = nil
+        enhancedCacheCoveragePercent = 0
+        enhancedCacheHitGroupCount = 0
+        enhancedCacheMissGroupCount = 0
         pendingResumePTS = nil
         pendingExplicitSeekPTS = nil
         ignoreAutomaticTimeJumpsUntil = nil

@@ -81,6 +81,8 @@ extension VTPlayerViewModel {
                 )
                 if plan.mode == .realTime {
                     self.preparedEnhancedFrameCacheKey = nil
+                    self.preparedEnhancedFrameCacheMode = nil
+                    self.enhancedCacheCoveragePercent = 0
                     self.appliedPipelineConfiguration = candidate
                     self.enhancedCachePreparationState = .ready
                     self.resumeAfterApplyingEnhancements(wasPlaying: wasPlaying)

@@ -9,6 +9,7 @@ import MediaPlayer
 
 extension VTPlayerViewModel {
     func stop() {
+        cancelEnhancedCachePreparation()
         stopEnhancedAudioPlayback()
         inactivityTask?.cancel()
         inactivityTask = nil
