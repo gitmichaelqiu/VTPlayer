@@ -44,6 +44,7 @@ actor EnhancedFrameCachePreparer {
             ).makeAsyncIterator()
             var samples: [Double] = []
             var outputCount = 0
+            var outputBytes: Int64 = 0
             var warmupRemaining = 4
 
             while samples.count < sampleCount, let frame = try await iterator.next() {
@@ -57,6 +58,9 @@ actor EnhancedFrameCachePreparer {
                 }
                 samples.append(elapsed)
                 outputCount += output.count
+                outputBytes += output.reduce(into: 0) { partialResult, frame in
+                    partialResult += Int64(CVPixelBufferGetDataSize(frame.buffer))
+                }
             }
             await coordinator.endSession()
             guard !samples.isEmpty else { throw EnhancedFrameDiskCacheError.invalidFrameData }
@@ -74,6 +78,7 @@ actor EnhancedFrameCachePreparer {
                 // benchmark establishes the processing-side admission decision.
                 measuredDisplayFramesPerSecond: requestedOutputRate,
                 outputFramesPerGroup: Double(outputCount) / Double(samples.count),
+                averageOutputBytesPerGroup: outputBytes / Int64(samples.count),
                 diskWriteBytesPerSecond: 0
             )
         } catch {
@@ -100,7 +105,8 @@ actor EnhancedFrameCachePreparer {
         let key = EnhancedFrameCacheKey(sourceFingerprint: fingerprint, configuration: configuration)
         let preparationIdentifier = UUID()
         let coverage = Array(repeating: true, count: max(1, estimatedGroupCount))
-        if let cached = try await diskCache.cachedStatus(for: key),
+        let priorCacheStatus = try await diskCache.cachedStatus(for: key)
+        if let cached = priorCacheStatus,
            cached.missingGroupIndices.isEmpty {
             return EnhancedFrameCachePreparationResult(
                 key: key,
@@ -113,7 +119,7 @@ actor EnhancedFrameCachePreparer {
             key: key,
             coverageBitmap: coverage,
             diskBudgetBytes: diskBudgetBytes,
-            requiredAdditionalBytes: estimatedRequiredBytes,
+            requiredAdditionalBytes: max(0, estimatedRequiredBytes - (priorCacheStatus?.byteCount ?? 0)),
             preparationIdentifier: preparationIdentifier
         )
         if existing.missingGroupIndices.isEmpty {

@@ -41,6 +41,7 @@ nonisolated struct EnhancedPipelineBenchmark: Equatable, Sendable {
     var requestedOutputFramesPerSecond: Double
     var measuredDisplayFramesPerSecond: Double
     var outputFramesPerGroup: Double
+    var averageOutputBytesPerGroup: Int64
     var diskWriteBytesPerSecond: Double
 
     var meetsRealTimeProcessingBudget: Bool {

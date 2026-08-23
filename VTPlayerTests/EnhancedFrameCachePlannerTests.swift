@@ -68,6 +68,7 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
             requestedOutputFramesPerSecond: 119.88,
             measuredDisplayFramesPerSecond: 118,
             outputFramesPerGroup: 2,
+            averageOutputBytesPerGroup: 1,
             diskWriteBytesPerSecond: 1
         )
         var configuration = AppliedPipelineConfiguration.disabled
@@ -92,6 +93,7 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
             requestedOutputFramesPerSecond: 119.88,
             measuredDisplayFramesPerSecond: 118,
             outputFramesPerGroup: 2,
+            averageOutputBytesPerGroup: 1,
             diskWriteBytesPerSecond: 1
         )
         let configuration = AppliedPipelineConfiguration(

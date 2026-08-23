@@ -90,11 +90,7 @@ extension VTPlayerViewModel {
                 // Full caching is the only enabled preparation mode until
                 // hybrid FI equivalence has been validated on-device.
                 self.enhancedCachePreparationState = .preparing(progress: 0, bytesWritten: 0)
-                let scale = max(1, max(candidate.superResolutionLevel, Float(candidate.qualitySuperResolutionScaleFactor)))
-                let outputMultiplier = max(1, candidate.frameInterpolationLevel)
-                let estimatedBytesPerGroup = Int64(
-                    Double(self.videoWidth * self.videoHeight) * 2 * Double(scale * scale) * Double(outputMultiplier)
-                )
+                let estimatedBytesPerGroup = max(1, benchmark.averageOutputBytesPerGroup)
                 let result = try await preparer.prepareFullCache(
                     url: url,
                     width: self.videoWidth,
