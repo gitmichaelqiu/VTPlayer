@@ -50,6 +50,22 @@ final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
     }
 }
 
+@available(macOS 14.0, *)
+@MainActor
+final class MacAppKitDisplayTickDriver: NSObject {
+    weak var viewModel: VTPlayerViewModel?
+
+    init(viewModel: VTPlayerViewModel) {
+        self.viewModel = viewModel
+    }
+
+    @objc func displayLinkTick(_: CADisplayLink) {
+        guard let viewModel else { return }
+        viewModel.tickDisplayLink()
+        viewModel.renderer.draw()
+    }
+}
+
 private let macDisplayLinkCallback: CVDisplayLinkOutputCallback = {
     _, _, _, _, _, userInfo in
     guard let userInfo else { return kCVReturnError }
@@ -76,6 +92,29 @@ extension VTPlayerViewModel {
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
         guard macDisplayLink == nil, macMetalDisplayLink == nil else { return }
+        if #available(macOS 14.0, *) {
+            let driver = MacAppKitDisplayTickDriver(viewModel: self)
+            let link = renderer.displayLink(
+                target: driver,
+                selector: #selector(MacAppKitDisplayTickDriver.displayLinkTick(_:))
+            )
+            let maximumRate = Float(max(60, renderer.window?.screen?.maximumFramesPerSecond ?? 60))
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: maximumRate,
+                maximum: maximumRate,
+                preferred: maximumRate
+            )
+            link.add(to: .main, forMode: .common)
+            link.isPaused = false
+            renderer.onDisplayTick = nil
+            renderer.setExternalDisplayScheduling(true)
+            displayLink = link
+            // The display link belongs to the view's actual screen, which
+            // avoids CAMetalDisplayLink's adaptive callback throttling.
+            macMetalDisplayTickDriver = nil
+            NSLog("RENDER: scheduling=appKitDisplayLink requestedHz=%.0f", maximumRate)
+            return
+        }
         if #available(macOS 14.0, *),
            let metalLayer = renderer.layer as? CAMetalLayer {
             let driver = MacMetalDisplayTickDriver(viewModel: self)
