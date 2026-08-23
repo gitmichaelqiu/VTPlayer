@@ -81,6 +81,32 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertNil(cachedStatus)
     }
 
+    func testCapacityEvictsLeastRecentlyUsedCompletedCache() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let firstKey = cacheKey("first")
+
+        _ = try await cache.prepare(
+            key: firstKey,
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0
+        )
+        try await cache.writeGroup([try makeFrame(value: 1, time: .zero, interpolated: false)], for: 0)
+        _ = try await cache.finalizePreparation()
+
+        _ = try await cache.prepare(
+            key: cacheKey("second"),
+            coverageBitmap: [true],
+            diskBudgetBytes: 1,
+            requiredAdditionalBytes: 1
+        )
+
+        let evictedStatus = try await cache.cachedStatus(for: firstKey)
+        XCTAssertNil(evictedStatus)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
     }
