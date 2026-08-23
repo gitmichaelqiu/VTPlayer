@@ -54,6 +54,10 @@ extension VTPlayerViewModel {
         let oldProducer = producerTask
         producerTask?.cancel()
         producerTask = nil
+        #if os(macOS)
+        fullCacheReaderControl = nil
+        fullCachePresentationQueue = nil
+        #endif
         consumerTask?.cancel()
         consumerTask = nil
         endActiveCoordinator(after: oldProducer)
@@ -428,9 +432,16 @@ extension VTPlayerViewModel {
             @MainActor
             func resumeAfterFramePrerollIfReady(force: Bool = false) {
                 guard waitingForFramePreroll, let player = self.player else { return }
+                #if os(macOS)
+                let cachedFrameCount = self.fullCachePresentationQueue?.snapshot().frameCount ??
+                    self.lockCache {
+                        max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
+                    }
+                #else
                 let cachedFrameCount = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
+                #endif
                 guard cachedFrameCount >= self.initialPrerollFrameCount || (force && cachedFrameCount > 0) else {
                     return
                 }
@@ -524,105 +535,114 @@ extension VTPlayerViewModel {
                     initialPrerollFrameCount * 4,
                     presentationReserveTarget
                 )
-                let cacheReadAheadGroupCount = 3
-                var cachedCursorTime = self.lastPulledTime
-                var cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
-                    atOrAfter: cachedCursorTime,
-                    for: preparedFrameCacheKey
+                let readerControl = EnhancedPresentationReaderControl(
+                    startTime: self.lastPulledTime,
+                    generation: 1
                 )
-                var cachedReadTasks: [Int: Task<[VTFrame]?, Never>] = [:]
+                let presentationQueue = EnhancedPresentationFrameQueue(
+                    capacityBytes: frameCacheMemoryBudget,
+                    capacityFrames: maximumPresentationReserveFrames,
+                    generation: 1
+                )
+                self.fullCacheReaderControl = readerControl
+                self.fullCachePresentationQueue = presentationQueue
+                let prerollFrameCount = initialPrerollFrameCount
 
-                func scheduleCachedRead(_ groupIndex: Int) {
-                    guard cachedReadTasks[groupIndex] == nil else { return }
-                    cachedReadTasks[groupIndex] = Task.detached(priority: .userInitiated) {
-                        #if os(macOS)
-                        let readSignpost = MacPresentationSignposts.begin("FullCacheDecode")
-                        defer { MacPresentationSignposts.end("FullCacheDecode", identifier: readSignpost) }
-                        #endif
-                        guard let url = try? await diskCache.groupFileURL(
-                            groupIndex,
+                let readerTask = Task.detached(priority: .userInitiated) {
+                    var handledGeneration: UInt64 = 0
+                    var notifiedPrerollGeneration: UInt64?
+
+                    while !Task.isCancelled {
+                        let request = readerControl.request()
+                        guard request.generation != handledGeneration else {
+                            try? await Task.sleep(nanoseconds: 8_000_000)
+                            continue
+                        }
+                        handledGeneration = request.generation
+                        notifiedPrerollGeneration = nil
+                        presentationQueue.reset(generation: handledGeneration)
+                        let startTime = CMTime(
+                            seconds: request.seconds,
+                            preferredTimescale: 600
+                        )
+                        guard var groupIndex = try? await diskCache.groupIndex(
+                            atOrAfter: startTime,
                             for: preparedFrameCacheKey
                         ) else {
-                            return nil
+                            return
                         }
-                        return try? EnhancedFrameDiskCache.readFrames(
-                            at: url,
-                            maximumFrameCount: maximumCachedFramesPerGroup
-                        )
-                    }
-                }
 
-                func scheduleCacheReadAhead(from groupIndex: Int) {
-                    for offset in 0..<cacheReadAheadGroupCount {
-                        scheduleCachedRead(groupIndex + offset)
-                    }
-                }
+                        while !Task.isCancelled {
+                            let latestRequest = readerControl.request()
+                            guard latestRequest.generation == handledGeneration else { break }
+                            let queueSnapshot = presentationQueue.snapshot()
+                            guard queueSnapshot.frameCount <
+                                maximumPresentationReserveFrames - (maximumCachedFramesPerGroup ?? 1) else {
+                                try? await Task.sleep(nanoseconds: 8_000_000)
+                                continue
+                            }
 
-                @MainActor
-                func waitForPresentationReserve() async {
-                    while !Task.isCancelled, gen == self.playbackGeneration {
-                        let cachedFrameCount = self.lockCache {
-                            max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
-                        }
-                        guard cachedFrameCount >= maximumPresentationReserveFrames else { return }
-                        try? await Task.sleep(nanoseconds: 4_000_000)
-                    }
-                }
+                            let readSignpost = MacPresentationSignposts.begin("FullCacheDecode")
+                            let frames: [VTFrame]?
+                            do {
+                                let url = try await diskCache.groupFileURL(
+                                    groupIndex,
+                                    for: preparedFrameCacheKey
+                                )
+                                if let url {
+                                    frames = try EnhancedFrameDiskCache.readFrames(
+                                        at: url,
+                                        maximumFrameCount: maximumCachedFramesPerGroup
+                                    )
+                                } else {
+                                    frames = nil
+                                }
+                            } catch {
+                                frames = nil
+                            }
+                            MacPresentationSignposts.end("FullCacheDecode", identifier: readSignpost)
 
-                if let groupIndex = cachedGroupIndex {
-                    scheduleCacheReadAhead(from: groupIndex)
-                }
-                while !Task.isCancelled, gen == self.playbackGeneration,
-                      let groupIndex = cachedGroupIndex {
-                    if self.isPaused && !self.isBuffering {
-                        try? await Task.sleep(nanoseconds: 50_000_000)
-                        continue
-                    }
-                    if self.lastPulledTime != cachedCursorTime {
-                        cachedCursorTime = self.lastPulledTime
-                        cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
-                            atOrAfter: cachedCursorTime,
-                            for: preparedFrameCacheKey
-                        )
-                        cachedReadTasks.values.forEach { $0.cancel() }
-                        cachedReadTasks.removeAll(keepingCapacity: true)
-                        if let groupIndex = cachedGroupIndex {
-                            scheduleCacheReadAhead(from: groupIndex)
-                        }
-                        continue
-                    }
-                    guard let readTask = cachedReadTasks.removeValue(forKey: groupIndex),
-                          let frames = await readTask.value else {
-                        break
-                    }
-                    let nextGroupIndex = groupIndex + 1
-                    scheduleCacheReadAhead(from: nextGroupIndex)
-                    for frame in frames {
-                        #if os(macOS)
-                        let admissionSignpost = MacPresentationSignposts.begin("FullCacheAdmission")
-                        defer {
+                            guard !Task.isCancelled,
+                                  readerControl.request().generation == handledGeneration,
+                                  let frames else {
+                                break
+                            }
+                            let admissionSignpost = MacPresentationSignposts.begin("FullCacheAdmission")
+                            let admitted = presentationQueue.enqueue(
+                                contentsOf: frames,
+                                generation: handledGeneration
+                            )
                             MacPresentationSignposts.end(
                                 "FullCacheAdmission",
                                 identifier: admissionSignpost
                             )
+                            guard admitted else { continue }
+                            presentationQueue.recordCacheHitGroup(generation: handledGeneration)
+                            if notifiedPrerollGeneration != handledGeneration,
+                               presentationQueue.snapshot().frameCount >= prerollFrameCount {
+                                notifiedPrerollGeneration = handledGeneration
+                                Task { @MainActor [weak self] in
+                                    guard let self,
+                                          self.playbackGeneration == gen,
+                                          self.fullCacheReaderControl === readerControl else {
+                                        return
+                                    }
+                                    resumeAfterFramePrerollIfReady()
+                                }
+                            }
+                            groupIndex += 1
                         }
-                        #endif
-                        guard await admitStreamedFrame(frame) else { break }
                     }
-                    self.enhancedCacheHitGroupCount += 1
-                    cachedGroupIndex = nextGroupIndex
-                    // `lastPulledTime` is the external seek signal for this
-                    // loop. Advance the local cursor with it so the next
-                    // iteration does not mistake normal cache progress for a
-                    // seek and restart from the same group.
-                    cachedCursorTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
-                    self.lastPulledTime = cachedCursorTime
-                    // Raw cached groups can be read much faster than the UI
-                    // run loop. Do not let them fill the memory cache beyond
-                    // the bounded presentation reserve.
-                    await waitForPresentationReserve()
                 }
-                cachedReadTasks.values.forEach { $0.cancel() }
+                await withTaskCancellationHandler {
+                    await readerTask.value
+                } onCancel: {
+                    readerTask.cancel()
+                }
+                if self.fullCacheReaderControl === readerControl {
+                    self.fullCacheReaderControl = nil
+                    self.fullCachePresentationQueue = nil
+                }
                 resumeAfterFramePrerollIfReady(force: true)
                 await coordinator.endSession()
                 return

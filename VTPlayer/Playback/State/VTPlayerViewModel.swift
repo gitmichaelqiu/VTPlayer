@@ -354,6 +354,10 @@ final class VTPlayerViewModel {
     @ObservationIgnored var processedFrameCacheStart = 0
     @ObservationIgnored var processedFrameCacheByteUsage = 0
     @ObservationIgnored var processedFrameByteEstimate = 0
+    #if os(macOS)
+    @ObservationIgnored var fullCachePresentationQueue: EnhancedPresentationFrameQueue?
+    @ObservationIgnored var fullCacheReaderControl: EnhancedPresentationReaderControl?
+    #endif
     @ObservationIgnored var producerDecodeWaitMilliseconds = 0.0
     @ObservationIgnored var producerCacheAdmissionMilliseconds = 0.0
     @ObservationIgnored var producerCacheInsertionMilliseconds = 0.0
@@ -402,6 +406,11 @@ final class VTPlayerViewModel {
         processedFrameCache.removeAll(keepingCapacity: true)
         processedFrameCacheStart = 0
         processedFrameCacheByteUsage = 0
+        #if os(macOS)
+        if let control = fullCacheReaderControl {
+            fullCachePresentationQueue?.reset(generation: control.request().generation)
+        }
+        #endif
     }
 
     func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
@@ -609,7 +618,16 @@ final class VTPlayerViewModel {
         return 1.0 / (sourceFrameRate * multiplier)
     }
     var securityScopedURL: URL?
-    var lastPulledTime: CMTime = .zero
+    var lastPulledTime: CMTime = .zero {
+        didSet {
+            #if os(macOS)
+            fullCacheReaderControl?.requestSeek(to: lastPulledTime)
+            if let control = fullCacheReaderControl {
+                fullCachePresentationQueue?.reset(generation: control.request().generation)
+            }
+            #endif
+        }
+    }
     var playerItemObserver: Any?
     var timeJumpedObserver: Any?
     var rateObserver: NSKeyValueObservation?

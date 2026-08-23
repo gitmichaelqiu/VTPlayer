@@ -171,10 +171,12 @@ extension VTPlayerViewModel {
 
         var lastFrameToRender: VTFrame? = nil
         var drained = 0
+        var droppedInterpolatedFrames = 0
         let now = DispatchTime.now()
         let needsTimelineCatchUp = appliedPipelineConfiguration.frameInterpolationLevel > 0 && sourceFrameRate > 0
 
-        self.lockCache {
+        func dequeueFromMemoryCache() {
+            self.lockCache {
             if needsTimelineCatchUp {
                 // 4x output can exceed the display callback rate. Keep media
                 // time authoritative: present the newest frame due now and
@@ -210,7 +212,26 @@ extension VTPlayerViewModel {
                 self.processedFrameCacheStart += 1
             }
             self.compactProcessedFrameCacheIfNeeded()
+            }
         }
+        #if os(macOS)
+        if let presentationQueue = fullCachePresentationQueue {
+            if let selection = presentationQueue.dequeueNewestDue(
+                at: presentationSecs,
+                after: lastRenderedPTS,
+                catchesUpInterpolation: needsTimelineCatchUp
+            ) {
+                lastFrameToRender = selection.frame
+                lastRenderedPTS = selection.frame.presentationTimeStamp
+                drained = 1
+                droppedInterpolatedFrames = selection.droppedInterpolatedFrames
+            }
+        } else {
+            dequeueFromMemoryCache()
+        }
+        #else
+        dequeueFromMemoryCache()
+        #endif
 
         if let frame = lastFrameToRender {
             #if os(macOS)
@@ -234,8 +255,9 @@ extension VTPlayerViewModel {
                 diagnosticPresentedSourceCount += 1
             }
             self.publishCurrentTime(min(currentSecs, duration))
-            if drained > 1 {
-                self.pendingDroppedFrames += drained - 1
+            let droppedFrames = max(0, drained - 1) + droppedInterpolatedFrames
+            if droppedFrames > 0 {
+                self.pendingDroppedFrames += droppedFrames
                 self.publishProcessingDiagnostics()
             }
         }
@@ -271,13 +293,28 @@ extension VTPlayerViewModel {
             var firstFrame: VTFrame? = nil
             var cacheCount = 0
             var cacheBytes = 0
-            self.lockCache {
-                if self.processedFrameCacheStart < self.processedFrameCache.count {
-                    firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
+            func snapshotMemoryCache() {
+                self.lockCache {
+                    if self.processedFrameCacheStart < self.processedFrameCache.count {
+                        firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
+                    }
+                    cacheCount = max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
+                    cacheBytes = self.processedFrameCacheByteUsage
                 }
-                cacheCount = max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
-                cacheBytes = self.processedFrameCacheByteUsage
             }
+            #if os(macOS)
+            if let presentationQueue = fullCachePresentationQueue {
+                let queueSnapshot = presentationQueue.snapshot(consumeActivity: true)
+                cacheCount = queueSnapshot.frameCount
+                cacheBytes = queueSnapshot.byteUsage
+                producedFramesCount += queueSnapshot.enqueuedFrames
+                enhancedCacheHitGroupCount += queueSnapshot.cacheHitGroups
+            } else {
+                snapshotMemoryCache()
+            }
+            #else
+            snapshotMemoryCache()
+            #endif
 
             let produced = producedFramesCount
             let callbacks = displayLinkTickCount

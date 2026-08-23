@@ -34,6 +34,10 @@ extension VTPlayerViewModel {
         let producer = producerTask
         producerTask?.cancel()
         producerTask = nil
+        #if os(macOS)
+        fullCacheReaderControl = nil
+        fullCachePresentationQueue = nil
+        #endif
         consumerTask?.cancel()
         consumerTask = nil
         endActiveCoordinator(after: producer)
