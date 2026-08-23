@@ -206,6 +206,8 @@ extension VTPlayerViewModel {
             let cacheInsertion = producerCacheInsertionMilliseconds / Double(timingSamples)
             let fiProcessingSamples = max(1, fiProcessingSampleCount)
             let averageFIProcessing = fiProcessingMilliseconds / Double(fiProcessingSamples)
+            let cacheHits = enhancedCacheHitGroupCount
+            let cacheMisses = enhancedCacheMissGroupCount
             #if os(macOS)
             let rendererPerformance = renderer.consumePerformanceSnapshot()
             let drawRate = Double(rendererPerformance.drawAttempts) / diagElapsed
@@ -220,6 +222,12 @@ extension VTPlayerViewModel {
                 NSLog("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             }
             NSLog("PERF: cacheMB=\(cacheBytes / (1024 * 1024)) decodeWaitMs=\(String(format: "%.2f", decodeWait)) cacheWaitMs=\(String(format: "%.2f", cacheAdmission)) cacheInsertMs=\(String(format: "%.2f", cacheInsertion)) samples=\(producerTimingSampleCount)")
+            if let cacheMode = preparedEnhancedFrameCacheMode {
+                let totalCacheGroups = cacheHits + cacheMisses
+                let hitRate = totalCacheGroups > 0 ? Double(cacheHits) / Double(totalCacheGroups) * 100 : 0
+                let hitRateString = String(format: "%.1f", hitRate)
+                NSLog("CACHE: mode=\(cacheMode.rawValue) coverage=\(enhancedCacheCoveragePercent)% hits5s=\(cacheHits) misses5s=\(cacheMisses) hitRate=\(hitRateString)")
+            }
             if fiProcessingSampleCount > 0 {
                 NSLog("FI: processMs=\(String(format: "%.2f", averageFIProcessing)) maxMs=\(String(format: "%.2f", fiProcessingMaximumMilliseconds)) deadlineMisses=\(fiDeadlineMissCount)/\(fiProcessingSampleCount) outputShortfalls=\(fiOutputShortfallCount) budgetMs=\(String(format: "%.2f", sourceFrameRate > 0 ? 1_000.0 / sourceFrameRate : 0))")
             }

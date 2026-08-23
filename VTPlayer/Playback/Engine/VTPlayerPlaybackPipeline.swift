@@ -509,6 +509,7 @@ extension VTPlayerViewModel {
                     for frame in frames {
                         guard await admitStreamedFrame(frame) else { break }
                     }
+                    self.enhancedCacheHitGroupCount += 1
                     cachedGroupIndex = groupIndex + 1
                     self.lastPulledTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
                 }
@@ -623,7 +624,12 @@ extension VTPlayerViewModel {
                     for cachedFrame in cachedFrames {
                         guard await admitStreamedFrame(cachedFrame) else { break }
                     }
+                    self.enhancedCacheHitGroupCount += 1
                     continue
+                }
+
+                if preparedFrameCacheMode == .sparse {
+                    self.enhancedCacheMissGroupCount += 1
                 }
 
                 // Process through the VideoToolbox pipeline

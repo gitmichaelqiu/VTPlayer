@@ -339,6 +339,9 @@ final class VTPlayerViewModel {
     @ObservationIgnored var fiProcessingSampleCount = 0
     @ObservationIgnored var fiDeadlineMissCount = 0
     @ObservationIgnored var fiOutputShortfallCount = 0
+    @ObservationIgnored var enhancedCacheHitGroupCount = 0
+    @ObservationIgnored var enhancedCacheMissGroupCount = 0
+    @ObservationIgnored var enhancedCacheCoveragePercent = 0
     @ObservationIgnored let cacheLock = NSRecursiveLock()
     /// Limit retained presentation frames by bytes, not a fixed frame count.
     /// 4x SR can turn a single 1080p frame into a 33 MP image.
@@ -521,6 +524,8 @@ final class VTPlayerViewModel {
         fiProcessingSampleCount = 0
         fiDeadlineMissCount = 0
         fiOutputShortfallCount = 0
+        enhancedCacheHitGroupCount = 0
+        enhancedCacheMissGroupCount = 0
     }
 
     func recordFIProcessingTiming(
@@ -529,7 +534,7 @@ final class VTPlayerViewModel {
         outputFrameCount: Int,
         expectsInterpolation: Bool
     ) {
-        guard frameInterpolationLevel > 0 else { return }
+        guard appliedPipelineConfiguration.frameInterpolationLevel > 0 else { return }
         fiProcessingMilliseconds += milliseconds
         fiProcessingMaximumMilliseconds = max(fiProcessingMaximumMilliseconds, milliseconds)
         fiProcessingSampleCount += 1

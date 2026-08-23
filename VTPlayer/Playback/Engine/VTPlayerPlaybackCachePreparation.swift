@@ -113,6 +113,9 @@ extension VTPlayerViewModel {
                       self.draftPipelineConfiguration == candidate else { return }
                 self.preparedEnhancedFrameCacheKey = result.key
                 self.preparedEnhancedFrameCacheMode = result.mode
+                self.enhancedCacheCoveragePercent = result.status.coverageBitmap.isEmpty
+                    ? 0
+                    : Int((Double(result.status.coverageBitmap.filter { $0 }.count) / Double(result.status.coverageBitmap.count) * 100).rounded())
                 self.appliedPipelineConfiguration = candidate
                 self.enhancedCachePreparationState = .ready
                 NSLog(
