@@ -4,6 +4,23 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameDiskCacheTests: XCTestCase {
+    func testStatusRequiresEveryGroupInAnExpandedCoveragePlan() {
+        let status = EnhancedFrameCacheStatus(
+            key: EnhancedFrameCacheKey(
+                sourceFingerprint: "fixture",
+                configuration: .disabled
+            ),
+            coverageBitmap: [false, true, false, true],
+            availableGroupIndices: [1, 3],
+            byteCount: 0,
+            preparationIdentifier: nil
+        )
+
+        XCTAssertTrue(status.satisfies(coverage: [false, true, false, true]))
+        XCTAssertFalse(status.satisfies(coverage: [true, true, false, true]))
+        XCTAssertFalse(status.satisfies(coverage: [false, true]))
+    }
+
     func testRawFrameRoundTripPreservesPixelsTimingAndAttachments() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

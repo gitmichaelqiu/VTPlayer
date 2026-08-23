@@ -27,6 +27,13 @@ nonisolated struct EnhancedFrameCacheStatus: Equatable, Sendable {
     var missingGroupIndices: [Int] {
         coverageBitmap.indices.filter { coverageBitmap[$0] && !availableGroupIndices.contains($0) }
     }
+
+    func satisfies(coverage requiredCoverage: [Bool]) -> Bool {
+        guard coverageBitmap.count == requiredCoverage.count else { return false }
+        return requiredCoverage.indices.allSatisfy {
+            !requiredCoverage[$0] || availableGroupIndices.contains($0)
+        }
+    }
 }
 
 nonisolated enum EnhancedFrameDiskCacheError: LocalizedError {
