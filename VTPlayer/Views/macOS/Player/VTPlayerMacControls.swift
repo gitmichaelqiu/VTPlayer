@@ -392,6 +392,14 @@ extension VTPlayerView {
                 .help("Cancel cache preparation")
             }
             .fixedSize()
+        case let .failed(message):
+            Button(action: { viewModel.applyPipelineEnhancements() }) {
+                Label("Retry Cache", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(message)
         default:
             Button(action: { viewModel.applyPipelineEnhancements() }) {
                 Label("Apply", systemImage: "checkmark.circle.fill")
