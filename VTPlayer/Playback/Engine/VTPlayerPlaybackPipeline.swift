@@ -511,6 +511,19 @@ extension VTPlayerViewModel {
                 let maximumCachedFramesPerGroup: Int? = nil
                 NSLog("CACHE: playback mode=full")
                 #endif
+                // A full cache is persistent. Keeping the entire title's raw
+                // pixel buffers resident only competes with presentation for
+                // memory bandwidth and main-actor time. Retain one display
+                // second of frames, with enough headroom for startup.
+                #if os(macOS)
+                let presentationReserveTarget = max(60, screenMaximumFrameRate)
+                #else
+                let presentationReserveTarget = 60
+                #endif
+                let maximumPresentationReserveFrames = max(
+                    initialPrerollFrameCount * 4,
+                    presentationReserveTarget
+                )
                 let cacheReadAheadGroupCount = 3
                 var cachedCursorTime = self.lastPulledTime
                 var cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
@@ -538,6 +551,17 @@ extension VTPlayerViewModel {
                 func scheduleCacheReadAhead(from groupIndex: Int) {
                     for offset in 0..<cacheReadAheadGroupCount {
                         scheduleCachedRead(groupIndex + offset)
+                    }
+                }
+
+                @MainActor
+                func waitForPresentationReserve() async {
+                    while !Task.isCancelled, gen == self.playbackGeneration {
+                        let cachedFrameCount = self.lockCache {
+                            max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
+                        }
+                        guard cachedFrameCount >= maximumPresentationReserveFrames else { return }
+                        try? await Task.sleep(nanoseconds: 4_000_000)
                     }
                 }
 
@@ -581,9 +605,9 @@ extension VTPlayerViewModel {
                     cachedCursorTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
                     self.lastPulledTime = cachedCursorTime
                     // Raw cached groups can be read much faster than the UI
-                    // run loop. Yield once per source group so MTKView keeps
-                    // receiving its requested display callbacks.
-                    await Task.yield()
+                    // run loop. Do not let them fill the memory cache beyond
+                    // the bounded presentation reserve.
+                    await waitForPresentationReserve()
                 }
                 cachedReadTasks.values.forEach { $0.cancel() }
                 resumeAfterFramePrerollIfReady(force: true)
