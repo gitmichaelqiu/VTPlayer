@@ -7,31 +7,69 @@ import MetalKit
 import AppKit
 import Synchronization
 
+struct MacDisplayTickDriverSnapshot: Sendable {
+    var callbacks: Int = 0
+    var scheduled: Int = 0
+    var coalesced: Int = 0
+    var executed: Int = 0
+    var totalMainQueueDelayNanoseconds: UInt64 = 0
+
+    var averageMainQueueDelayMilliseconds: Double {
+        guard executed > 0 else { return 0 }
+        return Double(totalMainQueueDelayNanoseconds) / Double(executed) / 1_000_000
+    }
+}
+
 final class MacDisplayTickDriver: @unchecked Sendable {
     weak var viewModel: VTPlayerViewModel?
     private let isTickPending = Mutex(false)
+    private let metrics = Mutex(MacDisplayTickDriverSnapshot())
+    private let pendingDispatchUptimeNanoseconds = Mutex<UInt64?>(nil)
 
     init(viewModel: VTPlayerViewModel) {
         self.viewModel = viewModel
     }
 
     func scheduleTick() {
+        let callbackUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
         let shouldSchedule = isTickPending.withLock { pending in
+            metrics.withLock { $0.callbacks += 1 }
             guard !pending else { return false }
             pending = true
+            metrics.withLock { $0.scheduled += 1 }
             return true
         }
-        guard shouldSchedule else { return }
+        guard shouldSchedule else {
+            metrics.withLock { $0.coalesced += 1 }
+            return
+        }
+        pendingDispatchUptimeNanoseconds.withLock { $0 = callbackUptimeNanoseconds }
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 defer {
                     self.isTickPending.withLock { $0 = false }
                 }
+                let mainQueueDelayNanoseconds = self.pendingDispatchUptimeNanoseconds.withLock { dispatchedAt in
+                    defer { dispatchedAt = nil }
+                    guard let dispatchedAt else { return UInt64.zero }
+                    return DispatchTime.now().uptimeNanoseconds &- dispatchedAt
+                }
+                self.metrics.withLock { metrics in
+                    metrics.executed += 1
+                    metrics.totalMainQueueDelayNanoseconds &+= mainQueueDelayNanoseconds
+                }
                 guard let viewModel = self.viewModel else { return }
                 viewModel.tickDisplayLink()
                 viewModel.renderer.draw()
             }
+        }
+    }
+
+    func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
+        metrics.withLock { metrics in
+            defer { metrics = MacDisplayTickDriverSnapshot() }
+            return metrics
         }
     }
 }
@@ -356,6 +394,7 @@ extension VTPlayerViewModel {
             let drawableSize = renderer.drawableSize
             let rendererScheduling = renderer.schedulingSnapshot()
             let physicalCadence = macPhysicalDisplayCadenceMonitor?.consumeSnapshot()
+            let displayTickDriver = macDisplayTickDriver?.consumeSnapshot()
             #endif
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
@@ -374,7 +413,7 @@ extension VTPlayerViewModel {
                 NSLog("FI: processMs=\(String(format: "%.2f", averageFIProcessing)) maxMs=\(String(format: "%.2f", fiProcessingMaximumMilliseconds)) deadlineMisses=\(fiDeadlineMissCount)/\(fiProcessingSampleCount) outputShortfalls=\(fiOutputShortfallCount) budgetMs=\(String(format: "%.2f", sourceFrameRate > 0 ? 1_000.0 / sourceFrameRate : 0))")
             }
             #if os(macOS)
-            NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) presentHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
+            NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) driverHz=\(String(format: "%.1f", Double(displayTickDriver?.callbacks ?? 0) / diagElapsed)) scheduledHz=\(String(format: "%.1f", Double(displayTickDriver?.scheduled ?? 0) / diagElapsed)) coalesced=\(displayTickDriver?.coalesced ?? 0) mainQueueDelayMs=\(String(format: "%.2f", displayTickDriver?.averageMainQueueDelayMilliseconds ?? 0)) presentHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
             NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
             #endif
             producedFramesCount = 0
