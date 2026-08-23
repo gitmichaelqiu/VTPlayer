@@ -67,6 +67,7 @@ extension VTPlayerViewModel {
         let pipelineHeight = videoHeight
         let configuration = appliedPipelineConfiguration
         let preparedFrameCacheKey = preparedEnhancedFrameCacheKey
+        let preparedFrameCacheMode = preparedEnhancedFrameCacheMode
         let targetFrameRate = sourceFrameRate * (configuration.frameInterpolationLevel > 0 ? Double(configuration.frameInterpolationLevel) : 1.0)
         #if os(macOS)
         // Request callback headroom for near-60 fps enhanced streams. The
@@ -480,7 +481,7 @@ extension VTPlayerViewModel {
                 return !Task.isCancelled && gen == self.playbackGeneration
             }
 
-            if let preparedFrameCacheKey {
+            if let preparedFrameCacheKey, preparedFrameCacheMode == .full {
                 NSLog("CACHE: playback mode=full")
                 var cachedCursorTime = self.lastPulledTime
                 var cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
@@ -514,6 +515,14 @@ extension VTPlayerViewModel {
                 resumeAfterFramePrerollIfReady(force: true)
                 await coordinator.endSession()
                 return
+            }
+
+            let sparseCacheStatus: EnhancedFrameCacheStatus?
+            if let preparedFrameCacheKey, preparedFrameCacheMode == .sparse {
+                sparseCacheStatus = try? await self.enhancedFrameDiskCache.cachedStatus(for: preparedFrameCacheKey)
+                NSLog("CACHE: playback mode=sparse coverage=%d%%", sparseCacheStatus?.coverageBitmap.filter { $0 }.count ?? 0)
+            } else {
+                sparseCacheStatus = nil
             }
 
             while !Task.isCancelled {
@@ -593,6 +602,29 @@ extension VTPlayerViewModel {
                     continue
                 }
                 #endif
+
+                if let preparedFrameCacheKey,
+                   preparedFrameCacheMode == .sparse,
+                   let sparseCacheStatus,
+                   let groupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
+                       closestTo: vtFrame.presentationTimeStamp,
+                       for: preparedFrameCacheKey
+                   ),
+                   sparseCacheStatus.coverageBitmap.indices.contains(groupIndex),
+                   sparseCacheStatus.coverageBitmap[groupIndex] {
+                    guard await coordinator.advanceSourceHistory(forCachedGroup: vtFrame),
+                          let cachedFrames = try? await self.enhancedFrameDiskCache.readGroup(
+                              groupIndex,
+                              for: preparedFrameCacheKey
+                          ) else {
+                        self.srInitializationError = "Enhanced cache could not restore a required frame group."
+                        break
+                    }
+                    for cachedFrame in cachedFrames {
+                        guard await admitStreamedFrame(cachedFrame) else { break }
+                    }
+                    continue
+                }
 
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()

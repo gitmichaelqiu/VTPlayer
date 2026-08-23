@@ -7,6 +7,7 @@ nonisolated struct EnhancedFrameCachePreparationResult: Sendable {
     var benchmark: EnhancedPipelineBenchmark
     var status: EnhancedFrameCacheStatus
     var totalGroupCount: Int
+    var mode: EnhancedCachePlaybackMode
 }
 
 /// Owns cache preparation off the view model. VideoToolbox processing remains
@@ -87,12 +88,13 @@ actor EnhancedFrameCachePreparer {
         }
     }
 
-    func prepareFullCache(
+    func prepareCache(
         url: URL,
         width: Int,
         height: Int,
         sourceFramesPerSecond: Double,
         estimatedGroupCount: Int,
+        plan: SparseCachePlan,
         configuration: AppliedPipelineConfiguration,
         qualityPrioritization: Int,
         preferSequentialSRFI: Bool,
@@ -104,7 +106,7 @@ actor EnhancedFrameCachePreparer {
         let fingerprint = try EnhancedFrameDiskCache.sourceFingerprint(for: url)
         let key = EnhancedFrameCacheKey(sourceFingerprint: fingerprint, configuration: configuration)
         let preparationIdentifier = UUID()
-        let coverage = Array(repeating: true, count: max(1, estimatedGroupCount))
+        let coverage = plan.coverageBitmap
         let priorCacheStatus = try await diskCache.cachedStatus(for: key)
         if let cached = priorCacheStatus,
            cached.missingGroupIndices.isEmpty {
@@ -112,7 +114,8 @@ actor EnhancedFrameCachePreparer {
                 key: key,
                 benchmark: benchmark,
                 status: cached,
-                totalGroupCount: cached.coverageBitmap.count
+                totalGroupCount: cached.coverageBitmap.count,
+                mode: plan.mode
             )
         }
         let existing = try await diskCache.prepare(
@@ -128,7 +131,8 @@ actor EnhancedFrameCachePreparer {
                 key: key,
                 benchmark: benchmark,
                 status: existing,
-                totalGroupCount: existing.coverageBitmap.count
+                totalGroupCount: existing.coverageBitmap.count,
+                mode: plan.mode
             )
         }
 
@@ -150,7 +154,13 @@ actor EnhancedFrameCachePreparer {
             var writtenBytes = existing.byteCount
             while let frame = try await iterator.next() {
                 try Task.checkCancellation()
-                if !existing.availableGroupIndices.contains(groupIndex) {
+                try await diskCache.recordSourceGroup(
+                    groupIndex,
+                    presentationTime: frame.presentationTimeStamp,
+                    preparationIdentifier: preparationIdentifier
+                )
+                let shouldCacheGroup = coverage.indices.contains(groupIndex) && coverage[groupIndex]
+                if shouldCacheGroup && !existing.availableGroupIndices.contains(groupIndex) {
                     let output = try await coordinator.processFrame(frame)
                     try await diskCache.writeGroup(
                         output,
@@ -180,7 +190,8 @@ actor EnhancedFrameCachePreparer {
                 key: key,
                 benchmark: benchmark,
                 status: status,
-                totalGroupCount: groupIndex
+                totalGroupCount: groupIndex,
+                mode: plan.mode
             )
         } catch {
             await coordinator.endSession()

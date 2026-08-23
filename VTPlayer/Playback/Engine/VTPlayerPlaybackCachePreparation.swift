@@ -87,16 +87,15 @@ extension VTPlayerViewModel {
                     return
                 }
 
-                // Full caching is the only enabled preparation mode until
-                // hybrid FI equivalence has been validated on-device.
                 self.enhancedCachePreparationState = .preparing(progress: 0, bytesWritten: 0)
                 let estimatedBytesPerGroup = max(1, benchmark.averageOutputBytesPerGroup)
-                let result = try await preparer.prepareFullCache(
+                let result = try await preparer.prepareCache(
                     url: url,
                     width: self.videoWidth,
                     height: self.videoHeight,
                     sourceFramesPerSecond: sourceRate,
                     estimatedGroupCount: groupCount,
+                    plan: plan,
                     configuration: candidate,
                     qualityPrioritization: self.qualityPrioritization,
                     preferSequentialSRFI: self.useSequentialSRFIFallback,
@@ -113,10 +112,12 @@ extension VTPlayerViewModel {
                       self.videoURL == url,
                       self.draftPipelineConfiguration == candidate else { return }
                 self.preparedEnhancedFrameCacheKey = result.key
+                self.preparedEnhancedFrameCacheMode = result.mode
                 self.appliedPipelineConfiguration = candidate
                 self.enhancedCachePreparationState = .ready
                 NSLog(
-                    "CACHE: prepared mode=full groups=%d bytes=%lld",
+                    "CACHE: prepared mode=%@ groups=%d bytes=%lld",
+                    result.mode.rawValue,
                     result.totalGroupCount,
                     result.status.byteCount
                 )

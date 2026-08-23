@@ -88,6 +88,7 @@ final class VTPlayerViewModel {
     var enhancedCachePreparationState: EnhancedCachePreparationState = .idle
     @ObservationIgnored let enhancedFrameDiskCache = EnhancedFrameDiskCache()
     @ObservationIgnored var preparedEnhancedFrameCacheKey: EnhancedFrameCacheKey?
+    @ObservationIgnored var preparedEnhancedFrameCacheMode: EnhancedCachePlaybackMode?
     @ObservationIgnored var enhancedCachePreparationTask: Task<Void, Never>?
     @ObservationIgnored var enhancedCachePreparationGeneration: UInt64 = 0
 

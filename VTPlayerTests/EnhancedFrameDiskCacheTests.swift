@@ -178,6 +178,42 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         _ = try await cache.finalizePreparation(preparationIdentifier: secondPreparation)
     }
 
+    func testSparseManifestIndexesUncachedSourceGroupsForSeek() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("sparse-index")
+        let preparation = UUID()
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [false, true, false],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0,
+            preparationIdentifier: preparation
+        )
+        for index in 0..<3 {
+            try await cache.recordSourceGroup(
+                index,
+                presentationTime: CMTime(seconds: Double(index), preferredTimescale: 600),
+                preparationIdentifier: preparation
+            )
+        }
+        try await cache.writeGroup(
+            [try makeFrame(value: 2, time: CMTime(seconds: 1, preferredTimescale: 600), interpolated: false)],
+            for: 1,
+            sourcePresentationTime: CMTime(seconds: 1, preferredTimescale: 600),
+            preparationIdentifier: preparation
+        )
+        let status = try await cache.finalizePreparation(preparationIdentifier: preparation)
+
+        XCTAssertEqual(status.availableGroupIndices, [1])
+        let seekGroup = try await cache.groupIndex(
+            closestTo: CMTime(seconds: 2, preferredTimescale: 600),
+            for: key
+        )
+        XCTAssertEqual(seekGroup, 2)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
     }
