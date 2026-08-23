@@ -571,6 +571,37 @@ extension VTPlayerViewModel {
                         ) else {
                             return
                         }
+                        var readTasks: [Int: Task<[VTFrame]?, Never>] = [:]
+
+                        func scheduleRead(_ index: Int) {
+                            guard readTasks[index] == nil else { return }
+                            readTasks[index] = Task.detached(priority: .userInitiated) {
+                                let readSignpost = MacPresentationSignposts.begin("FullCacheDecode")
+                                defer {
+                                    MacPresentationSignposts.end(
+                                        "FullCacheDecode",
+                                        identifier: readSignpost
+                                    )
+                                }
+                                guard let url = try? await diskCache.groupFileURL(
+                                    index,
+                                    for: preparedFrameCacheKey
+                                ) else {
+                                    return nil
+                                }
+                                return try? EnhancedFrameDiskCache.readFrames(
+                                    at: url,
+                                    maximumFrameCount: maximumCachedFramesPerGroup
+                                )
+                            }
+                        }
+
+                        func scheduleReadAhead(from index: Int) {
+                            for offset in 0..<3 {
+                                scheduleRead(index + offset)
+                            }
+                        }
+                        scheduleReadAhead(from: groupIndex)
 
                         while !Task.isCancelled {
                             let latestRequest = readerControl.request()
@@ -582,31 +613,16 @@ extension VTPlayerViewModel {
                                 continue
                             }
 
-                            let readSignpost = MacPresentationSignposts.begin("FullCacheDecode")
-                            let frames: [VTFrame]?
-                            do {
-                                let url = try await diskCache.groupFileURL(
-                                    groupIndex,
-                                    for: preparedFrameCacheKey
-                                )
-                                if let url {
-                                    frames = try EnhancedFrameDiskCache.readFrames(
-                                        at: url,
-                                        maximumFrameCount: maximumCachedFramesPerGroup
-                                    )
-                                } else {
-                                    frames = nil
-                                }
-                            } catch {
-                                frames = nil
+                            guard let readTask = readTasks.removeValue(forKey: groupIndex) else {
+                                break
                             }
-                            MacPresentationSignposts.end("FullCacheDecode", identifier: readSignpost)
-
+                            let frames = await readTask.value
                             guard !Task.isCancelled,
                                   readerControl.request().generation == handledGeneration,
                                   let frames else {
                                 break
                             }
+                            scheduleReadAhead(from: groupIndex + 1)
                             let admissionSignpost = MacPresentationSignposts.begin("FullCacheAdmission")
                             let admitted = presentationQueue.enqueue(
                                 contentsOf: frames,
@@ -632,6 +648,7 @@ extension VTPlayerViewModel {
                             }
                             groupIndex += 1
                         }
+                        readTasks.values.forEach { $0.cancel() }
                     }
                 }
                 await withTaskCancellationHandler {
