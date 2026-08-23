@@ -336,6 +336,8 @@ final class VTPlayerViewModel {
     #if os(macOS)
     @ObservationIgnored var macDisplayLink: CVDisplayLink?
     @ObservationIgnored var macDisplayTickDriver: MacDisplayTickDriver?
+    @ObservationIgnored var macMetalDisplayLink: CAMetalDisplayLink?
+    @ObservationIgnored var macMetalDisplayTickDriver: MacMetalDisplayTickDriver?
     #endif
     @ObservationIgnored var presentedFramesCount = 0
     @ObservationIgnored var diagnosticPresentedFramesCount = 0

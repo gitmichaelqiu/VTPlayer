@@ -34,6 +34,22 @@ final class MacDisplayTickDriver: @unchecked Sendable {
     }
 }
 
+@available(macOS 14.0, *)
+@MainActor
+final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
+    weak var viewModel: VTPlayerViewModel?
+
+    init(viewModel: VTPlayerViewModel) {
+        self.viewModel = viewModel
+    }
+
+    func metalDisplayLink(_: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        guard let viewModel else { return }
+        viewModel.tickDisplayLink()
+        viewModel.renderer.draw(to: update.drawable)
+    }
+}
+
 private let macDisplayLinkCallback: CVDisplayLinkOutputCallback = {
     _, _, _, _, _, userInfo in
     guard let userInfo else { return kCVReturnError }
@@ -59,7 +75,28 @@ extension VTPlayerViewModel {
 
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
-        guard macDisplayLink == nil else { return }
+        guard macDisplayLink == nil, macMetalDisplayLink == nil else { return }
+        if #available(macOS 14.0, *),
+           let metalLayer = renderer.layer as? CAMetalLayer {
+            let driver = MacMetalDisplayTickDriver(viewModel: self)
+            let link = CAMetalDisplayLink(metalLayer: metalLayer)
+            let maximumRate = Float(max(60, renderer.window?.screen?.maximumFramesPerSecond ?? 60))
+            link.preferredFrameLatency = 1
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: maximumRate,
+                maximum: maximumRate,
+                preferred: maximumRate
+            )
+            link.delegate = driver
+            link.add(to: .main, forMode: .common)
+            link.isPaused = false
+            renderer.onDisplayTick = nil
+            renderer.setExternalDisplayScheduling(true)
+            macMetalDisplayTickDriver = driver
+            macMetalDisplayLink = link
+            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%.0f", maximumRate)
+            return
+        }
         var link: CVDisplayLink?
         let screenNumber = renderer.window?.screen?.deviceDescription[
             NSDeviceDescriptionKey("NSScreenNumber")

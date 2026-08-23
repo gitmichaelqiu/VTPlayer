@@ -284,8 +284,7 @@ public final class VTMetalRenderer: MTKView {
     public override func draw(_ rect: CGRect) {
         performanceAggregate.recordDrawAttempt()
         let drawableAcquisitionStart = DispatchTime.now()
-        guard let drawable = currentDrawable,
-              let queue = commandQueue else {
+        guard let drawable = currentDrawable else {
             return
         }
         performanceAggregate.recordDrawableAcquisition(start: drawableAcquisitionStart)
@@ -297,7 +296,25 @@ public final class VTMetalRenderer: MTKView {
         onDisplayTick?()
         #endif
 
+        drawCurrentFrame(to: drawable)
+    }
+
+    #if os(macOS)
+    /// Encodes directly into the drawable provided by CAMetalDisplayLink.
+    /// This avoids a second drawable acquisition between the display callback
+    /// and presentation.
+    public func draw(to drawable: CAMetalDrawable) {
+        performanceAggregate.recordDrawAttempt()
+        let drawableAcquisitionStart = DispatchTime.now()
+        performanceAggregate.recordDrawableAcquisition(start: drawableAcquisitionStart)
+        drawCurrentFrame(to: drawable)
+    }
+    #endif
+
+    private func drawCurrentFrame(to drawable: CAMetalDrawable) {
         guard needsDrawableUpdate else { return }
+
+        guard let queue = commandQueue else { return }
 
         if currentPixelBuffer == nil {
             let encodeStart = DispatchTime.now()
