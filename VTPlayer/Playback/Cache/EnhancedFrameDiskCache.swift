@@ -57,6 +57,7 @@ nonisolated enum EnhancedFrameDiskCacheError: LocalizedError {
 /// cache is never modified in place: preparation writes an adjacent partial
 /// directory and atomically promotes it only after its manifest is complete.
 actor EnhancedFrameDiskCache {
+    static let shared = EnhancedFrameDiskCache()
     private static let manifestFilename = "manifest.json"
     private static let accessPersistenceInterval: TimeInterval = 30
 
@@ -104,6 +105,7 @@ actor EnhancedFrameDiskCache {
     private var preparedManifest: Manifest?
     private var activePreparationIdentifier: UUID?
     private var completedManifests: [String: Manifest] = [:]
+    private var activePlaybackCounts: [EnhancedFrameCacheKey: Int] = [:]
 
     init(rootDirectory: URL? = nil, fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -338,6 +340,45 @@ actor EnhancedFrameDiskCache {
         return status(for: manifest)
     }
 
+    func beginPlayback(for key: EnhancedFrameCacheKey) {
+        activePlaybackCounts[key, default: 0] += 1
+    }
+
+    func endPlayback(for key: EnhancedFrameCacheKey) {
+        guard let count = activePlaybackCounts[key] else { return }
+        if count > 1 {
+            activePlaybackCounts[key] = count - 1
+        } else {
+            activePlaybackCounts.removeValue(forKey: key)
+        }
+    }
+
+    func diskUsageBytes() throws -> Int64 {
+        guard fileManager.fileExists(atPath: rootDirectory.path) else { return 0 }
+        return allocatedSize(of: rootDirectory)
+    }
+
+    /// Removes completed cache entries that are not currently serving a
+    /// playback producer. Active and partial entries remain intact.
+    func clearUnpinnedCaches() throws -> Int64 {
+        guard fileManager.fileExists(atPath: rootDirectory.path) else { return 0 }
+        let protectedDirectories = Set(activePlaybackCounts.keys.map(\.directoryName))
+        let directories = try fileManager.contentsOfDirectory(
+            at: rootDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        for directory in directories where directory.pathExtension.isEmpty {
+            guard !directory.lastPathComponent.hasSuffix(".partial"),
+                  !protectedDirectories.contains(directory.lastPathComponent) else {
+                continue
+            }
+            try fileManager.removeItem(at: directory)
+            completedManifests.removeValue(forKey: directory.lastPathComponent)
+        }
+        return try diskUsageBytes()
+    }
+
     func groupIndex(atOrAfter presentationTime: CMTime, for key: EnhancedFrameCacheKey) throws -> Int? {
         guard let manifest = try completedManifest(for: key), manifest.key == key else { return nil }
         let seconds = CMTimeGetSeconds(presentationTime)
@@ -416,7 +457,10 @@ actor EnhancedFrameDiskCache {
         if availableBeforeEviction >= requiredAdditionalBytes { return availableBeforeEviction }
 
         for (directory, _, size) in entries
-            .filter({ $0.0.lastPathComponent != directoryName })
+            .filter({
+                $0.0.lastPathComponent != directoryName
+                    && activePlaybackCounts[$0.1.key] == nil
+            })
             .sorted(by: { $0.1.lastAccess < $1.1.lastAccess }) {
             try fileManager.removeItem(at: directory)
             completedManifests.removeValue(forKey: directory.lastPathComponent)

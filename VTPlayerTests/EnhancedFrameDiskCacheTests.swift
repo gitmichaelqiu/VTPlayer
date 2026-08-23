@@ -231,8 +231,83 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertEqual(seekGroup, 2)
     }
 
+    func testClearRemovesCompletedUnpinnedCachesAndReportsUsage() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("clear-unpinned")
+
+        try await completeCache(cache, key: key)
+        let initialUsage = try await cache.diskUsageBytes()
+        XCTAssertGreaterThan(initialUsage, 0)
+
+        let remainingUsage = try await cache.clearUnpinnedCaches()
+        let status = try await cache.cachedStatus(for: key)
+        XCTAssertEqual(remainingUsage, 0)
+        XCTAssertNil(status)
+    }
+
+    func testClearRetainsCachePinnedByActivePlayback() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("clear-pinned")
+
+        try await completeCache(cache, key: key)
+        await cache.beginPlayback(for: key)
+
+        let pinnedUsage = try await cache.clearUnpinnedCaches()
+        let pinnedStatus = try await cache.cachedStatus(for: key)
+        XCTAssertGreaterThan(pinnedUsage, 0)
+        XCTAssertNotNil(pinnedStatus)
+
+        await cache.endPlayback(for: key)
+        let remainingUsage = try await cache.clearUnpinnedCaches()
+        let status = try await cache.cachedStatus(for: key)
+        XCTAssertEqual(remainingUsage, 0)
+        XCTAssertNil(status)
+    }
+
+    func testOverlappingPlaybackPinsRetainCacheUntilEveryProducerEnds() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("overlapping-pins")
+
+        try await completeCache(cache, key: key)
+        await cache.beginPlayback(for: key)
+        await cache.beginPlayback(for: key)
+        await cache.endPlayback(for: key)
+
+        let retainedUsage = try await cache.clearUnpinnedCaches()
+        let retainedStatus = try await cache.cachedStatus(for: key)
+        XCTAssertGreaterThan(retainedUsage, 0)
+        XCTAssertNotNil(retainedStatus)
+
+        await cache.endPlayback(for: key)
+        let remainingUsage = try await cache.clearUnpinnedCaches()
+        XCTAssertEqual(remainingUsage, 0)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
+    }
+
+    private func completeCache(
+        _ cache: EnhancedFrameDiskCache,
+        key: EnhancedFrameCacheKey
+    ) async throws {
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0
+        )
+        try await cache.writeGroup(
+            [try makeFrame(value: 1, time: .zero, interpolated: false)],
+            for: 0
+        )
+        _ = try await cache.finalizePreparation()
     }
 
     private func makeTemporaryDirectory() throws -> URL {

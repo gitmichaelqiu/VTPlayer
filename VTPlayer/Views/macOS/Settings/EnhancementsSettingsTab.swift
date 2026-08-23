@@ -11,6 +11,11 @@ struct EnhancementsSettingsTab: View {
     @AppStorage("VTDefaultHDRColorfulness") private var defaultHDRColorfulness = 0.0
     @AppStorage("VTEnhancedFrameCacheMemoryMB") private var enhancedFrameCacheMemoryMB = 1_024
     @AppStorage("VTEnhancedFrameCacheDiskGB") private var enhancedFrameCacheDiskGB = 20
+    @State private var diskCacheUsageBytes: Int64 = 0
+    @State private var isClearingDiskCache = false
+    @State private var showClearDiskCacheConfirmation = false
+    @State private var diskCacheError: String?
+    private let diskCache = EnhancedFrameDiskCache.shared
 
     var body: some View {
         SettingsContainer(.enhancements) {
@@ -47,6 +52,33 @@ struct EnhancementsSettingsTab: View {
                         step: 1.0,
                         valueString: { String(format: "%.0f GB", $0) }
                     )
+
+                    HStack {
+                        Label("Current disk usage", systemImage: "internaldrive")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: diskCacheUsageBytes, countStyle: .file))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Button("Clear Disk Cache", role: .destructive) {
+                            showClearDiskCacheConfirmation = true
+                        }
+                        .disabled(isClearingDiskCache || diskCacheUsageBytes == 0)
+
+                        if isClearingDiskCache {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+
+                    if let diskCacheError {
+                        Text(diskCacheError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 SettingsSection("Postprocessing") {
@@ -116,6 +148,35 @@ struct EnhancementsSettingsTab: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .task {
+            await refreshDiskCacheUsage()
+        }
+        .confirmationDialog("Clear Enhanced Frame Disk Cache?", isPresented: $showClearDiskCacheConfirmation) {
+            Button("Clear Disk Cache", role: .destructive) {
+                clearDiskCache()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Cached enhanced frames will be removed. Frames currently being played or prepared are retained until they are no longer in use.")
+        }
+    }
+
+    @MainActor
+    private func refreshDiskCacheUsage() async {
+        diskCacheUsageBytes = (try? await diskCache.diskUsageBytes()) ?? 0
+    }
+
+    private func clearDiskCache() {
+        isClearingDiskCache = true
+        diskCacheError = nil
+        Task { @MainActor in
+            do {
+                diskCacheUsageBytes = try await diskCache.clearUnpinnedCaches()
+            } catch {
+                diskCacheError = error.localizedDescription
+            }
+            isClearingDiskCache = false
         }
     }
 }

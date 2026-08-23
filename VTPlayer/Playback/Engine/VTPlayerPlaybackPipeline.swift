@@ -68,6 +68,7 @@ extension VTPlayerViewModel {
         let configuration = appliedPipelineConfiguration
         let preparedFrameCacheKey = preparedEnhancedFrameCacheKey
         let preparedFrameCacheMode = preparedEnhancedFrameCacheMode
+        let diskCache = enhancedFrameDiskCache
         let targetFrameRate = sourceFrameRate * (configuration.frameInterpolationLevel > 0 ? Double(configuration.frameInterpolationLevel) : 1.0)
         #if os(macOS)
         // Request callback headroom for near-60 fps enhanced streams. The
@@ -133,6 +134,16 @@ extension VTPlayerViewModel {
 
         producerTask = Task { @MainActor [weak self] in
             guard let self = self else { return }
+            if let preparedFrameCacheKey {
+                await diskCache.beginPlayback(for: preparedFrameCacheKey)
+            }
+            defer {
+                if let preparedFrameCacheKey {
+                    Task {
+                        await diskCache.endPlayback(for: preparedFrameCacheKey)
+                    }
+                }
+            }
             var pausedForInitialization = false
 
             @MainActor

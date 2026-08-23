@@ -95,7 +95,7 @@ final class VTPlayerViewModel {
             false
         }
     }
-    @ObservationIgnored let enhancedFrameDiskCache = EnhancedFrameDiskCache()
+    @ObservationIgnored let enhancedFrameDiskCache = EnhancedFrameDiskCache.shared
     @ObservationIgnored var preparedEnhancedFrameCacheKey: EnhancedFrameCacheKey?
     @ObservationIgnored var preparedEnhancedFrameCacheMode: EnhancedCachePlaybackMode?
     @ObservationIgnored var enhancedCachePreparationTask: Task<Void, Never>?
