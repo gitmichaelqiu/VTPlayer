@@ -488,6 +488,15 @@ extension VTPlayerViewModel {
                     atOrAfter: cachedCursorTime,
                     for: preparedFrameCacheKey
                 )
+                var cachedReadTask: Task<[VTFrame]?, Never>?
+                if let groupIndex = cachedGroupIndex {
+                    cachedReadTask = Task { [enhancedFrameDiskCache] in
+                        try? await enhancedFrameDiskCache.readGroup(
+                            groupIndex,
+                            for: preparedFrameCacheKey
+                        )
+                    }
+                }
                 while !Task.isCancelled, gen == self.playbackGeneration,
                       let groupIndex = cachedGroupIndex {
                     if self.isPaused && !self.isBuffering {
@@ -500,19 +509,35 @@ extension VTPlayerViewModel {
                             atOrAfter: cachedCursorTime,
                             for: preparedFrameCacheKey
                         )
+                        cachedReadTask?.cancel()
+                        if let groupIndex = cachedGroupIndex {
+                            cachedReadTask = Task { [enhancedFrameDiskCache] in
+                                try? await enhancedFrameDiskCache.readGroup(
+                                    groupIndex,
+                                    for: preparedFrameCacheKey
+                                )
+                            }
+                        } else {
+                            cachedReadTask = nil
+                        }
                         continue
                     }
-                    guard let frames = try? await self.enhancedFrameDiskCache.readGroup(
-                        groupIndex,
-                        for: preparedFrameCacheKey
-                    ) else { break }
+                    guard let frames = await cachedReadTask?.value else { break }
+                    let nextGroupIndex = groupIndex + 1
+                    cachedReadTask = Task { [enhancedFrameDiskCache] in
+                        try? await enhancedFrameDiskCache.readGroup(
+                            nextGroupIndex,
+                            for: preparedFrameCacheKey
+                        )
+                    }
                     for frame in frames {
                         guard await admitStreamedFrame(frame) else { break }
                     }
                     self.enhancedCacheHitGroupCount += 1
-                    cachedGroupIndex = groupIndex + 1
+                    cachedGroupIndex = nextGroupIndex
                     self.lastPulledTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
                 }
+                cachedReadTask?.cancel()
                 resumeAfterFramePrerollIfReady(force: true)
                 await coordinator.endSession()
                 return
