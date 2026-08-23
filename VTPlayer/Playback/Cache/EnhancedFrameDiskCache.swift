@@ -51,6 +51,7 @@ nonisolated enum EnhancedFrameDiskCacheError: LocalizedError {
 /// directory and atomically promotes it only after its manifest is complete.
 actor EnhancedFrameDiskCache {
     private static let manifestFilename = "manifest.json"
+    private static let accessPersistenceInterval: TimeInterval = 30
 
     private struct Manifest: Codable, Sendable {
         var schemaVersion: Int
@@ -95,6 +96,7 @@ actor EnhancedFrameDiskCache {
     private var partialDirectory: URL?
     private var preparedManifest: Manifest?
     private var activePreparationIdentifier: UUID?
+    private var completedManifests: [String: Manifest] = [:]
 
     init(rootDirectory: URL? = nil, fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -141,7 +143,7 @@ actor EnhancedFrameDiskCache {
     ) throws -> EnhancedFrameCacheStatus {
         try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         let existingDirectory = directory(for: key)
-        let existingManifest = try loadManifest(at: existingDirectory)
+        let existingManifest = try completedManifest(for: key)
         let availableBytes = try evictForCapacity(
             requiredAdditionalBytes: requiredAdditionalBytes,
             diskBudgetBytes: diskBudgetBytes,
@@ -291,6 +293,7 @@ actor EnhancedFrameDiskCache {
         self.partialDirectory = nil
         self.preparedManifest = nil
         self.activePreparationIdentifier = nil
+        completedManifests[manifest.key.directoryName] = manifest
         return status(for: manifest)
     }
 
@@ -306,25 +309,30 @@ actor EnhancedFrameDiskCache {
 
     func readGroup(_ groupIndex: Int, for key: EnhancedFrameCacheKey) throws -> [VTFrame]? {
         let directory = directory(for: key)
-        guard var manifest = try loadManifest(at: directory), manifest.key == key,
+        guard var manifest = try completedManifest(for: key), manifest.key == key,
               let entry = manifest.groups.first(where: { $0.groupIndex == groupIndex }),
               let filename = entry.filename else {
             return nil
         }
         let data = try Data(contentsOf: directory.appendingPathComponent(filename))
         let frames = try decode(data)
-        manifest.lastAccess = .now
-        try writeManifest(manifest, to: directory)
+        let now = Date.now
+        let directoryName = key.directoryName
+        if now.timeIntervalSince(manifest.lastAccess) >= Self.accessPersistenceInterval {
+            manifest.lastAccess = now
+            try writeManifest(manifest, to: directory)
+            completedManifests[directoryName] = manifest
+        }
         return frames
     }
 
     func cachedStatus(for key: EnhancedFrameCacheKey) throws -> EnhancedFrameCacheStatus? {
-        guard let manifest = try loadManifest(at: directory(for: key)), manifest.key == key else { return nil }
+        guard let manifest = try completedManifest(for: key), manifest.key == key else { return nil }
         return status(for: manifest)
     }
 
     func groupIndex(atOrAfter presentationTime: CMTime, for key: EnhancedFrameCacheKey) throws -> Int? {
-        guard let manifest = try loadManifest(at: directory(for: key)), manifest.key == key else { return nil }
+        guard let manifest = try completedManifest(for: key), manifest.key == key else { return nil }
         let seconds = CMTimeGetSeconds(presentationTime)
         guard seconds.isFinite else { return manifest.groups.first?.groupIndex }
         return manifest.groups.first(where: { $0.sourcePresentationSeconds >= seconds })?.groupIndex
@@ -332,7 +340,7 @@ actor EnhancedFrameDiskCache {
     }
 
     func groupIndex(closestTo presentationTime: CMTime, for key: EnhancedFrameCacheKey) throws -> Int? {
-        guard let manifest = try loadManifest(at: directory(for: key)), manifest.key == key else { return nil }
+        guard let manifest = try completedManifest(for: key), manifest.key == key else { return nil }
         let seconds = CMTimeGetSeconds(presentationTime)
         guard seconds.isFinite else { return nil }
         return manifest.groups.min {
@@ -342,6 +350,18 @@ actor EnhancedFrameDiskCache {
 
     private func directory(for key: EnhancedFrameCacheKey) -> URL {
         rootDirectory.appendingPathComponent(key.directoryName, isDirectory: true)
+    }
+
+    private func completedManifest(for key: EnhancedFrameCacheKey) throws -> Manifest? {
+        let directoryName = key.directoryName
+        if let manifest = completedManifests[directoryName] {
+            return manifest
+        }
+        guard let manifest = try loadManifest(at: directory(for: key)), manifest.key == key else {
+            return nil
+        }
+        completedManifests[directoryName] = manifest
+        return manifest
     }
 
     private func status(
@@ -392,6 +412,7 @@ actor EnhancedFrameDiskCache {
             .filter({ $0.0.lastPathComponent != directoryName })
             .sorted(by: { $0.1.lastAccess < $1.1.lastAccess }) {
             try fileManager.removeItem(at: directory)
+            completedManifests.removeValue(forKey: directory.lastPathComponent)
             usedBytes -= size
             let available = max(0, diskBudgetBytes - usedBytes)
             if available >= requiredAdditionalBytes { return available }
