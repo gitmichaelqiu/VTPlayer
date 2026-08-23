@@ -22,14 +22,16 @@ final class MacDisplayTickDriver: @unchecked Sendable {
             return true
         }
         guard shouldSchedule else { return }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer {
-                self.isTickPending.withLock { $0 = false }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                defer {
+                    self.isTickPending.withLock { $0 = false }
+                }
+                guard let viewModel = self.viewModel else { return }
+                viewModel.tickDisplayLink()
+                viewModel.renderer.draw()
             }
-            guard let viewModel = self.viewModel else { return }
-            viewModel.tickDisplayLink()
-            viewModel.renderer.draw()
         }
     }
 }
