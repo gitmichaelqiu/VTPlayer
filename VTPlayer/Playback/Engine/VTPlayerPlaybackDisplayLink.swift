@@ -97,6 +97,32 @@ extension VTPlayerViewModel {
         let displayID = renderer.window?.screen?.deviceDescription[
             NSDeviceDescriptionKey("NSScreenNumber")
         ].flatMap { ($0 as? NSNumber).map(CGDirectDisplayID.init(truncating:)) }
+        if #available(macOS 14.0, *),
+           let metalLayer = renderer.layer as? CAMetalLayer {
+            renderer.setExternalDisplayScheduling(true)
+            renderer.onDisplayTick = nil
+            let driver = MacMetalDisplayTickDriver(viewModel: self)
+            let metalDisplayLink = CAMetalDisplayLink(metalLayer: metalLayer)
+            let maximumRate = Float(max(60, renderer.window?.screen?.maximumFramesPerSecond ?? 60))
+            metalDisplayLink.preferredFrameLatency = 3
+            metalDisplayLink.preferredFrameRateRange = CAFrameRateRange(
+                minimum: maximumRate,
+                maximum: maximumRate,
+                preferred: maximumRate
+            )
+            metalDisplayLink.delegate = driver
+            metalDisplayLink.add(to: .main, forMode: .common)
+            metalDisplayLink.isPaused = false
+            macMetalDisplayTickDriver = driver
+            macMetalDisplayLink = metalDisplayLink
+            if macPhysicalDisplayCadenceMonitor == nil {
+                let monitor = MacPhysicalDisplayCadenceMonitor(displayID: displayID)
+                monitor?.start()
+                macPhysicalDisplayCadenceMonitor = monitor
+            }
+            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%.0f", maximumRate)
+            return
+        }
         // The renderer's preferred rate is not a scheduling guarantee. Its
         // internal callback can coalesce below the panel's active cadence, so
         // manual, still-vsynced draws use the physical display link instead.
