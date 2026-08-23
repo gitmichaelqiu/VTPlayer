@@ -319,15 +319,24 @@ public final class VTMetalRenderer: MTKView {
     /// Encodes directly into the drawable provided by CAMetalDisplayLink.
     /// This avoids a second drawable acquisition between the display callback
     /// and presentation.
-    public func draw(to drawable: CAMetalDrawable) {
+    public func draw(
+        to drawable: CAMetalDrawable,
+        targetPresentationHostTime: CFTimeInterval? = nil
+    ) {
         performanceAggregate.recordDrawAttempt()
         let drawableAcquisitionStart = DispatchTime.now()
         performanceAggregate.recordDrawableAcquisition(start: drawableAcquisitionStart)
-        drawCurrentFrame(to: drawable)
+        drawCurrentFrame(
+            to: drawable,
+            targetPresentationHostTime: targetPresentationHostTime
+        )
     }
     #endif
 
-    private func drawCurrentFrame(to drawable: CAMetalDrawable) {
+    private func drawCurrentFrame(
+        to drawable: CAMetalDrawable,
+        targetPresentationHostTime: CFTimeInterval? = nil
+    ) {
         guard needsDrawableUpdate else { return }
 
         guard let queue = commandQueue else { return }
@@ -346,7 +355,11 @@ public final class VTMetalRenderer: MTKView {
             renderPassDescriptor.colorAttachments[0].storeAction = .store
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
             encoder.endEncoding()
-            commandBuffer.present(drawable)
+            if let targetPresentationHostTime {
+                commandBuffer.present(drawable, atTime: targetPresentationHostTime)
+            } else {
+                commandBuffer.present(drawable)
+            }
             trackGPUCompletion(of: commandBuffer)
             commandBuffer.commit()
             performanceAggregate.recordCPUEncode(start: encodeStart)
@@ -469,7 +482,11 @@ public final class VTMetalRenderer: MTKView {
                 : CGColorSpaceCreateDeviceRGB()
         )
 
-        commandBuffer.present(drawable)
+        if let targetPresentationHostTime {
+            commandBuffer.present(drawable, atTime: targetPresentationHostTime)
+        } else {
+            commandBuffer.present(drawable)
+        }
         trackGPUCompletion(of: commandBuffer)
         commandBuffer.commit()
         performanceAggregate.recordCPUEncode(start: encodeStart)

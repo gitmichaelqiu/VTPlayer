@@ -37,6 +37,7 @@ extension VTPlayerViewModel {
         pipelineRestartAnchorPTS = nil
         stopEnhancedAudioPlayback()
         #if os(macOS)
+        stopDisplayLinkIfNeeded()
         pipelinePresentationReady = false
         renderer.setRenderingActive(true)
         setNativeVideoEnabled(true)
@@ -449,6 +450,9 @@ extension VTPlayerViewModel {
                 self.isBuffering = false
                 self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
                 player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
+                #if os(macOS)
+                self.startDisplayLinkIfNeeded()
+                #endif
             }
 
             @MainActor
@@ -907,7 +911,13 @@ extension VTPlayerViewModel {
             activeVideoURL: videoURL,
             activePlayer: player
         ) else { return }
+        #if os(macOS)
+        if !isBuffering {
+            startDisplayLinkIfNeeded()
+        }
+        #else
         startDisplayLinkIfNeeded()
+        #endif
 
         audioSyncTask?.cancel()
         audioSyncTask = Task {

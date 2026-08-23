@@ -4,6 +4,50 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedPresentationFrameQueueTests: XCTestCase {
+    func testDisplaySchedulingWaitsForPreroll() {
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: true,
+            fullCacheFrameCount: 8
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false,
+            fullCacheFrameCount: 0
+        ))
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false,
+            fullCacheFrameCount: 8
+        ))
+    }
+
+    func testDisplayTargetClockExtrapolatesToPredictedPresentation() {
+        XCTAssertEqual(
+            DisplayTargetClock.presentationSeconds(
+                currentPresentationSeconds: 12,
+                targetHostTime: 20.008,
+                currentHostTime: 20,
+                playbackRate: 1
+            ),
+            12.008,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(
+            DisplayTargetClock.presentationSeconds(
+                currentPresentationSeconds: 12,
+                targetHostTime: 20.008,
+                currentHostTime: 20,
+                playbackRate: 2
+            ),
+            12.016,
+            accuracy: 0.000_001
+        )
+    }
+
     func testNewestDueSelectionDropsOnlySupersededInterpolation() throws {
         let queue = EnhancedPresentationFrameQueue(
             capacityBytes: 1_000_000,

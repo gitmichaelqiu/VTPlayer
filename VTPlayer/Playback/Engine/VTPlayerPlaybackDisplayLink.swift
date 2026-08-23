@@ -7,6 +7,36 @@ import MetalKit
 import AppKit
 import Synchronization
 
+struct EnhancedDisplaySchedulingPolicy {
+    nonisolated static func shouldStart(
+        isPlaying: Bool,
+        isPaused: Bool,
+        isBuffering: Bool,
+        fullCacheFrameCount: Int?
+    ) -> Bool {
+        guard isPlaying, !isPaused, !isBuffering else { return false }
+        return fullCacheFrameCount.map { $0 > 0 } ?? true
+    }
+}
+
+struct DisplayTargetClock {
+    nonisolated static func presentationSeconds(
+        currentPresentationSeconds: Double,
+        targetHostTime: CFTimeInterval?,
+        currentHostTime: CFTimeInterval,
+        playbackRate: Double
+    ) -> Double {
+        guard let targetHostTime,
+              targetHostTime.isFinite,
+              currentHostTime.isFinite,
+              targetHostTime > currentHostTime else {
+            return currentPresentationSeconds
+        }
+        return currentPresentationSeconds +
+            (targetHostTime - currentHostTime) * max(0, playbackRate)
+    }
+}
+
 struct MacDisplayTickDriverSnapshot: Sendable {
     var callbacks: Int = 0
     var scheduled: Int = 0
@@ -87,8 +117,11 @@ final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
     func metalDisplayLink(_: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
         callbackCount += 1
         guard let viewModel else { return }
-        viewModel.tickDisplayLink()
-        viewModel.renderer.draw(to: update.drawable)
+        viewModel.tickDisplayLink(targetPresentationHostTime: update.targetPresentationTimestamp)
+        viewModel.renderer.draw(
+            to: update.drawable,
+            targetPresentationHostTime: update.targetPresentationTimestamp
+        )
     }
 
     func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
@@ -148,6 +181,13 @@ extension VTPlayerViewModel {
             return
         }
         #else
+        let fullCacheFrameCount = fullCachePresentationQueue?.snapshot().frameCount
+        guard EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: isPlaying,
+            isPaused: isPaused,
+            isBuffering: isBuffering,
+            fullCacheFrameCount: fullCacheFrameCount
+        ) else { return }
         guard displayLink == nil else { return }
         #endif
 
@@ -167,7 +207,7 @@ extension VTPlayerViewModel {
             let driver = MacMetalDisplayTickDriver(viewModel: self)
             let link = CAMetalDisplayLink(metalLayer: metalLayer)
             let maximumFramesPerSecond = max(1, renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
-            link.preferredFrameLatency = 2
+            link.preferredFrameLatency = 1
             link.preferredFrameRateRange = CAFrameRateRange(
                 minimum: Float(maximumFramesPerSecond),
                 maximum: Float(maximumFramesPerSecond),
@@ -183,7 +223,7 @@ extension VTPlayerViewModel {
                 monitor?.start()
                 macPhysicalDisplayCadenceMonitor = monitor
             }
-            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%d latency=2", maximumFramesPerSecond)
+            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%d latency=1", maximumFramesPerSecond)
             return
         }
         if #available(macOS 14.0, *) {
@@ -273,7 +313,7 @@ extension VTPlayerViewModel {
     #endif
 
     @MainActor
-    func tickDisplayLink() {
+    func tickDisplayLink(targetPresentationHostTime: CFTimeInterval? = nil) {
         guard isPlaying && !isPaused, let player = self.player else { return }
         #if os(iOS)
         // AVPlayerViewController owns the transport controls. Honor its pause
@@ -295,7 +335,12 @@ extension VTPlayerViewModel {
         let currentTime = player.currentTime()
         let observedSecs = CMTimeGetSeconds(currentTime)
         let currentSecs = presentationClockSeconds(playerSeconds: observedSecs)
-        let presentationSecs = currentSecs
+        let presentationSecs = DisplayTargetClock.presentationSeconds(
+            currentPresentationSeconds: currentSecs,
+            targetHostTime: targetPresentationHostTime,
+            currentHostTime: CACurrentMediaTime(),
+            playbackRate: playbackSpeed
+        )
 
         var lastFrameToRender: VTFrame? = nil
         var drained = 0
