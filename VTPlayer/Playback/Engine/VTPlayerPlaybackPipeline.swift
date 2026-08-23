@@ -535,7 +535,12 @@ extension VTPlayerViewModel {
                     }
                     self.enhancedCacheHitGroupCount += 1
                     cachedGroupIndex = nextGroupIndex
-                    self.lastPulledTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
+                    // `lastPulledTime` is the external seek signal for this
+                    // loop. Advance the local cursor with it so the next
+                    // iteration does not mistake normal cache progress for a
+                    // seek and restart from the same group.
+                    cachedCursorTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
+                    self.lastPulledTime = cachedCursorTime
                 }
                 cachedReadTask?.cancel()
                 resumeAfterFramePrerollIfReady(force: true)
