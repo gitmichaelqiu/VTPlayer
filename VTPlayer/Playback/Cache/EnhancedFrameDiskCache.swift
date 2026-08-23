@@ -321,25 +321,43 @@ actor EnhancedFrameDiskCache {
         for key: EnhancedFrameCacheKey,
         maximumFrameCount: Int? = nil
     ) throws -> [VTFrame]? {
-        let directory = directory(for: key)
         guard var manifest = try completedManifest(for: key), manifest.key == key,
               let entry = manifest.groups.first(where: { $0.groupIndex == groupIndex }),
               let filename = entry.filename else {
             return nil
         }
-        let data = try Data(
-            contentsOf: directory.appendingPathComponent(filename),
-            options: [.mappedIfSafe]
+        let cacheDirectory = directory(for: key)
+        let frames = try Self.readFrames(
+            at: cacheDirectory.appendingPathComponent(filename),
+            maximumFrameCount: maximumFrameCount
         )
-        let frames = try decode(data, maximumFrameCount: maximumFrameCount)
         let now = Date.now
         let directoryName = key.directoryName
         if now.timeIntervalSince(manifest.lastAccess) >= Self.accessPersistenceInterval {
             manifest.lastAccess = now
-            try writeManifest(manifest, to: directory)
+            try writeManifest(manifest, to: cacheDirectory)
             completedManifests[directoryName] = manifest
         }
         return frames
+    }
+
+    /// Resolves a completed group before its expensive raw-pixel decode is
+    /// performed by a bounded playback read-ahead task.
+    func groupFileURL(_ groupIndex: Int, for key: EnhancedFrameCacheKey) throws -> URL? {
+        guard let manifest = try completedManifest(for: key), manifest.key == key,
+              let entry = manifest.groups.first(where: { $0.groupIndex == groupIndex }),
+              let filename = entry.filename else {
+            return nil
+        }
+        return directory(for: key).appendingPathComponent(filename)
+    }
+
+    nonisolated static func readFrames(
+        at url: URL,
+        maximumFrameCount: Int? = nil
+    ) throws -> [VTFrame] {
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        return try decode(data, maximumFrameCount: maximumFrameCount)
     }
 
     func cachedStatus(for key: EnhancedFrameCacheKey) throws -> EnhancedFrameCacheStatus? {
@@ -534,7 +552,7 @@ actor EnhancedFrameDiskCache {
         return data
     }
 
-    private func decode(_ data: Data, maximumFrameCount: Int?) throws -> [VTFrame] {
+    private nonisolated static func decode(_ data: Data, maximumFrameCount: Int?) throws -> [VTFrame] {
         guard data.count >= MemoryLayout<UInt64>.size else { throw EnhancedFrameDiskCacheError.invalidFrameData }
         let headerLength = data.prefix(MemoryLayout<UInt64>.size).withUnsafeBytes { $0.load(as: UInt64.self).bigEndian }
         let headerStart = MemoryLayout<UInt64>.size
@@ -605,7 +623,7 @@ actor EnhancedFrameDiskCache {
         return frames
     }
 
-    private func selectedFrameIndices(totalCount: Int, maximumFrameCount: Int?) -> Set<Int> {
+    private nonisolated static func selectedFrameIndices(totalCount: Int, maximumFrameCount: Int?) -> Set<Int> {
         guard let maximumFrameCount,
               maximumFrameCount > 0,
               maximumFrameCount < totalCount else {
@@ -628,7 +646,7 @@ actor EnhancedFrameDiskCache {
         )
     }
 
-    private func applyAttachments(_ data: Data?, to buffer: CVPixelBuffer) {
+    private nonisolated static func applyAttachments(_ data: Data?, to buffer: CVPixelBuffer) {
         guard let data,
               let attachments = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
             return

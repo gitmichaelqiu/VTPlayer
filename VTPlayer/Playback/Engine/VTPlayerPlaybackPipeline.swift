@@ -511,20 +511,38 @@ extension VTPlayerViewModel {
                 let maximumCachedFramesPerGroup: Int? = nil
                 NSLog("CACHE: playback mode=full")
                 #endif
+                let cacheReadAheadGroupCount = 3
                 var cachedCursorTime = self.lastPulledTime
                 var cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
                     atOrAfter: cachedCursorTime,
                     for: preparedFrameCacheKey
                 )
-                var cachedReadTask: Task<[VTFrame]?, Never>?
-                if let groupIndex = cachedGroupIndex {
-                    cachedReadTask = Task { [enhancedFrameDiskCache] in
-                        try? await enhancedFrameDiskCache.readGroup(
+                var cachedReadTasks: [Int: Task<[VTFrame]?, Never>] = [:]
+
+                func scheduleCachedRead(_ groupIndex: Int) {
+                    guard cachedReadTasks[groupIndex] == nil else { return }
+                    cachedReadTasks[groupIndex] = Task.detached(priority: .userInitiated) {
+                        guard let url = try? await diskCache.groupFileURL(
                             groupIndex,
-                            for: preparedFrameCacheKey,
+                            for: preparedFrameCacheKey
+                        ) else {
+                            return nil
+                        }
+                        return try? EnhancedFrameDiskCache.readFrames(
+                            at: url,
                             maximumFrameCount: maximumCachedFramesPerGroup
                         )
                     }
+                }
+
+                func scheduleCacheReadAhead(from groupIndex: Int) {
+                    for offset in 0..<cacheReadAheadGroupCount {
+                        scheduleCachedRead(groupIndex + offset)
+                    }
+                }
+
+                if let groupIndex = cachedGroupIndex {
+                    scheduleCacheReadAhead(from: groupIndex)
                 }
                 while !Task.isCancelled, gen == self.playbackGeneration,
                       let groupIndex = cachedGroupIndex {
@@ -538,29 +556,19 @@ extension VTPlayerViewModel {
                             atOrAfter: cachedCursorTime,
                             for: preparedFrameCacheKey
                         )
-                        cachedReadTask?.cancel()
+                        cachedReadTasks.values.forEach { $0.cancel() }
+                        cachedReadTasks.removeAll(keepingCapacity: true)
                         if let groupIndex = cachedGroupIndex {
-                            cachedReadTask = Task { [enhancedFrameDiskCache] in
-                                try? await enhancedFrameDiskCache.readGroup(
-                                    groupIndex,
-                                    for: preparedFrameCacheKey,
-                                    maximumFrameCount: maximumCachedFramesPerGroup
-                                )
-                            }
-                        } else {
-                            cachedReadTask = nil
+                            scheduleCacheReadAhead(from: groupIndex)
                         }
                         continue
                     }
-                    guard let frames = await cachedReadTask?.value else { break }
-                    let nextGroupIndex = groupIndex + 1
-                    cachedReadTask = Task { [enhancedFrameDiskCache] in
-                        try? await enhancedFrameDiskCache.readGroup(
-                            nextGroupIndex,
-                            for: preparedFrameCacheKey,
-                            maximumFrameCount: maximumCachedFramesPerGroup
-                        )
+                    guard let readTask = cachedReadTasks.removeValue(forKey: groupIndex),
+                          let frames = await readTask.value else {
+                        break
                     }
+                    let nextGroupIndex = groupIndex + 1
+                    scheduleCacheReadAhead(from: nextGroupIndex)
                     for frame in frames {
                         guard await admitStreamedFrame(frame) else { break }
                     }
@@ -577,7 +585,7 @@ extension VTPlayerViewModel {
                     // receiving its requested display callbacks.
                     await Task.yield()
                 }
-                cachedReadTask?.cancel()
+                cachedReadTasks.values.forEach { $0.cancel() }
                 resumeAfterFramePrerollIfReady(force: true)
                 await coordinator.endSession()
                 return

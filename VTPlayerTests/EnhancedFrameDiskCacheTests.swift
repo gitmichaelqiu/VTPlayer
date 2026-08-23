@@ -76,6 +76,21 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertEqual(decoded.map { firstByte(of: $0.buffer) }, [1, 3])
     }
 
+    func testResolvedGroupCanBeReadOutsideCacheActor() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("resolved-group")
+
+        try await completeCache(cache, key: key)
+        let groupURL = try await cache.groupFileURL(0, for: key)
+        let url = try XCTUnwrap(groupURL)
+        let frames = try EnhancedFrameDiskCache.readFrames(at: url)
+
+        XCTAssertEqual(frames.count, 1)
+        XCTAssertEqual(firstByte(of: frames[0].buffer), 1)
+    }
+
     func testExtendingCoverageReusesCompletedGroups() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
