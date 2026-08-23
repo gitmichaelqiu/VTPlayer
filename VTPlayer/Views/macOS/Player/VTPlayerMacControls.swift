@@ -92,13 +92,6 @@ extension VTPlayerView {
                 // Play/Pause button
                 playPauseButton
 
-                Divider()
-                    .frame(height: 16)
-
-                if !viewModel.shouldShowTransportApplyAction {
-                    applyEnhancementsControl
-                }
-
                 // Super Resolution Popover
                 Button {
                     showSuperResolutionPopover.toggle()
@@ -365,51 +358,6 @@ extension VTPlayerView {
             viewModel.inactivityTask?.cancel()
         } else {
             viewModel.userActivityDetected()
-        }
-    }
-
-    @ViewBuilder
-    private var applyEnhancementsControl: some View {
-        switch viewModel.enhancedCachePreparationState {
-        case .benchmarking:
-            Button(action: { viewModel.cancelEnhancedCachePreparation() }) {
-                Label("Cancel Measuring", systemImage: "xmark.circle")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        case let .preparing(progress, bytesWritten):
-            HStack(spacing: 6) {
-                VStack(alignment: .leading, spacing: 2) {
-                    ProgressView(value: progress)
-                        .frame(width: 92)
-                    Text("Preparing \(Int(progress * 100))% · \(ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Button(action: { viewModel.cancelEnhancedCachePreparation() }) {
-                    Image(systemName: "xmark.circle")
-                }
-                .buttonStyle(.plain)
-                .help("Cancel cache preparation")
-            }
-            .fixedSize()
-        case let .failed(message):
-            Button(action: { viewModel.applyPipelineEnhancements() }) {
-                Label("Retry Cache", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help(message)
-        default:
-            Button(action: { viewModel.applyPipelineEnhancements() }) {
-                Label("Apply", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(!viewModel.hasUnappliedPipelineChanges)
         }
     }
 

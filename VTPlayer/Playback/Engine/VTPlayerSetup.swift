@@ -277,6 +277,14 @@ extension VTPlayerViewModel {
                     // the producer can prebuffer from the saved position while
                     // the player clock still briefly reports zero.
                     guard let resumeTime else {
+                        #if os(macOS)
+                        guard !self.hasUnappliedPipelineChanges else {
+                            self.isPlaying = false
+                            self.isPaused = true
+                            self.renderer.setRenderingActive(false)
+                            return
+                        }
+                        #endif
                         self.play()
                         return
                     }
@@ -307,6 +315,14 @@ extension VTPlayerViewModel {
                         completionViewModel.ignoreAutomaticTimeJumpsUntil = DispatchTime(
                             uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + 5_000_000_000
                         )
+                        #if os(macOS)
+                        guard !completionViewModel.hasUnappliedPipelineChanges else {
+                            completionViewModel.isPlaying = false
+                            completionViewModel.isPaused = true
+                            completionViewModel.renderer.setRenderingActive(false)
+                            return
+                        }
+                        #endif
                         completionViewModel.play()
                     }
                 }

@@ -100,7 +100,7 @@ extension VTPlayerViewModel {
         continueVideoPlaybackPreference = ContinueVideoPlaybackPreference(
             rawValue: settings["continueVideoPlaybackPreference"] as? Int ?? 0
         ) ?? .default
-        appliedPipelineConfiguration = draftPipelineConfiguration
+        stageLoadedPipelineConfigurationForApply()
     }
 
     func applyDefaultPlaybackSettings() {
@@ -126,7 +126,18 @@ extension VTPlayerViewModel {
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1
         continueVideoPlaybackPreference = .default
+        stageLoadedPipelineConfigurationForApply()
+    }
+
+    private func stageLoadedPipelineConfigurationForApply() {
+        #if os(macOS)
+        // Saved processor settings are intentionally restored as a draft.
+        // The first transport action therefore prepares the exact cache
+        // before enhanced presentation begins.
+        appliedPipelineConfiguration = .disabled
+        #else
         appliedPipelineConfiguration = draftPipelineConfiguration
+        #endif
     }
 
     #if os(iOS)

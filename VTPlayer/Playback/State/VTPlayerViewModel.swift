@@ -121,7 +121,7 @@ final class VTPlayerViewModel {
 
     var shouldShowTransportApplyAction: Bool {
         #if os(macOS)
-        hasUnappliedPipelineChanges && (isPaused || !isPlaying)
+        hasUnappliedPipelineChanges
         #else
         false
         #endif

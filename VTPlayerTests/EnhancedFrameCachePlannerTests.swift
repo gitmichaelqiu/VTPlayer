@@ -33,7 +33,7 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
     }
 
     @MainActor
-    func testMacOSTransportApplyActionReplacesStoppedOrPausedPlay() {
+    func testMacOSTransportApplyActionReplacesPlayForEveryTransportState() {
         let viewModel = VTPlayerViewModel()
         viewModel.availableSuperResolutionScales = [1.5]
         viewModel.superResolutionLevel = 1.5
@@ -43,9 +43,32 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
 
         viewModel.isPlaying = true
         viewModel.isPaused = false
-        XCTAssertFalse(viewModel.shouldShowTransportApplyAction)
+        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
 
         viewModel.isPaused = true
+        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSSavedPipelineSettingsRequireInitialApply() {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        let url = URL(fileURLWithPath: "/tmp/VTPlayerSavedPipelineSettings.mov")
+        let key = VTPlayerViewModel.videoSettingsKey(for: url.lastPathComponent)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        UserDefaults.standard.set([
+            "superResolutionLevel": 1.5,
+            "frameInterpolationLevel": 2,
+            "qualitySuperResolutionScaleFactor": 0,
+            "motionBlurStrength": 0,
+            "denoiseStrength": 0.0
+        ], forKey: key)
+
+        viewModel.loadVideoSettings(for: url)
+
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration, .disabled)
+        XCTAssertTrue(viewModel.hasUnappliedPipelineChanges)
         XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
         #endif
     }
