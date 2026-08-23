@@ -167,7 +167,7 @@ extension VTPlayerViewModel {
             let driver = MacMetalDisplayTickDriver(viewModel: self)
             let link = CAMetalDisplayLink(metalLayer: metalLayer)
             let maximumFramesPerSecond = max(1, renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
-            link.preferredFrameLatency = 1
+            link.preferredFrameLatency = 2
             link.preferredFrameRateRange = CAFrameRateRange(
                 minimum: Float(maximumFramesPerSecond),
                 maximum: Float(maximumFramesPerSecond),
@@ -183,7 +183,7 @@ extension VTPlayerViewModel {
                 monitor?.start()
                 macPhysicalDisplayCadenceMonitor = monitor
             }
-            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%d latency=1", maximumFramesPerSecond)
+            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%d latency=2", maximumFramesPerSecond)
             return
         }
         if #available(macOS 14.0, *) {
