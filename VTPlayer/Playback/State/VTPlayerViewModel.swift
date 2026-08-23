@@ -336,6 +336,7 @@ final class VTPlayerViewModel {
     #if os(macOS)
     @ObservationIgnored var macDisplayLink: CVDisplayLink?
     @ObservationIgnored var macDisplayTickDriver: MacDisplayTickDriver?
+    @ObservationIgnored var macAppKitDisplayTickDriver: MacAppKitDisplayTickDriver?
     @ObservationIgnored var macMetalDisplayLink: CAMetalDisplayLink?
     @ObservationIgnored var macMetalDisplayTickDriver: MacMetalDisplayTickDriver?
     @ObservationIgnored var macPhysicalDisplayCadenceMonitor: MacPhysicalDisplayCadenceMonitor?

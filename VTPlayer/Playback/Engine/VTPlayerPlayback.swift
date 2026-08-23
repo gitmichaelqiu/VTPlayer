@@ -212,6 +212,7 @@ extension VTPlayerViewModel {
             self.macDisplayLink = nil
         }
         macDisplayTickDriver = nil
+        macAppKitDisplayTickDriver = nil
         renderer.setExternalDisplayScheduling(false)
         #endif
         if let link = displayLink {

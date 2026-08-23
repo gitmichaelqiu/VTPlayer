@@ -94,15 +94,26 @@ final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
 @MainActor
 final class MacAppKitDisplayTickDriver: NSObject {
     weak var viewModel: VTPlayerViewModel?
+    private var callbackCount = 0
 
     init(viewModel: VTPlayerViewModel) {
         self.viewModel = viewModel
     }
 
     @objc func displayLinkTick(_: CADisplayLink) {
+        callbackCount += 1
         guard let viewModel else { return }
         viewModel.tickDisplayLink()
         viewModel.renderer.draw()
+    }
+
+    func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
+        defer { callbackCount = 0 }
+        return MacDisplayTickDriverSnapshot(
+            callbacks: callbackCount,
+            scheduled: callbackCount,
+            executed: callbackCount
+        )
     }
 }
 
@@ -135,11 +146,35 @@ extension VTPlayerViewModel {
         let displayID = renderer.window?.screen?.deviceDescription[
             NSDeviceDescriptionKey("NSScreenNumber")
         ].flatMap { ($0 as? NSNumber).map(CGDirectDisplayID.init(truncating:)) }
-        // The renderer's preferred rate is not a scheduling guarantee. Its
-        // internal callback can coalesce below the panel's active cadence, so
-        // manual, still-vsynced draws use the physical display link instead.
+        // NSView's display link runs on the AppKit main run loop at the
+        // attached display cadence. This avoids cross-thread dispatch
+        // coalescing between a CVDisplayLink callback and MTKView.draw().
         renderer.setExternalDisplayScheduling(true)
         renderer.onDisplayTick = nil
+        if #available(macOS 14.0, *) {
+            let driver = MacAppKitDisplayTickDriver(viewModel: self)
+            let link = renderer.displayLink(
+                target: driver,
+                selector: #selector(MacAppKitDisplayTickDriver.displayLinkTick(_:))
+            )
+            let maximumFramesPerSecond = max(1, renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: Float(maximumFramesPerSecond),
+                maximum: Float(maximumFramesPerSecond),
+                preferred: Float(maximumFramesPerSecond)
+            )
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+            macAppKitDisplayTickDriver = driver
+            if macPhysicalDisplayCadenceMonitor == nil {
+                let monitor = MacPhysicalDisplayCadenceMonitor(displayID: displayID)
+                monitor?.start()
+                macPhysicalDisplayCadenceMonitor = monitor
+            }
+            NSLog("RENDER: scheduling=nsViewDisplayLink requestedHz=%d", maximumFramesPerSecond)
+            return
+        }
+
         let driver = MacDisplayTickDriver(viewModel: self)
         var displayLink: CVDisplayLink?
         let createResult: CVReturn
@@ -394,7 +429,12 @@ extension VTPlayerViewModel {
             let drawableSize = renderer.drawableSize
             let rendererScheduling = renderer.schedulingSnapshot()
             let physicalCadence = macPhysicalDisplayCadenceMonitor?.consumeSnapshot()
-            let displayTickDriver = macDisplayTickDriver?.consumeSnapshot()
+            let displayTickDriver: MacDisplayTickDriverSnapshot?
+            if #available(macOS 14.0, *) {
+                displayTickDriver = macAppKitDisplayTickDriver?.consumeSnapshot()
+            } else {
+                displayTickDriver = macDisplayTickDriver?.consumeSnapshot()
+            }
             #endif
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
