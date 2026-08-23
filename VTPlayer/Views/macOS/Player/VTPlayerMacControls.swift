@@ -95,7 +95,9 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
 
-                applyEnhancementsControl
+                if !(viewModel.isPaused && viewModel.hasUnappliedPipelineChanges) {
+                    applyEnhancementsControl
+                }
 
                 // Super Resolution Popover
                 Button {

@@ -192,9 +192,6 @@
         }
       }
     },
-    "Apply pending pipeline enhancements" : {
-
-    },
     "Author's GitHub" : {
       "localizations" : {
         "zh-Hans" : {
@@ -264,6 +261,12 @@
           }
         }
       }
+    },
+    "Cancel cache preparation" : {
+
+    },
+    "Cancel Measuring" : {
+
     },
     "Check for updates" : {
       "localizations" : {
@@ -974,9 +977,6 @@
         }
       }
     },
-    "No pending pipeline enhancement changes" : {
-
-    },
     "No results" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1190,6 +1190,16 @@
         }
       }
     },
+    "Preparing %lld%% · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Preparing %1$lld%% · %2$@"
+          }
+        }
+      }
+    },
     "QL Model" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1375,6 +1385,9 @@
           }
         }
       }
+    },
+    "Retry Cache" : {
+
     },
     "Right-click with the Option key." : {
       "localizations" : {

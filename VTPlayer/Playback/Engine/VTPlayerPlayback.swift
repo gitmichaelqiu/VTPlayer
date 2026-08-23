@@ -76,6 +76,7 @@ extension VTPlayerViewModel {
 
     /// Toggles play and pause state.
     func togglePlayPause() {
+        guard !isPreparingEnhancedCache else { return }
         guard player != nil else { return }
         if isPaused || !isPlaying {
             play()

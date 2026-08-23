@@ -19,13 +19,23 @@ extension VTPlayerView {
     #if os(macOS)
     @ViewBuilder
     var playPauseButton: some View {
-        Button(action: { viewModel.togglePlayPause() }) {
-            Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.primary)
+        if viewModel.isPaused && viewModel.hasUnappliedPipelineChanges {
+            Button(action: { viewModel.applyPipelineEnhancements() }) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+            }
+            .buttonStyle(.glassProminent)
+            .keyboardShortcut(.space, modifiers: [])
+            .help("Apply enhancement changes")
+        } else {
+            Button(action: { viewModel.togglePlayPause() }) {
+                Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+            .buttonStyle(.glass)
+            .keyboardShortcut(.space, modifiers: [])
         }
-        .buttonStyle(.glass)
-        .keyboardShortcut(.space, modifiers: [])
     }
 
     @ViewBuilder

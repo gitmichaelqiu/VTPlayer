@@ -86,6 +86,15 @@ final class VTPlayerViewModel {
     /// applied value, keeping playback stable until the user confirms Apply.
     var appliedPipelineConfiguration = AppliedPipelineConfiguration.disabled
     var enhancedCachePreparationState: EnhancedCachePreparationState = .idle
+
+    var isPreparingEnhancedCache: Bool {
+        switch enhancedCachePreparationState {
+        case .benchmarking, .preparing:
+            true
+        case .idle, .ready, .failed:
+            false
+        }
+    }
     @ObservationIgnored let enhancedFrameDiskCache = EnhancedFrameDiskCache()
     @ObservationIgnored var preparedEnhancedFrameCacheKey: EnhancedFrameCacheKey?
     @ObservationIgnored var preparedEnhancedFrameCacheMode: EnhancedCachePlaybackMode?

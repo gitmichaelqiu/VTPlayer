@@ -171,8 +171,16 @@ struct VTPlayerView: View {
             iphoneLayout
             #else
             splitViewLayout
+                .disabled(viewModel.isPreparingEnhancedCache)
             #endif
         }
+        #if os(macOS)
+        .overlay {
+            if viewModel.isPreparingEnhancedCache {
+                enhancedCachePreparationOverlay
+            }
+        }
+        #endif
         .alert("Rename Video", isPresented: $showRenameAlert) {
             TextField("New Name", text: $renameText)
             Button("Cancel", role: .cancel) { }
