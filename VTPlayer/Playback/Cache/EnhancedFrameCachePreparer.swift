@@ -34,49 +34,52 @@ actor EnhancedFrameCachePreparer {
             preferSequentialSRFI: preferSequentialSRFI
         )
         try await coordinator.startSession(width: width, height: height)
-        defer { Task { await coordinator.endSession() } }
+        do {
+            let padding = await coordinator.sourceFramePadding()
+            var iterator = VTFrameSequence(
+                url: url,
+                startTime: .zero,
+                extendedPixelsRight: padding.right,
+                extendedPixelsBottom: padding.bottom
+            ).makeAsyncIterator()
+            var samples: [Double] = []
+            var outputCount = 0
+            var warmupRemaining = 4
 
-        let padding = await coordinator.sourceFramePadding()
-        var iterator = VTFrameSequence(
-            url: url,
-            startTime: .zero,
-            extendedPixelsRight: padding.right,
-            extendedPixelsBottom: padding.bottom
-        ).makeAsyncIterator()
-        var samples: [Double] = []
-        var outputCount = 0
-        var warmupRemaining = 4
-
-        while samples.count < sampleCount, let frame = try await iterator.next() {
-            try Task.checkCancellation()
-            let start = DispatchTime.now()
-            let output = try await coordinator.processFrame(frame)
-            let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
-            if warmupRemaining > 0 {
-                warmupRemaining -= 1
-                continue
+            while samples.count < sampleCount, let frame = try await iterator.next() {
+                try Task.checkCancellation()
+                let start = DispatchTime.now()
+                let output = try await coordinator.processFrame(frame)
+                let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
+                if warmupRemaining > 0 {
+                    warmupRemaining -= 1
+                    continue
+                }
+                samples.append(elapsed)
+                outputCount += output.count
             }
-            samples.append(elapsed)
-            outputCount += output.count
+            await coordinator.endSession()
+            guard !samples.isEmpty else { throw EnhancedFrameDiskCacheError.invalidFrameData }
+            let sorted = samples.sorted()
+            let percentile: (Double) -> Double = { fraction in
+                sorted[min(sorted.count - 1, max(0, Int((Double(sorted.count - 1) * fraction).rounded(.up))))]
+            }
+            let requestedOutputRate = sourceFramesPerSecond * Double(max(1, configuration.frameInterpolationLevel))
+            return EnhancedPipelineBenchmark(
+                p50GroupSeconds: percentile(0.5),
+                p95GroupSeconds: percentile(0.95),
+                sourceFramesPerSecond: sourceFramesPerSecond,
+                requestedOutputFramesPerSecond: requestedOutputRate,
+                // Presentation is rechecked from live renderer diagnostics. This
+                // benchmark establishes the processing-side admission decision.
+                measuredDisplayFramesPerSecond: requestedOutputRate,
+                outputFramesPerGroup: Double(outputCount) / Double(samples.count),
+                diskWriteBytesPerSecond: 0
+            )
+        } catch {
+            await coordinator.endSession()
+            throw error
         }
-        await coordinator.endSession()
-        guard !samples.isEmpty else { throw EnhancedFrameDiskCacheError.invalidFrameData }
-        let sorted = samples.sorted()
-        let percentile: (Double) -> Double = { fraction in
-            sorted[min(sorted.count - 1, max(0, Int((Double(sorted.count - 1) * fraction).rounded(.up))))]
-        }
-        let requestedOutputRate = sourceFramesPerSecond * Double(max(1, configuration.frameInterpolationLevel))
-        return EnhancedPipelineBenchmark(
-            p50GroupSeconds: percentile(0.5),
-            p95GroupSeconds: percentile(0.95),
-            sourceFramesPerSecond: sourceFramesPerSecond,
-            requestedOutputFramesPerSecond: requestedOutputRate,
-            // Presentation is rechecked from live renderer diagnostics. This
-            // benchmark establishes the processing-side admission decision.
-            measuredDisplayFramesPerSecond: requestedOutputRate,
-            outputFramesPerGroup: Double(outputCount) / Double(samples.count),
-            diskWriteBytesPerSecond: 0
-        )
     }
 
     func prepareFullCache(

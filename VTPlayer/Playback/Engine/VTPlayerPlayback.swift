@@ -20,6 +20,12 @@ extension VTPlayerViewModel {
     func updateEnhancements() {
         validateEnhancementSelections()
         #if os(macOS)
+        if enhancedCachePreparationTask != nil {
+            enhancedCachePreparationGeneration &+= 1
+            enhancedCachePreparationTask?.cancel()
+            enhancedCachePreparationTask = nil
+            enhancedCachePreparationState = .idle
+        }
         return
         #else
         appliedPipelineConfiguration = draftPipelineConfiguration

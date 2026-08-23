@@ -20,13 +20,22 @@ extension VTPlayerViewModel {
         stopPlaybackLoopOnly()
         enhancedCachePreparationState = .benchmarking
 
-        Task { @MainActor [weak self] in
+        enhancedCachePreparationTask?.cancel()
+        enhancedCachePreparationGeneration &+= 1
+        let preparationGeneration = enhancedCachePreparationGeneration
+        enhancedCachePreparationTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                if self.enhancedCachePreparationGeneration == preparationGeneration {
+                    self.enhancedCachePreparationTask = nil
+                }
+            }
             if let teardown = self.coordinatorTeardownTask {
                 await teardown.value
                 self.coordinatorTeardownTask = nil
             }
-            guard self.videoURL == url,
+            guard self.enhancedCachePreparationGeneration == preparationGeneration,
+                  self.videoURL == url,
                   self.draftPipelineConfiguration == candidate else { return }
 
             let sourceRate = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30
@@ -41,7 +50,8 @@ extension VTPlayerViewModel {
                     qualityPrioritization: self.qualityPrioritization,
                     preferSequentialSRFI: self.useSequentialSRFIFallback
                 )
-                guard self.videoURL == url,
+                guard self.enhancedCachePreparationGeneration == preparationGeneration,
+                      self.videoURL == url,
                       self.draftPipelineConfiguration == candidate else { return }
 
                 let asset = AVURLAsset(url: url)
@@ -95,7 +105,8 @@ extension VTPlayerViewModel {
                         bytesWritten: bytesWritten
                     )
                 }
-                guard self.videoURL == url,
+                guard self.enhancedCachePreparationGeneration == preparationGeneration,
+                      self.videoURL == url,
                       self.draftPipelineConfiguration == candidate else { return }
                 self.preparedEnhancedFrameCacheKey = result.key
                 self.appliedPipelineConfiguration = candidate
@@ -107,14 +118,18 @@ extension VTPlayerViewModel {
                 )
                 self.resumeAfterApplyingEnhancements(wasPlaying: wasPlaying)
             } catch is CancellationError {
-                self.enhancedCachePreparationState = .idle
+                if self.enhancedCachePreparationGeneration == preparationGeneration {
+                    self.enhancedCachePreparationState = .idle
+                }
             } catch {
-                self.enhancedCachePreparationState = .failed(error.localizedDescription)
-                self.srInitializationError = error.localizedDescription
-                self.setNativeVideoEnabled(true)
-                if wasPlaying {
-                    self.player?.rate = Float(self.playbackSpeed)
-                    self.isPaused = false
+                if self.enhancedCachePreparationGeneration == preparationGeneration {
+                    self.enhancedCachePreparationState = .failed(error.localizedDescription)
+                    self.srInitializationError = error.localizedDescription
+                    self.setNativeVideoEnabled(true)
+                    if wasPlaying {
+                        self.player?.rate = Float(self.playbackSpeed)
+                        self.isPaused = false
+                    }
                 }
             }
         }
