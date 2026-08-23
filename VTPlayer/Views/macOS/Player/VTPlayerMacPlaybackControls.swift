@@ -19,7 +19,7 @@ extension VTPlayerView {
     #if os(macOS)
     @ViewBuilder
     var playPauseButton: some View {
-        if viewModel.isPaused && viewModel.hasUnappliedPipelineChanges {
+        if viewModel.shouldShowTransportApplyAction {
             Button(action: { viewModel.applyPipelineEnhancements() }) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3.weight(.semibold))

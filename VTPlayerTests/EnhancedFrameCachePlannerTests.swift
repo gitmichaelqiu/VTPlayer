@@ -32,6 +32,24 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testMacOSTransportApplyActionReplacesStoppedOrPausedPlay() {
+        let viewModel = VTPlayerViewModel()
+        viewModel.availableSuperResolutionScales = [1.5]
+        viewModel.superResolutionLevel = 1.5
+
+        #if os(macOS)
+        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
+
+        viewModel.isPlaying = true
+        viewModel.isPaused = false
+        XCTAssertFalse(viewModel.shouldShowTransportApplyAction)
+
+        viewModel.isPaused = true
+        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
+        #endif
+    }
+
     func testRequiredCoverageUsesP95AndRoundsUpWithSafetyMargin() {
         XCTAssertEqual(
             SparseCachePlanner.requiredCoveragePercent(

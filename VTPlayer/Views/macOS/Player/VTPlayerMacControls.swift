@@ -95,7 +95,7 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
 
-                if !(viewModel.isPaused && viewModel.hasUnappliedPipelineChanges) {
+                if !viewModel.shouldShowTransportApplyAction {
                     applyEnhancementsControl
                 }
 
