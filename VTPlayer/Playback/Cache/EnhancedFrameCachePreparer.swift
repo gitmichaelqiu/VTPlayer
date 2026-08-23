@@ -10,6 +10,22 @@ nonisolated struct EnhancedFrameCachePreparationResult: Sendable {
     var mode: EnhancedCachePlaybackMode
 }
 
+@MainActor
+private final class EnhancedPipelineBenchmarkOutputCollector {
+    private(set) var count = 0
+    private(set) var byteCount: Int64 = 0
+
+    func reset() {
+        count = 0
+        byteCount = 0
+    }
+
+    func record(_ frame: VTFrame) {
+        count += 1
+        byteCount += Int64(CVPixelBufferGetDataSize(frame.buffer))
+    }
+}
+
 /// Owns cache preparation off the view model. VideoToolbox processing remains
 /// sequential inside one coordinator so temporal references retain order.
 actor EnhancedFrameCachePreparer {
@@ -36,6 +52,9 @@ actor EnhancedFrameCachePreparer {
         )
         try await coordinator.startSession(width: width, height: height)
         do {
+            let streamedOutputCollector = await MainActor.run {
+                EnhancedPipelineBenchmarkOutputCollector()
+            }
             let padding = await coordinator.sourceFramePadding()
             var iterator = VTFrameSequence(
                 url: url,
@@ -50,16 +69,22 @@ actor EnhancedFrameCachePreparer {
 
             while samples.count < sampleCount, let frame = try await iterator.next() {
                 try Task.checkCancellation()
+                await streamedOutputCollector.reset()
                 let start = DispatchTime.now()
-                let output = try await coordinator.processFrame(frame)
+                let output = try await coordinator.processFrame(frame) { streamedFrame in
+                    streamedOutputCollector.record(streamedFrame)
+                    return true
+                }
                 let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
+                let streamedOutputCount = await streamedOutputCollector.count
+                let streamedOutputBytes = await streamedOutputCollector.byteCount
                 if warmupRemaining > 0 {
                     warmupRemaining -= 1
                     continue
                 }
                 samples.append(elapsed)
-                outputCount += output.count
-                outputBytes += output.reduce(into: 0) { partialResult, frame in
+                outputCount += output.count + streamedOutputCount
+                outputBytes += streamedOutputBytes + output.reduce(into: 0) { partialResult, frame in
                     partialResult += Int64(CVPixelBufferGetDataSize(frame.buffer))
                 }
             }
@@ -109,7 +134,7 @@ actor EnhancedFrameCachePreparer {
         let coverage = plan.coverageBitmap
         let priorCacheStatus = try await diskCache.cachedStatus(for: key)
         if let cached = priorCacheStatus,
-           cached.missingGroupIndices.isEmpty {
+           cached.satisfies(coverage: coverage) {
             return EnhancedFrameCachePreparationResult(
                 key: key,
                 benchmark: benchmark,
