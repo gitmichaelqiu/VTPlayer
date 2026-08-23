@@ -189,9 +189,6 @@
         }
       }
     },
-    "Apply" : {
-
-    },
     "Apply enhancement changes" : {
 
     },
@@ -277,12 +274,6 @@
           }
         }
       }
-    },
-    "Cancel cache preparation" : {
-
-    },
-    "Cancel Measuring" : {
-
     },
     "Check for updates" : {
       "localizations" : {
@@ -1221,16 +1212,6 @@
         }
       }
     },
-    "Preparing %lld%% · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Preparing %1$lld%% · %2$@"
-          }
-        }
-      }
-    },
     "Preparing Enhancements" : {
 
     },
@@ -1419,9 +1400,6 @@
           }
         }
       }
-    },
-    "Retry Cache" : {
-
     },
     "Right-click with the Option key." : {
       "localizations" : {

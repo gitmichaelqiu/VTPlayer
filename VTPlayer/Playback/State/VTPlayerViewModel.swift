@@ -333,6 +333,10 @@ final class VTPlayerViewModel {
     @ObservationIgnored var coordinatorTeardownTask: Task<Void, Never>?
     @ObservationIgnored var qualityModelRetryTask: Task<Void, Never>?
     @ObservationIgnored var displayLink: CADisplayLink?
+    #if os(macOS)
+    @ObservationIgnored var macDisplayLink: CVDisplayLink?
+    @ObservationIgnored var macDisplayTickDriver: MacDisplayTickDriver?
+    #endif
     @ObservationIgnored var presentedFramesCount = 0
     @ObservationIgnored var diagnosticPresentedFramesCount = 0
     @ObservationIgnored var diagnosticPresentedInterpolatedCount = 0

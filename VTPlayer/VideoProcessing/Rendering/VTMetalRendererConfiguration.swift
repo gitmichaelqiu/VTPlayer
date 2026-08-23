@@ -202,7 +202,7 @@ extension VTMetalRenderer {
         configureMacOSPresentationScheduling()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()
-        if window != nil, renderingActive {
+        if window != nil, renderingActive, !usesExternalDisplayScheduling {
             isPaused = false
         }
     }

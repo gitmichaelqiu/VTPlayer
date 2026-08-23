@@ -143,6 +143,7 @@ public final class VTMetalRenderer: MTKView {
     internal var nativeHDRTransfer: NativeHDRTransfer?
     #if os(macOS)
     internal var renderingActive = false
+    internal var usesExternalDisplayScheduling = false
     internal var pausedLayoutRedrawPending = false
     internal var lastLayoutSize: CGSize = .zero
     #endif
@@ -229,7 +230,7 @@ public final class VTMetalRenderer: MTKView {
         self.currentPixelBuffer = pixelBuffer
         needsDrawableUpdate = true
         #if os(macOS)
-        if self.isPaused {
+        if self.isPaused && !usesExternalDisplayScheduling {
             self.draw()
         }
         #else
@@ -242,7 +243,14 @@ public final class VTMetalRenderer: MTKView {
     /// paused while stopped avoids rendering the same frame unnecessarily.
     public func setRenderingActive(_ active: Bool) {
         self.renderingActive = active
-        self.isPaused = !active
+        self.isPaused = !active || usesExternalDisplayScheduling
+    }
+
+    /// Uses an owner-provided display callback while retaining MTKView's
+    /// drawable and Metal presentation implementation.
+    public func setExternalDisplayScheduling(_ enabled: Bool) {
+        usesExternalDisplayScheduling = enabled
+        isPaused = !renderingActive || enabled
     }
     #endif
 

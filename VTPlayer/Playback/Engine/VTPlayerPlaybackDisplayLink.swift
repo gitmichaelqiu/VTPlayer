@@ -3,6 +3,45 @@ import AVFoundation
 import VideoToolbox
 import CoreVideo
 import MetalKit
+#if os(macOS)
+import AppKit
+import Synchronization
+
+final class MacDisplayTickDriver: @unchecked Sendable {
+    weak var viewModel: VTPlayerViewModel?
+    private let isTickPending = Mutex(false)
+
+    init(viewModel: VTPlayerViewModel) {
+        self.viewModel = viewModel
+    }
+
+    func scheduleTick() {
+        let shouldSchedule = isTickPending.withLock { pending in
+            guard !pending else { return false }
+            pending = true
+            return true
+        }
+        guard shouldSchedule else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.isTickPending.withLock { $0 = false }
+            }
+            guard let viewModel = self.viewModel else { return }
+            viewModel.tickDisplayLink()
+            viewModel.renderer.draw()
+        }
+    }
+}
+
+private let macDisplayLinkCallback: CVDisplayLinkOutputCallback = {
+    _, _, _, _, _, userInfo in
+    guard let userInfo else { return kCVReturnError }
+    let driver = Unmanaged<MacDisplayTickDriver>.fromOpaque(userInfo).takeUnretainedValue()
+    driver.scheduleTick()
+    return kCVReturnSuccess
+}
+#endif
 #if os(iOS)
 import MediaPlayer
 #endif
@@ -20,11 +59,49 @@ extension VTPlayerViewModel {
 
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
-        // Let the renderer's MTKView own the display cadence. A separate
-        // NSWindow display link can be throttled independently and then
-        // starves FI output even while the Metal view is drawing at refresh.
-        renderer.onDisplayTick = { [weak self] in
-            self?.tickDisplayLink()
+        guard macDisplayLink == nil else { return }
+        var link: CVDisplayLink?
+        let screenNumber = renderer.window?.screen?.deviceDescription[
+            NSDeviceDescriptionKey("NSScreenNumber")
+        ] as? NSNumber
+        let result: CVReturn
+        if let screenNumber {
+            result = CVDisplayLinkCreateWithCGDisplay(
+                CGDirectDisplayID(truncating: screenNumber),
+                &link
+            )
+        } else {
+            result = CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        }
+        guard result == kCVReturnSuccess, let link else {
+            renderer.onDisplayTick = { [weak self] in
+                self?.tickDisplayLink()
+            }
+            return
+        }
+        let driver = MacDisplayTickDriver(viewModel: self)
+        guard CVDisplayLinkSetOutputCallback(
+            link,
+            macDisplayLinkCallback,
+            Unmanaged.passUnretained(driver).toOpaque()
+        ) == kCVReturnSuccess else {
+            renderer.onDisplayTick = { [weak self] in
+                self?.tickDisplayLink()
+            }
+            return
+        }
+        renderer.onDisplayTick = nil
+        renderer.setExternalDisplayScheduling(true)
+        macDisplayTickDriver = driver
+        macDisplayLink = link
+        guard CVDisplayLinkStart(link) == kCVReturnSuccess else {
+            macDisplayLink = nil
+            macDisplayTickDriver = nil
+            renderer.setExternalDisplayScheduling(false)
+            renderer.onDisplayTick = { [weak self] in
+                self?.tickDisplayLink()
+            }
+            return
         }
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
