@@ -10,6 +10,7 @@ struct EnhancementsSettingsTab: View {
     @AppStorage("VTDefaultHDRBoost") private var defaultHDRBoost = 0.0
     @AppStorage("VTDefaultHDRColorfulness") private var defaultHDRColorfulness = 0.0
     @AppStorage("VTEnhancedFrameCacheMemoryMB") private var enhancedFrameCacheMemoryMB = 1_024
+    @AppStorage("VTEnhancedFrameCacheDiskGB") private var enhancedFrameCacheDiskGB = 20
 
     var body: some View {
         SettingsContainer(.enhancements) {
@@ -30,6 +31,21 @@ struct EnhancementsSettingsTab: View {
                                 ? String(format: "%.1f GB", $0 / 1_024.0)
                                 : String(format: "%.0f MB", $0)
                         }
+                    )
+
+                    Divider()
+
+                    SliderSettingsRow(
+                        "Enhanced frame disk cache",
+                        helperText: "Maximum persistent storage for lossless enhanced frames.",
+                        value: Binding(
+                            get: { Double(min(max(enhancedFrameCacheDiskGB, 2), 200)) },
+                            set: { enhancedFrameCacheDiskGB = Int($0.rounded()) }
+                        ),
+                        range: 2.0...200.0,
+                        defaultValue: 20.0,
+                        step: 1.0,
+                        valueString: { String(format: "%.0f GB", $0) }
                     )
                 }
 

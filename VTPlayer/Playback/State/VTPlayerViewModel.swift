@@ -340,6 +340,14 @@ final class VTPlayerViewModel {
         let megabytes = configured > 0 ? configured : defaultMegabytes
         return min(maximumMegabytes, max(128, megabytes)) * 1024 * 1024
     }
+
+    #if os(macOS)
+    var enhancedFrameDiskCacheBudget: Int64 {
+        let configured = UserDefaults.standard.integer(forKey: "VTEnhancedFrameCacheDiskGB")
+        let gigabytes = configured > 0 ? configured : 20
+        return Int64(min(200, max(2, gigabytes))) * 1_024 * 1_024 * 1_024
+    }
+    #endif
     /// The memory budget is the cache limit. A frame-count cap would make
     /// low-resolution videos start with only a few seconds of reserve.
     let maximumFrameCacheCount = Int.max
