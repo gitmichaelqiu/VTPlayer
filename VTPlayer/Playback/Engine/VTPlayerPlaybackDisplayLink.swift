@@ -81,7 +81,11 @@ extension VTPlayerViewModel {
             let driver = MacMetalDisplayTickDriver(viewModel: self)
             let link = CAMetalDisplayLink(metalLayer: metalLayer)
             let maximumRate = Float(max(60, renderer.window?.screen?.maximumFramesPerSecond ?? 60))
-            link.preferredFrameLatency = 1
+            // A single frame of allowed latency serializes every callback on
+            // compositor retirement. That can underfeed a ProMotion display
+            // even when encoding has already completed. Keep the link within
+            // CAMetalLayer's normal triple-buffered presentation depth.
+            link.preferredFrameLatency = 3
             link.preferredFrameRateRange = CAFrameRateRange(
                 minimum: maximumRate,
                 maximum: maximumRate,
