@@ -78,15 +78,26 @@ final class MacDisplayTickDriver: @unchecked Sendable {
 @MainActor
 final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
     weak var viewModel: VTPlayerViewModel?
+    private var callbackCount = 0
 
     init(viewModel: VTPlayerViewModel) {
         self.viewModel = viewModel
     }
 
     func metalDisplayLink(_: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        callbackCount += 1
         guard let viewModel else { return }
         viewModel.tickDisplayLink()
         viewModel.renderer.draw(to: update.drawable)
+    }
+
+    func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
+        defer { callbackCount = 0 }
+        return MacDisplayTickDriverSnapshot(
+            callbacks: callbackCount,
+            scheduled: callbackCount,
+            executed: callbackCount
+        )
     }
 }
 
@@ -151,6 +162,30 @@ extension VTPlayerViewModel {
         // coalescing between a CVDisplayLink callback and MTKView.draw().
         renderer.setExternalDisplayScheduling(true)
         renderer.onDisplayTick = nil
+        if #available(macOS 14.0, *),
+           let metalLayer = renderer.layer as? CAMetalLayer {
+            let driver = MacMetalDisplayTickDriver(viewModel: self)
+            let link = CAMetalDisplayLink(metalLayer: metalLayer)
+            let maximumFramesPerSecond = max(1, renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
+            link.preferredFrameLatency = 1
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: Float(maximumFramesPerSecond),
+                maximum: Float(maximumFramesPerSecond),
+                preferred: Float(maximumFramesPerSecond)
+            )
+            link.delegate = driver
+            link.add(to: .main, forMode: .common)
+            link.isPaused = false
+            macMetalDisplayLink = link
+            macMetalDisplayTickDriver = driver
+            if macPhysicalDisplayCadenceMonitor == nil {
+                let monitor = MacPhysicalDisplayCadenceMonitor(displayID: displayID)
+                monitor?.start()
+                macPhysicalDisplayCadenceMonitor = monitor
+            }
+            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%d latency=1", maximumFramesPerSecond)
+            return
+        }
         if #available(macOS 14.0, *) {
             let driver = MacAppKitDisplayTickDriver(viewModel: self)
             let link = renderer.displayLink(
@@ -431,7 +466,11 @@ extension VTPlayerViewModel {
             let physicalCadence = macPhysicalDisplayCadenceMonitor?.consumeSnapshot()
             let displayTickDriver: MacDisplayTickDriverSnapshot?
             if #available(macOS 14.0, *) {
-                displayTickDriver = macAppKitDisplayTickDriver?.consumeSnapshot()
+                if let macMetalDisplayTickDriver {
+                    displayTickDriver = macMetalDisplayTickDriver.consumeSnapshot()
+                } else {
+                    displayTickDriver = macAppKitDisplayTickDriver?.consumeSnapshot()
+                }
             } else {
                 displayTickDriver = macDisplayTickDriver?.consumeSnapshot()
             }
