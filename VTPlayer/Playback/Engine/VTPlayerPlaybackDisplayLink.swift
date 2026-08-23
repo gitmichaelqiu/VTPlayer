@@ -92,23 +92,41 @@ extension VTPlayerViewModel {
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
         guard macDisplayLink == nil, macMetalDisplayLink == nil else { return }
-        // MTKView owns the drawable and has the most direct knowledge of the
-        // screen's selected refresh cadence. External links were consistently
-        // coalesced to about 60 Hz on ProMotion displays despite a 120 Hz
-        // request, so leave the view's own scheduler active for presentation.
-        renderer.setExternalDisplayScheduling(false)
-        renderer.onDisplayTick = { [weak self] in
-            self?.tickDisplayLink()
+        let displayID = renderer.window?.screen?.deviceDescription[
+            NSDeviceDescriptionKey("NSScreenNumber")
+        ].flatMap { ($0 as? NSNumber).map(CGDirectDisplayID.init(truncating:)) }
+        // The renderer's preferred rate is not a scheduling guarantee. Its
+        // internal callback can coalesce below the panel's active cadence, so
+        // manual, still-vsynced draws use the physical display link instead.
+        renderer.setExternalDisplayScheduling(true)
+        renderer.onDisplayTick = nil
+        let driver = MacDisplayTickDriver(viewModel: self)
+        var displayLink: CVDisplayLink?
+        let createResult: CVReturn
+        if let displayID {
+            createResult = CVDisplayLinkCreateWithCGDisplay(displayID, &displayLink)
+        } else {
+            createResult = CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
         }
+        guard createResult == kCVReturnSuccess,
+              let displayLink,
+              CVDisplayLinkSetOutputCallback(
+                displayLink,
+                macDisplayLinkCallback,
+                Unmanaged.passUnretained(driver).toOpaque()
+              ) == kCVReturnSuccess else {
+            renderer.setExternalDisplayScheduling(false)
+            return
+        }
+        macDisplayTickDriver = driver
+        macDisplayLink = displayLink
+        CVDisplayLinkStart(displayLink)
         if macPhysicalDisplayCadenceMonitor == nil {
-            let displayID = renderer.window?.screen?.deviceDescription[
-                NSDeviceDescriptionKey("NSScreenNumber")
-            ].flatMap { ($0 as? NSNumber).map(CGDirectDisplayID.init(truncating:)) }
             let monitor = MacPhysicalDisplayCadenceMonitor(displayID: displayID)
             monitor?.start()
             macPhysicalDisplayCadenceMonitor = monitor
         }
-        NSLog("RENDER: scheduling=mtkView requestedHz=%d", renderer.preferredFramesPerSecond)
+        NSLog("RENDER: scheduling=cvDisplayLink requestedHz=%d", renderer.preferredFramesPerSecond)
         return
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
