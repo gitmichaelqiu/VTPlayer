@@ -7,6 +7,16 @@
     "%lld" : {
       "shouldTranslate" : false
     },
+    "%lld%% · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%% · %2$@"
+          }
+        }
+      }
+    },
     "© %@ Michael Yicheng Qiu" : {
       "localizations" : {
         "zh-Hans" : {
@@ -180,6 +190,9 @@
       }
     },
     "Apply" : {
+
+    },
+    "Apply enhancement changes" : {
 
     },
     "Apply motion blur." : {
@@ -588,6 +601,9 @@
     "Enhanced frame disk cache" : {
 
     },
+    "Enhancement preparation in progress" : {
+
+    },
     "Enter a new name for the video file." : {
       "localizations" : {
         "zh-Hans" : {
@@ -865,6 +881,9 @@
       }
     },
     "Maximum persistent storage for lossless enhanced frames." : {
+
+    },
+    "Measuring the selected pipeline before playback." : {
 
     },
     "Measuring…" : {
@@ -1199,6 +1218,9 @@
           }
         }
       }
+    },
+    "Preparing Enhancements" : {
+
     },
     "QL Model" : {
       "localizations" : {
