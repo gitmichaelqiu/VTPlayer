@@ -95,6 +95,9 @@ struct RendererSchedulingSnapshot: Equatable {
     let presentsWithTransaction: Bool
     let displaySyncEnabled: Bool
     let screenMaximumFramesPerSecond: Int
+    let screenMinimumRefreshInterval: TimeInterval
+    let screenMaximumRefreshInterval: TimeInterval
+    let displayModeRefreshRate: Double
 }
 
 private struct RendererGPUPerformanceStorage: Sendable {
@@ -272,16 +275,29 @@ public final class VTMetalRenderer: MTKView {
     #if os(macOS)
     internal func schedulingSnapshot() -> RendererSchedulingSnapshot {
         let metalLayer = layer as? CAMetalLayer
+        let displayID = window?.screen?.deviceDescription[
+            NSDeviceDescriptionKey("NSScreenNumber")
+        ].flatMap { ($0 as? NSNumber).map(CGDirectDisplayID.init(truncating:)) }
+        let displayModeRefreshRate = displayID
+            .flatMap(CGDisplayCopyDisplayMode)
+            .map(\.refreshRate) ?? 0
         return RendererSchedulingSnapshot(
             preferredFramesPerSecond: preferredFramesPerSecond,
             presentsWithTransaction: presentsWithTransaction,
             displaySyncEnabled: metalLayer?.displaySyncEnabled ?? true,
-            screenMaximumFramesPerSecond: window?.screen?.maximumFramesPerSecond ?? 0
+            screenMaximumFramesPerSecond: window?.screen?.maximumFramesPerSecond ?? 0,
+            screenMinimumRefreshInterval: window?.screen?.minimumRefreshInterval ?? 0,
+            screenMaximumRefreshInterval: window?.screen?.maximumRefreshInterval ?? 0,
+            displayModeRefreshRate: displayModeRefreshRate
         )
     }
     #endif
 
     public override func draw(_ rect: CGRect) {
+        #if os(macOS)
+        let drawSignpost = MacPresentationSignposts.begin("MTKDraw")
+        defer { MacPresentationSignposts.end("MTKDraw", identifier: drawSignpost) }
+        #endif
         performanceAggregate.recordDrawAttempt()
         let drawableAcquisitionStart = DispatchTime.now()
         guard let drawable = currentDrawable else {
@@ -317,6 +333,10 @@ public final class VTMetalRenderer: MTKView {
         guard let queue = commandQueue else { return }
 
         if currentPixelBuffer == nil {
+            #if os(macOS)
+            let encodeSignpost = MacPresentationSignposts.begin("CoreImageEncode")
+            defer { MacPresentationSignposts.end("CoreImageEncode", identifier: encodeSignpost) }
+            #endif
             let encodeStart = DispatchTime.now()
             guard let commandBuffer = queue.makeCommandBuffer() else { return }
             let renderPassDescriptor = MTLRenderPassDescriptor()
@@ -419,6 +439,10 @@ public final class VTMetalRenderer: MTKView {
         let transformedImage = hdrImage.transformed(by: transform)
 
         // Render the image to the drawable texture
+        #if os(macOS)
+        let encodeSignpost = MacPresentationSignposts.begin("CoreImageEncode")
+        defer { MacPresentationSignposts.end("CoreImageEncode", identifier: encodeSignpost) }
+        #endif
         let encodeStart = DispatchTime.now()
         guard let commandBuffer = queue.makeCommandBuffer() else { return }
 
@@ -453,8 +477,14 @@ public final class VTMetalRenderer: MTKView {
     }
 
     private func trackGPUCompletion(of commandBuffer: MTLCommandBuffer) {
+        #if os(macOS)
+        let completionSignpost = MacPresentationSignposts.begin("CommandBuffer")
+        #endif
         let recorder = gpuPerformanceRecorder
         commandBuffer.addCompletedHandler { commandBuffer in
+            #if os(macOS)
+            MacPresentationSignposts.end("CommandBuffer", identifier: completionSignpost)
+            #endif
             let start = commandBuffer.gpuStartTime
             let end = commandBuffer.gpuEndTime
             guard start.isFinite, end.isFinite, end >= start else { return }

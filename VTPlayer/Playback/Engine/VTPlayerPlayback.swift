@@ -205,6 +205,8 @@ extension VTPlayerViewModel {
         macMetalDisplayLink?.invalidate()
         macMetalDisplayLink = nil
         macMetalDisplayTickDriver = nil
+        macPhysicalDisplayCadenceMonitor?.stop()
+        macPhysicalDisplayCadenceMonitor = nil
         if let macDisplayLink {
             CVDisplayLinkStop(macDisplayLink)
             self.macDisplayLink = nil

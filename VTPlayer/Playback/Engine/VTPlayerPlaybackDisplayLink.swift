@@ -100,6 +100,14 @@ extension VTPlayerViewModel {
         renderer.onDisplayTick = { [weak self] in
             self?.tickDisplayLink()
         }
+        if macPhysicalDisplayCadenceMonitor == nil {
+            let displayID = renderer.window?.screen?.deviceDescription[
+                NSDeviceDescriptionKey("NSScreenNumber")
+            ].flatMap { ($0 as? NSNumber).map(CGDirectDisplayID.init(truncating:)) }
+            let monitor = MacPhysicalDisplayCadenceMonitor(displayID: displayID)
+            monitor?.start()
+            macPhysicalDisplayCadenceMonitor = monitor
+        }
         NSLog("RENDER: scheduling=mtkView requestedHz=%d", renderer.preferredFramesPerSecond)
         return
         #else
@@ -290,6 +298,7 @@ extension VTPlayerViewModel {
             let drawableRate = Double(rendererPerformance.drawableAcquisitions) / diagElapsed
             let drawableSize = renderer.drawableSize
             let rendererScheduling = renderer.schedulingSnapshot()
+            let physicalCadence = macPhysicalDisplayCadenceMonitor?.consumeSnapshot()
             #endif
             if let first = firstFrame {
                 let ft = CMTimeGetSeconds(first.presentationTimeStamp)
@@ -308,6 +317,7 @@ extension VTPlayerViewModel {
                 NSLog("FI: processMs=\(String(format: "%.2f", averageFIProcessing)) maxMs=\(String(format: "%.2f", fiProcessingMaximumMilliseconds)) deadlineMisses=\(fiDeadlineMissCount)/\(fiProcessingSampleCount) outputShortfalls=\(fiOutputShortfallCount) budgetMs=\(String(format: "%.2f", sourceFrameRate > 0 ? 1_000.0 / sourceFrameRate : 0))")
             }
             #if os(macOS)
+            NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) presentHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
             NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
             #endif
             producedFramesCount = 0

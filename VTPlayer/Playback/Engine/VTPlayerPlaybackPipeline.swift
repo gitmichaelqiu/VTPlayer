@@ -535,6 +535,10 @@ extension VTPlayerViewModel {
                 func scheduleCachedRead(_ groupIndex: Int) {
                     guard cachedReadTasks[groupIndex] == nil else { return }
                     cachedReadTasks[groupIndex] = Task.detached(priority: .userInitiated) {
+                        #if os(macOS)
+                        let readSignpost = MacPresentationSignposts.begin("FullCacheDecode")
+                        defer { MacPresentationSignposts.end("FullCacheDecode", identifier: readSignpost) }
+                        #endif
                         guard let url = try? await diskCache.groupFileURL(
                             groupIndex,
                             for: preparedFrameCacheKey
@@ -594,6 +598,15 @@ extension VTPlayerViewModel {
                     let nextGroupIndex = groupIndex + 1
                     scheduleCacheReadAhead(from: nextGroupIndex)
                     for frame in frames {
+                        #if os(macOS)
+                        let admissionSignpost = MacPresentationSignposts.begin("FullCacheAdmission")
+                        defer {
+                            MacPresentationSignposts.end(
+                                "FullCacheAdmission",
+                                identifier: admissionSignpost
+                            )
+                        }
+                        #endif
                         guard await admitStreamedFrame(frame) else { break }
                     }
                     self.enhancedCacheHitGroupCount += 1
