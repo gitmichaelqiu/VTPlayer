@@ -8,6 +8,22 @@ import CoreMedia
 extension VTFrameProcessorCoordinator {
     // MARK: - Process Frame
 
+    /// Advances only the explicit source-frame reference ring for an output
+    /// group supplied from the lossless cache. This is deliberately limited
+    /// to configurations whose VideoToolbox stages do not retain hidden
+    /// temporal state across submissions.
+    func advanceSourceHistory(forCachedGroup frame: VTFrame) -> Bool {
+        guard qualitySuperResolutionScaleFactor == 0,
+              denoiseStrength == 0,
+              motionBlurStrength == 0,
+              (superResolutionLevel == 0 || temporalFirstForSRInterpolation || frameInterpolationLevel == 0) else {
+            return false
+        }
+        propagateColorAttachments(from: frame.buffer, to: frame.buffer)
+        appendToSourceHistory(frame)
+        return true
+    }
+
     func beginProcessing() -> Bool {
         guard isSessionActive, !endRequested else { return false }
         activeProcessCount += 1
@@ -33,13 +49,7 @@ extension VTFrameProcessorCoordinator {
         // interpreting enhanced chroma as a green image.
         propagateColorAttachments(from: frame.buffer, to: frame.buffer)
 
-        // Track this frame in history
-        if let fpFrame = VTFrameProcessorFrame(buffer: frame.buffer, presentationTimeStamp: frame.presentationTimeStamp) {
-            frameHistory.insert(fpFrame, at: 0)
-            if frameHistory.count > maxHistoryLength {
-                frameHistory.removeLast()
-            }
-        }
+        appendToSourceHistory(frame)
 
         var currentFrames: [VTFrame] = [frame]
 
@@ -100,6 +110,17 @@ extension VTFrameProcessorCoordinator {
             return try await processSpatial(instance: instance, inputFrames: inputFrames)
         case .motionBlur:
             return try await processMotionBlur(instance: instance, inputFrames: inputFrames)
+        }
+    }
+
+    private func appendToSourceHistory(_ frame: VTFrame) {
+        guard let fpFrame = VTFrameProcessorFrame(
+            buffer: frame.buffer,
+            presentationTimeStamp: frame.presentationTimeStamp
+        ) else { return }
+        frameHistory.insert(fpFrame, at: 0)
+        if frameHistory.count > maxHistoryLength {
+            frameHistory.removeLast()
         }
     }
 

@@ -290,6 +290,8 @@ public actor VTFrameProcessorCoordinator {
         return [frame]
     }
 
+    func advanceSourceHistory(forCachedGroup frame: VTFrame) -> Bool { true }
+
     public func endSession() async {}
 
     public func sourceFramePadding() -> (right: Int, bottom: Int) { (0, 0) }
