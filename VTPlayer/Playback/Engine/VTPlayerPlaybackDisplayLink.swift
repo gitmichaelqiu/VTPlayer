@@ -74,6 +74,12 @@ extension VTPlayerViewModel {
         #endif
         displayLinkTickCount += 1
 
+        // Initial enhanced playback keeps AVPlayer paused while the producer
+        // builds a small reserve. Do not advance the extrapolated presentation
+        // clock during that interval: consuming those frames would prevent the
+        // reserve from completing and leave the transport paused indefinitely.
+        guard !isBuffering else { return }
+
         let currentTime = player.currentTime()
         let observedSecs = CMTimeGetSeconds(currentTime)
         let currentSecs = presentationClockSeconds(playerSeconds: observedSecs)
