@@ -316,15 +316,22 @@ actor EnhancedFrameDiskCache {
         activePreparationIdentifier = nil
     }
 
-    func readGroup(_ groupIndex: Int, for key: EnhancedFrameCacheKey) throws -> [VTFrame]? {
+    func readGroup(
+        _ groupIndex: Int,
+        for key: EnhancedFrameCacheKey,
+        maximumFrameCount: Int? = nil
+    ) throws -> [VTFrame]? {
         let directory = directory(for: key)
         guard var manifest = try completedManifest(for: key), manifest.key == key,
               let entry = manifest.groups.first(where: { $0.groupIndex == groupIndex }),
               let filename = entry.filename else {
             return nil
         }
-        let data = try Data(contentsOf: directory.appendingPathComponent(filename))
-        let frames = try decode(data)
+        let data = try Data(
+            contentsOf: directory.appendingPathComponent(filename),
+            options: [.mappedIfSafe]
+        )
+        let frames = try decode(data, maximumFrameCount: maximumFrameCount)
         let now = Date.now
         let directoryName = key.directoryName
         if now.timeIntervalSince(manifest.lastAccess) >= Self.accessPersistenceInterval {
@@ -527,15 +534,28 @@ actor EnhancedFrameDiskCache {
         return data
     }
 
-    private func decode(_ data: Data) throws -> [VTFrame] {
+    private func decode(_ data: Data, maximumFrameCount: Int?) throws -> [VTFrame] {
         guard data.count >= MemoryLayout<UInt64>.size else { throw EnhancedFrameDiskCacheError.invalidFrameData }
         let headerLength = data.prefix(MemoryLayout<UInt64>.size).withUnsafeBytes { $0.load(as: UInt64.self).bigEndian }
         let headerStart = MemoryLayout<UInt64>.size
         let headerEnd = headerStart + Int(headerLength)
         guard headerEnd <= data.count else { throw EnhancedFrameDiskCacheError.invalidFrameData }
         let header = try JSONDecoder().decode(GroupHeader.self, from: data[headerStart..<headerEnd])
+        let selectedIndices = selectedFrameIndices(
+            totalCount: header.frames.count,
+            maximumFrameCount: maximumFrameCount
+        )
         var payloadOffset = headerEnd
-        return try header.frames.map { frameHeader in
+        var frames: [VTFrame] = []
+        frames.reserveCapacity(selectedIndices.count)
+        for (frameIndex, frameHeader) in header.frames.enumerated() {
+            let framePayloadOffset = payloadOffset
+            let framePayloadByteCount = frameHeader.planes.reduce(0) { $0 + $1.byteCount }
+            payloadOffset += framePayloadByteCount
+            guard payloadOffset <= data.count else {
+                throw EnhancedFrameDiskCacheError.invalidFrameData
+            }
+            guard selectedIndices.contains(frameIndex) else { continue }
             let attributes: [CFString: Any] = [
                 kCVPixelBufferWidthKey: frameHeader.width,
                 kCVPixelBufferHeightKey: frameHeader.height,
@@ -552,11 +572,12 @@ actor EnhancedFrameDiskCache {
             guard (planeCount == 0 && frameHeader.planes.count == 1) || planeCount == frameHeader.planes.count else {
                 throw EnhancedFrameDiskCacheError.invalidFrameData
             }
+            var planePayloadOffset = framePayloadOffset
             for (index, plane) in frameHeader.planes.enumerated() {
                 let destinationBytesPerRow = planeCount == 0 ? CVPixelBufferGetBytesPerRow(buffer) : CVPixelBufferGetBytesPerRowOfPlane(buffer, index)
                 let destinationHeight = planeCount == 0 ? CVPixelBufferGetHeight(buffer) : CVPixelBufferGetHeightOfPlane(buffer, index)
                 guard destinationBytesPerRow >= plane.bytesPerRow, destinationHeight >= plane.height,
-                      payloadOffset + plane.byteCount <= data.count else {
+                      planePayloadOffset + plane.byteCount <= data.count else {
                     throw EnhancedFrameDiskCacheError.invalidFrameData
                 }
                 let destination = planeCount == 0 ? CVPixelBufferGetBaseAddress(buffer) : CVPixelBufferGetBaseAddressOfPlane(buffer, index)
@@ -565,12 +586,12 @@ actor EnhancedFrameDiskCache {
                     for row in 0..<plane.height {
                         memcpy(
                             destination.advanced(by: row * destinationBytesPerRow),
-                            source.baseAddress!.advanced(by: payloadOffset + row * plane.bytesPerRow),
+                            source.baseAddress!.advanced(by: planePayloadOffset + row * plane.bytesPerRow),
                             plane.bytesPerRow
                         )
                     }
                 }
-                payloadOffset += plane.byteCount
+                planePayloadOffset += plane.byteCount
             }
             applyAttachments(frameHeader.attachmentData, to: buffer)
             let time = CMTime(
@@ -579,8 +600,20 @@ actor EnhancedFrameDiskCache {
                 flags: CMTimeFlags(rawValue: frameHeader.presentationTimeFlags),
                 epoch: 0
             )
-            return VTFrame(buffer: buffer, presentationTimeStamp: time, isInterpolated: frameHeader.isInterpolated)
+            frames.append(VTFrame(buffer: buffer, presentationTimeStamp: time, isInterpolated: frameHeader.isInterpolated))
         }
+        return frames
+    }
+
+    private func selectedFrameIndices(totalCount: Int, maximumFrameCount: Int?) -> Set<Int> {
+        guard let maximumFrameCount,
+              maximumFrameCount > 0,
+              maximumFrameCount < totalCount else {
+            return Set(0..<totalCount)
+        }
+        return Set((0..<maximumFrameCount).map { index in
+            (2 * index + 1) * totalCount / (2 * maximumFrameCount)
+        })
     }
 
     private func encodedAttachments(for buffer: CVPixelBuffer) -> Data? {

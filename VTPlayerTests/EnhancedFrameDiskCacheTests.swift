@@ -48,6 +48,34 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         )
     }
 
+    func testFrameLimitedReadEvenlySelectsDisplayableFrames() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("limited-read")
+        let frames = try (0..<4).map { index in
+            try makeFrame(
+                value: UInt8(index),
+                time: CMTime(value: Int64(index), timescale: 240),
+                interpolated: index < 3
+            )
+        }
+
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0
+        )
+        try await cache.writeGroup(frames, for: 0)
+        _ = try await cache.finalizePreparation()
+
+        let group = try await cache.readGroup(0, for: key, maximumFrameCount: 2)
+        let decoded = try XCTUnwrap(group)
+        XCTAssertEqual(decoded.map(\.presentationTimeStamp), [frames[1].presentationTimeStamp, frames[3].presentationTimeStamp])
+        XCTAssertEqual(decoded.map { firstByte(of: $0.buffer) }, [1, 3])
+    }
+
     func testExtendingCoverageReusesCompletedGroups() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -493,7 +493,24 @@ extension VTPlayerViewModel {
             }
 
             if let preparedFrameCacheKey, preparedFrameCacheMode == .full {
+                #if os(macOS)
+                let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+                let maximumCachedFramesPerGroup: Int? = {
+                    guard screenMaximumFrameRate > 0, sourceFPS > 0 else { return nil }
+                    let count = Int((Double(screenMaximumFrameRate) / sourceFPS).rounded(.down))
+                    guard count > 0,
+                          fiLevel > count else { return nil }
+                    return count
+                }()
+                NSLog(
+                    "CACHE: playback mode=full displayCap=%d groupFrameLimit=%d",
+                    screenMaximumFrameRate,
+                    maximumCachedFramesPerGroup ?? 0
+                )
+                #else
+                let maximumCachedFramesPerGroup: Int? = nil
                 NSLog("CACHE: playback mode=full")
+                #endif
                 var cachedCursorTime = self.lastPulledTime
                 var cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
                     atOrAfter: cachedCursorTime,
@@ -504,7 +521,8 @@ extension VTPlayerViewModel {
                     cachedReadTask = Task { [enhancedFrameDiskCache] in
                         try? await enhancedFrameDiskCache.readGroup(
                             groupIndex,
-                            for: preparedFrameCacheKey
+                            for: preparedFrameCacheKey,
+                            maximumFrameCount: maximumCachedFramesPerGroup
                         )
                     }
                 }
@@ -525,7 +543,8 @@ extension VTPlayerViewModel {
                             cachedReadTask = Task { [enhancedFrameDiskCache] in
                                 try? await enhancedFrameDiskCache.readGroup(
                                     groupIndex,
-                                    for: preparedFrameCacheKey
+                                    for: preparedFrameCacheKey,
+                                    maximumFrameCount: maximumCachedFramesPerGroup
                                 )
                             }
                         } else {
@@ -538,7 +557,8 @@ extension VTPlayerViewModel {
                     cachedReadTask = Task { [enhancedFrameDiskCache] in
                         try? await enhancedFrameDiskCache.readGroup(
                             nextGroupIndex,
-                            for: preparedFrameCacheKey
+                            for: preparedFrameCacheKey,
+                            maximumFrameCount: maximumCachedFramesPerGroup
                         )
                     }
                     for frame in frames {
