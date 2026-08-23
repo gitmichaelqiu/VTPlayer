@@ -179,6 +179,9 @@
         }
       }
     },
+    "Apply" : {
+
+    },
     "Apply motion blur." : {
       "localizations" : {
         "zh-Hans" : {
@@ -188,6 +191,9 @@
           }
         }
       }
+    },
+    "Apply pending pipeline enhancements" : {
+
     },
     "Author's GitHub" : {
       "localizations" : {
@@ -576,6 +582,9 @@
         }
       }
     },
+    "Enhanced frame disk cache" : {
+
+    },
     "Enter a new name for the video file." : {
       "localizations" : {
         "zh-Hans" : {
@@ -852,6 +861,9 @@
         }
       }
     },
+    "Maximum persistent storage for lossless enhanced frames." : {
+
+    },
     "Measuring…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -961,6 +973,9 @@
           }
         }
       }
+    },
+    "No pending pipeline enhancement changes" : {
+
     },
     "No results" : {
       "localizations" : {
