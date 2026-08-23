@@ -86,7 +86,16 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
             completedFrames: 1,
             totalNanoseconds: 1_250_000
         )
-        let snapshot = aggregate.consumeSnapshot(completedGPU: completedGPU)
+        let presentation = RendererPresentationPerformanceSnapshot(
+            presentedFrames: 1,
+            droppedPresentations: 0,
+            intervalSamples: 0,
+            totalIntervalNanoseconds: 0
+        )
+        let snapshot = aggregate.consumeSnapshot(
+            completedGPU: completedGPU,
+            presentation: presentation
+        )
 
         XCTAssertEqual(snapshot.drawAttempts, 2)
         XCTAssertEqual(snapshot.drawableAcquisitions, 1)
@@ -94,17 +103,28 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
         XCTAssertEqual(snapshot.averageDrawableAcquisitionMilliseconds, 2.5, accuracy: 0.001)
         XCTAssertEqual(snapshot.averageCPUEncodeMilliseconds, 2.5, accuracy: 0.001)
         XCTAssertEqual(snapshot.averageGPUMilliseconds, 1.25, accuracy: 0.001)
+        XCTAssertEqual(snapshot.presentedFrames, 1)
         XCTAssertEqual(aggregate.consumeSnapshot(completedGPU: RendererGPUPerformanceSnapshot(
             completedFrames: 0,
             totalNanoseconds: 0
+        ), presentation: RendererPresentationPerformanceSnapshot(
+            presentedFrames: 0,
+            droppedPresentations: 0,
+            intervalSamples: 0,
+            totalIntervalNanoseconds: 0
         )), RendererPerformanceSnapshot(
             drawAttempts: 0,
             drawableAcquisitions: 0,
+            drawableAcquisitionFailures: 0,
             encodedFrames: 0,
             totalDrawableAcquisitionNanoseconds: 0,
             totalCPUEncodeNanoseconds: 0,
             completedGPUFrames: 0,
-            totalGPUNanoseconds: 0
+            totalGPUNanoseconds: 0,
+            presentedFrames: 0,
+            droppedPresentations: 0,
+            presentationIntervalSamples: 0,
+            totalPresentationIntervalNanoseconds: 0
         ))
     }
 }

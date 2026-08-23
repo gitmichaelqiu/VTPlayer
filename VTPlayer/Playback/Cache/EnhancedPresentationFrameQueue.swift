@@ -6,8 +6,13 @@ import Synchronization
 struct EnhancedPresentationQueueSnapshot: Sendable {
     let frameCount: Int
     let byteUsage: Int
+    let nextPresentationSeconds: Double?
     let enqueuedFrames: Int
     let cacheHitGroups: Int
+    let intentionallySampledOutFrames: Int
+    let dequeueAttempts: Int
+    let starvationCount: Int
+    let lateInterpolatedDrops: Int
 }
 
 struct EnhancedPresentationFrameSelection {
@@ -22,6 +27,10 @@ private struct EnhancedPresentationFrameQueueState: Sendable {
     var generation: UInt64
     var enqueuedFrames = 0
     var cacheHitGroups = 0
+    var intentionallySampledOutFrames = 0
+    var dequeueAttempts = 0
+    var starvationCount = 0
+    var lateInterpolatedDrops = 0
 }
 
 final class EnhancedPresentationFrameQueue: @unchecked Sendable {
@@ -41,6 +50,12 @@ final class EnhancedPresentationFrameQueue: @unchecked Sendable {
             state.startIndex = 0
             state.queuedByteUsage = 0
             state.generation = generation
+            state.enqueuedFrames = 0
+            state.cacheHitGroups = 0
+            state.intentionallySampledOutFrames = 0
+            state.dequeueAttempts = 0
+            state.starvationCount = 0
+            state.lateInterpolatedDrops = 0
         }
     }
 
@@ -71,10 +86,11 @@ final class EnhancedPresentationFrameQueue: @unchecked Sendable {
         }
     }
 
-    func recordCacheHitGroup(generation: UInt64) {
+    func recordCacheHitGroup(generation: UInt64, sampledOutFrames: Int = 0) {
         state.withLock { state in
             guard state.generation == generation else { return }
             state.cacheHitGroups += 1
+            state.intentionallySampledOutFrames += max(0, sampledOutFrames)
         }
     }
 
@@ -84,6 +100,10 @@ final class EnhancedPresentationFrameQueue: @unchecked Sendable {
         catchesUpInterpolation: Bool
     ) -> EnhancedPresentationFrameSelection? {
         state.withLock { state in
+            state.dequeueAttempts += 1
+            if state.startIndex >= state.frames.count {
+                state.starvationCount += 1
+            }
             var selected: VTFrame?
             var droppedInterpolatedFrames = 0
 
@@ -125,6 +145,7 @@ final class EnhancedPresentationFrameQueue: @unchecked Sendable {
             if selected.isInterpolated, droppedInterpolatedFrames > 0 {
                 droppedInterpolatedFrames -= 1
             }
+            state.lateInterpolatedDrops += droppedInterpolatedFrames
             compactConsumedFrames(&state)
             return EnhancedPresentationFrameSelection(
                 frame: selected,
@@ -138,12 +159,23 @@ final class EnhancedPresentationFrameQueue: @unchecked Sendable {
             let snapshot = EnhancedPresentationQueueSnapshot(
                 frameCount: state.frames.count - state.startIndex,
                 byteUsage: state.queuedByteUsage,
+                nextPresentationSeconds: state.startIndex < state.frames.count
+                    ? CMTimeGetSeconds(state.frames[state.startIndex].presentationTimeStamp)
+                    : nil,
                 enqueuedFrames: state.enqueuedFrames,
-                cacheHitGroups: state.cacheHitGroups
+                cacheHitGroups: state.cacheHitGroups,
+                intentionallySampledOutFrames: state.intentionallySampledOutFrames,
+                dequeueAttempts: state.dequeueAttempts,
+                starvationCount: state.starvationCount,
+                lateInterpolatedDrops: state.lateInterpolatedDrops
             )
             if consumeActivity {
                 state.enqueuedFrames = 0
                 state.cacheHitGroups = 0
+                state.intentionallySampledOutFrames = 0
+                state.dequeueAttempts = 0
+                state.starvationCount = 0
+                state.lateInterpolatedDrops = 0
             }
             return snapshot
         }

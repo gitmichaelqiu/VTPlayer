@@ -21,11 +21,16 @@ import UIKit
 struct RendererPerformanceSnapshot: Equatable {
     let drawAttempts: Int
     let drawableAcquisitions: Int
+    let drawableAcquisitionFailures: Int
     let encodedFrames: Int
     let totalDrawableAcquisitionNanoseconds: UInt64
     let totalCPUEncodeNanoseconds: UInt64
     let completedGPUFrames: Int
     let totalGPUNanoseconds: UInt64
+    let presentedFrames: Int
+    let droppedPresentations: Int
+    let presentationIntervalSamples: Int
+    let totalPresentationIntervalNanoseconds: UInt64
 
     var averageDrawableAcquisitionMilliseconds: Double {
         guard drawableAcquisitions > 0 else { return 0 }
@@ -41,11 +46,18 @@ struct RendererPerformanceSnapshot: Equatable {
         guard completedGPUFrames > 0 else { return 0 }
         return Double(totalGPUNanoseconds) / Double(completedGPUFrames) / 1_000_000.0
     }
+
+    var averagePresentationIntervalMilliseconds: Double {
+        guard presentationIntervalSamples > 0 else { return 0 }
+        return Double(totalPresentationIntervalNanoseconds) /
+            Double(presentationIntervalSamples) / 1_000_000.0
+    }
 }
 
 struct RendererPerformanceAggregate {
     private var drawAttempts = 0
     private var drawableAcquisitions = 0
+    private var drawableAcquisitionFailures = 0
     private var encodedFrames = 0
     private var totalDrawableAcquisitionNanoseconds: UInt64 = 0
     private var totalCPUEncodeNanoseconds: UInt64 = 0
@@ -60,28 +72,95 @@ struct RendererPerformanceAggregate {
         totalDrawableAcquisitionNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
     }
 
+    mutating func recordDrawableAcquisitionFailure() {
+        drawableAcquisitionFailures += 1
+    }
+
     mutating func recordCPUEncode(start: DispatchTime, end: DispatchTime = .now()) {
         encodedFrames += 1
         guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
         totalCPUEncodeNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
     }
 
-    mutating func consumeSnapshot(completedGPU: RendererGPUPerformanceSnapshot) -> RendererPerformanceSnapshot {
+    mutating func consumeSnapshot(
+        completedGPU: RendererGPUPerformanceSnapshot,
+        presentation: RendererPresentationPerformanceSnapshot
+    ) -> RendererPerformanceSnapshot {
         let snapshot = RendererPerformanceSnapshot(
             drawAttempts: drawAttempts,
             drawableAcquisitions: drawableAcquisitions,
+            drawableAcquisitionFailures: drawableAcquisitionFailures,
             encodedFrames: encodedFrames,
             totalDrawableAcquisitionNanoseconds: totalDrawableAcquisitionNanoseconds,
             totalCPUEncodeNanoseconds: totalCPUEncodeNanoseconds,
             completedGPUFrames: completedGPU.completedFrames,
-            totalGPUNanoseconds: completedGPU.totalNanoseconds
+            totalGPUNanoseconds: completedGPU.totalNanoseconds,
+            presentedFrames: presentation.presentedFrames,
+            droppedPresentations: presentation.droppedPresentations,
+            presentationIntervalSamples: presentation.intervalSamples,
+            totalPresentationIntervalNanoseconds: presentation.totalIntervalNanoseconds
         )
         drawAttempts = 0
         drawableAcquisitions = 0
+        drawableAcquisitionFailures = 0
         encodedFrames = 0
         totalDrawableAcquisitionNanoseconds = 0
         totalCPUEncodeNanoseconds = 0
         return snapshot
+    }
+}
+
+struct RendererPresentationPerformanceSnapshot: Equatable, Sendable {
+    let presentedFrames: Int
+    let droppedPresentations: Int
+    let intervalSamples: Int
+    let totalIntervalNanoseconds: UInt64
+}
+
+private struct RendererPresentationPerformanceStorage: Sendable {
+    var presentedFrames = 0
+    var droppedPresentations = 0
+    var intervalSamples = 0
+    var totalIntervalNanoseconds: UInt64 = 0
+    var previousPresentedTime: CFTimeInterval?
+}
+
+final class RendererPresentationPerformanceRecorder: @unchecked Sendable {
+    private let storage = Mutex(RendererPresentationPerformanceStorage())
+
+    nonisolated func record(presentedTime: CFTimeInterval) {
+        storage.withLock { storage in
+            guard presentedTime.isFinite, presentedTime > 0 else {
+                storage.droppedPresentations += 1
+                return
+            }
+            storage.presentedFrames += 1
+            if let previous = storage.previousPresentedTime, presentedTime >= previous {
+                let interval = (presentedTime - previous) * 1_000_000_000
+                if interval <= Double(UInt64.max) {
+                    storage.totalIntervalNanoseconds += UInt64(interval)
+                    storage.intervalSamples += 1
+                }
+            }
+            storage.previousPresentedTime = presentedTime
+        }
+    }
+
+    nonisolated func consumeSnapshot() -> RendererPresentationPerformanceSnapshot {
+        storage.withLock { storage in
+            let snapshot = RendererPresentationPerformanceSnapshot(
+                presentedFrames: storage.presentedFrames,
+                droppedPresentations: storage.droppedPresentations,
+                intervalSamples: storage.intervalSamples,
+                totalIntervalNanoseconds: storage.totalIntervalNanoseconds
+            )
+            storage.presentedFrames = 0
+            storage.droppedPresentations = 0
+            storage.intervalSamples = 0
+            storage.totalIntervalNanoseconds = 0
+            storage.previousPresentedTime = nil
+            return snapshot
+        }
     }
 }
 
@@ -135,6 +214,7 @@ public final class VTMetalRenderer: MTKView {
     internal var ciContext: CIContext?
     internal var performanceAggregate = RendererPerformanceAggregate()
     private let gpuPerformanceRecorder = RendererGPUPerformanceRecorder()
+    private let presentationPerformanceRecorder = RendererPresentationPerformanceRecorder()
 
     // The current pixel buffer to render
     internal var currentPixelBuffer: CVPixelBuffer?
@@ -269,7 +349,10 @@ public final class VTMetalRenderer: MTKView {
     }
 
     internal func consumePerformanceSnapshot() -> RendererPerformanceSnapshot {
-        performanceAggregate.consumeSnapshot(completedGPU: gpuPerformanceRecorder.consumeSnapshot())
+        performanceAggregate.consumeSnapshot(
+            completedGPU: gpuPerformanceRecorder.consumeSnapshot(),
+            presentation: presentationPerformanceRecorder.consumeSnapshot()
+        )
     }
 
     #if os(macOS)
@@ -301,6 +384,7 @@ public final class VTMetalRenderer: MTKView {
         performanceAggregate.recordDrawAttempt()
         let drawableAcquisitionStart = DispatchTime.now()
         guard let drawable = currentDrawable else {
+            performanceAggregate.recordDrawableAcquisitionFailure()
             return
         }
         performanceAggregate.recordDrawableAcquisition(start: drawableAcquisitionStart)
@@ -355,6 +439,7 @@ public final class VTMetalRenderer: MTKView {
             renderPassDescriptor.colorAttachments[0].storeAction = .store
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
             encoder.endEncoding()
+            trackPresentation(of: drawable)
             if let targetPresentationHostTime {
                 commandBuffer.present(drawable, atTime: targetPresentationHostTime)
             } else {
@@ -482,6 +567,7 @@ public final class VTMetalRenderer: MTKView {
                 : CGColorSpaceCreateDeviceRGB()
         )
 
+        trackPresentation(of: drawable)
         if let targetPresentationHostTime {
             commandBuffer.present(drawable, atTime: targetPresentationHostTime)
         } else {
@@ -508,6 +594,13 @@ public final class VTMetalRenderer: MTKView {
             let duration = (end - start) * 1_000_000_000
             guard duration <= Double(UInt64.max) else { return }
             recorder.recordCompletion(durationNanoseconds: UInt64(duration))
+        }
+    }
+
+    private func trackPresentation(of drawable: CAMetalDrawable) {
+        let recorder = presentationPerformanceRecorder
+        drawable.addPresentedHandler { drawable in
+            recorder.record(presentedTime: drawable.presentedTime)
         }
     }
 

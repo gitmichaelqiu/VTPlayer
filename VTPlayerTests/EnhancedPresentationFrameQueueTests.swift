@@ -84,6 +84,54 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
         XCTAssertTrue(queue.enqueue(contentsOf: [frame], generation: 2))
     }
 
+    func testQueueSnapshotSeparatesSamplingStarvationAndLateDrops() throws {
+        let queue = EnhancedPresentationFrameQueue(
+            capacityBytes: 1_000_000,
+            capacityFrames: 8,
+            generation: 1
+        )
+        XCTAssertNil(queue.dequeueNewestDue(
+            at: 0,
+            after: .negativeInfinity,
+            catchesUpInterpolation: true
+        ))
+        let frames = try [
+            makeFrame(time: CMTime(value: 1, timescale: 120), interpolated: true),
+            makeFrame(time: CMTime(value: 2, timescale: 120), interpolated: true)
+        ]
+        XCTAssertTrue(queue.enqueue(contentsOf: frames, generation: 1))
+        queue.recordCacheHitGroup(generation: 1, sampledOutFrames: 2)
+        _ = queue.dequeueNewestDue(
+            at: 1,
+            after: .zero,
+            catchesUpInterpolation: true
+        )
+
+        let snapshot = queue.snapshot(consumeActivity: true)
+        XCTAssertEqual(snapshot.starvationCount, 1)
+        XCTAssertEqual(snapshot.intentionallySampledOutFrames, 2)
+        XCTAssertEqual(snapshot.lateInterpolatedDrops, 1)
+        XCTAssertEqual(snapshot.dequeueAttempts, 2)
+        XCTAssertEqual(queue.snapshot().starvationCount, 0)
+    }
+
+    func testPresentationRecorderExcludesZeroPresentedTime() {
+        let recorder = RendererPresentationPerformanceRecorder()
+        recorder.record(presentedTime: 0)
+        recorder.record(presentedTime: 10)
+        recorder.record(presentedTime: 10 + 1.0 / 120.0)
+
+        let snapshot = recorder.consumeSnapshot()
+        XCTAssertEqual(snapshot.presentedFrames, 2)
+        XCTAssertEqual(snapshot.droppedPresentations, 1)
+        XCTAssertEqual(snapshot.intervalSamples, 1)
+        XCTAssertEqual(
+            Double(snapshot.totalIntervalNanoseconds) / 1_000_000,
+            1_000.0 / 120.0,
+            accuracy: 0.001
+        )
+    }
+
     private func makeFrame(time: CMTime, interpolated: Bool) throws -> VTFrame {
         var buffer: CVPixelBuffer?
         XCTAssertEqual(

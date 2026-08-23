@@ -637,7 +637,10 @@ extension VTPlayerViewModel {
                                 identifier: admissionSignpost
                             )
                             guard admitted else { continue }
-                            presentationQueue.recordCacheHitGroup(generation: handledGeneration)
+                            presentationQueue.recordCacheHitGroup(
+                                generation: handledGeneration,
+                                sampledOutFrames: max(0, fiLevel - frames.count)
+                            )
                             if notifiedPrerollGeneration != handledGeneration,
                                presentationQueue.snapshot().frameCount >= prerollFrameCount {
                                 notifiedPrerollGeneration = handledGeneration

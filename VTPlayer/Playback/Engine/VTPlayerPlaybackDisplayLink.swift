@@ -43,10 +43,25 @@ struct MacDisplayTickDriverSnapshot: Sendable {
     var coalesced: Int = 0
     var executed: Int = 0
     var totalMainQueueDelayNanoseconds: UInt64 = 0
+    var callbackIntervalSamples = 0
+    var totalCallbackIntervalNanoseconds: UInt64 = 0
+    var deadlineMarginSamples = 0
+    var totalDeadlineMarginSeconds = 0.0
 
     var averageMainQueueDelayMilliseconds: Double {
         guard executed > 0 else { return 0 }
         return Double(totalMainQueueDelayNanoseconds) / Double(executed) / 1_000_000
+    }
+
+    var averageCallbackIntervalMilliseconds: Double {
+        guard callbackIntervalSamples > 0 else { return 0 }
+        return Double(totalCallbackIntervalNanoseconds) /
+            Double(callbackIntervalSamples) / 1_000_000
+    }
+
+    var averageDeadlineMarginMilliseconds: Double {
+        guard deadlineMarginSamples > 0 else { return 0 }
+        return totalDeadlineMarginSeconds / Double(deadlineMarginSamples) * 1_000
     }
 }
 
@@ -109,13 +124,32 @@ final class MacDisplayTickDriver: @unchecked Sendable {
 final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
     weak var viewModel: VTPlayerViewModel?
     private var callbackCount = 0
+    private var previousCallbackHostTime: CFTimeInterval?
+    private var callbackIntervalSamples = 0
+    private var totalCallbackIntervalNanoseconds: UInt64 = 0
+    private var deadlineMarginSamples = 0
+    private var totalDeadlineMarginSeconds = 0.0
 
     init(viewModel: VTPlayerViewModel) {
         self.viewModel = viewModel
     }
 
     func metalDisplayLink(_: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        let callbackHostTime = CACurrentMediaTime()
         callbackCount += 1
+        if let previousCallbackHostTime,
+           callbackHostTime >= previousCallbackHostTime {
+            let interval = (callbackHostTime - previousCallbackHostTime) * 1_000_000_000
+            if interval <= Double(UInt64.max) {
+                totalCallbackIntervalNanoseconds += UInt64(interval)
+                callbackIntervalSamples += 1
+            }
+        }
+        previousCallbackHostTime = callbackHostTime
+        if update.targetTimestamp.isFinite {
+            totalDeadlineMarginSeconds += update.targetTimestamp - callbackHostTime
+            deadlineMarginSamples += 1
+        }
         guard let viewModel else { return }
         viewModel.tickDisplayLink(targetPresentationHostTime: update.targetPresentationTimestamp)
         viewModel.renderer.draw(
@@ -125,12 +159,21 @@ final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
     }
 
     func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
-        defer { callbackCount = 0 }
-        return MacDisplayTickDriverSnapshot(
+        let snapshot = MacDisplayTickDriverSnapshot(
             callbacks: callbackCount,
             scheduled: callbackCount,
-            executed: callbackCount
+            executed: callbackCount,
+            callbackIntervalSamples: callbackIntervalSamples,
+            totalCallbackIntervalNanoseconds: totalCallbackIntervalNanoseconds,
+            deadlineMarginSamples: deadlineMarginSamples,
+            totalDeadlineMarginSeconds: totalDeadlineMarginSeconds
         )
+        callbackCount = 0
+        callbackIntervalSamples = 0
+        totalCallbackIntervalNanoseconds = 0
+        deadlineMarginSamples = 0
+        totalDeadlineMarginSeconds = 0
+        return snapshot
     }
 }
 
@@ -466,6 +509,11 @@ extension VTPlayerViewModel {
             var firstFrame: VTFrame? = nil
             var cacheCount = 0
             var cacheBytes = 0
+            var queueNextPresentationSeconds: Double?
+            var intentionallySampledOutFrames = 0
+            var queueDequeueAttempts = 0
+            var queueStarvationCount = 0
+            var queueLateInterpolatedDrops = 0
             func snapshotMemoryCache() {
                 self.lockCache {
                     if self.processedFrameCacheStart < self.processedFrameCache.count {
@@ -480,8 +528,13 @@ extension VTPlayerViewModel {
                 let queueSnapshot = presentationQueue.snapshot(consumeActivity: true)
                 cacheCount = queueSnapshot.frameCount
                 cacheBytes = queueSnapshot.byteUsage
+                queueNextPresentationSeconds = queueSnapshot.nextPresentationSeconds
                 producedFramesCount += queueSnapshot.enqueuedFrames
                 enhancedCacheHitGroupCount += queueSnapshot.cacheHitGroups
+                intentionallySampledOutFrames = queueSnapshot.intentionallySampledOutFrames
+                queueDequeueAttempts = queueSnapshot.dequeueAttempts
+                queueStarvationCount = queueSnapshot.starvationCount
+                queueLateInterpolatedDrops = queueSnapshot.lateInterpolatedDrops
             } else {
                 snapshotMemoryCache()
             }
@@ -520,11 +573,13 @@ extension VTPlayerViewModel {
                 displayTickDriver = macDisplayTickDriver?.consumeSnapshot()
             }
             #endif
-            if let first = firstFrame {
-                let ft = CMTimeGetSeconds(first.presentationTimeStamp)
+            let nextPresentationSeconds = queueNextPresentationSeconds ?? firstFrame.map {
+                CMTimeGetSeconds($0.presentationTimeStamp)
+            }
+            if let ft = nextPresentationSeconds {
                 NSLog("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) nextPTS=\(String(format: "%.3f", ft)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             } else {
-                NSLog("DIAG: cache=0 currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
+                NSLog("DIAG: cache=\(cacheCount) currentSecs=\(String(format: "%.3f", currentSecs)) rate=\(curRate) produced5s=\(produced) callbacks5s=\(callbacks) presented5s=\(presented) interp5s=\(interpolated) source5s=\(source) rendered=\(curFPS)")
             }
             NSLog("PERF: cacheMB=\(cacheBytes / (1024 * 1024)) decodeWaitMs=\(String(format: "%.2f", decodeWait)) cacheWaitMs=\(String(format: "%.2f", cacheAdmission)) cacheInsertMs=\(String(format: "%.2f", cacheInsertion)) samples=\(producerTimingSampleCount)")
             if let cacheMode = preparedEnhancedFrameCacheMode {
@@ -532,13 +587,17 @@ extension VTPlayerViewModel {
                 let hitRate = totalCacheGroups > 0 ? Double(cacheHits) / Double(totalCacheGroups) * 100 : 0
                 let hitRateString = String(format: "%.1f", hitRate)
                 NSLog("CACHE: mode=\(cacheMode.rawValue) coverage=\(enhancedCacheCoveragePercent)% hits5s=\(cacheHits) misses5s=\(cacheMisses) hitRate=\(hitRateString)")
+                if cacheMode == .full {
+                    NSLog("CACHE-PRESENTATION: dequeues5s=\(queueDequeueAttempts) starved5s=\(queueStarvationCount) sampledOut5s=\(intentionallySampledOutFrames) lateInterpDrops5s=\(queueLateInterpolatedDrops)")
+                }
             }
             if fiProcessingSampleCount > 0 {
                 NSLog("FI: processMs=\(String(format: "%.2f", averageFIProcessing)) maxMs=\(String(format: "%.2f", fiProcessingMaximumMilliseconds)) deadlineMisses=\(fiDeadlineMissCount)/\(fiProcessingSampleCount) outputShortfalls=\(fiOutputShortfallCount) budgetMs=\(String(format: "%.2f", sourceFrameRate > 0 ? 1_000.0 / sourceFrameRate : 0))")
             }
             #if os(macOS)
-            NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) driverHz=\(String(format: "%.1f", Double(displayTickDriver?.callbacks ?? 0) / diagElapsed)) scheduledHz=\(String(format: "%.1f", Double(displayTickDriver?.scheduled ?? 0) / diagElapsed)) coalesced=\(displayTickDriver?.coalesced ?? 0) mainQueueDelayMs=\(String(format: "%.2f", displayTickDriver?.averageMainQueueDelayMilliseconds ?? 0)) presentHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
-            NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
+            let actualPresentationRate = Double(rendererPerformance.presentedFrames) / diagElapsed
+            NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) driverHz=\(String(format: "%.1f", Double(displayTickDriver?.callbacks ?? 0) / diagElapsed)) callbackIntervalMs=\(String(format: "%.2f", displayTickDriver?.averageCallbackIntervalMilliseconds ?? 0)) scheduledHz=\(String(format: "%.1f", Double(displayTickDriver?.scheduled ?? 0) / diagElapsed)) coalesced=\(displayTickDriver?.coalesced ?? 0) mainQueueDelayMs=\(String(format: "%.2f", displayTickDriver?.averageMainQueueDelayMilliseconds ?? 0)) deadlineMarginMs=\(String(format: "%.2f", displayTickDriver?.averageDeadlineMarginMilliseconds ?? 0)) submitHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) actualHz=\(String(format: "%.1f", actualPresentationRate)) actualIntervalMs=\(String(format: "%.2f", rendererPerformance.averagePresentationIntervalMilliseconds)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
+            NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableFailures=\(rendererPerformance.drawableAcquisitionFailures) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) presented=\(rendererPerformance.presentedFrames) presentationDrops=\(rendererPerformance.droppedPresentations) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
             #endif
             producedFramesCount = 0
             displayLinkTickCount = 0
