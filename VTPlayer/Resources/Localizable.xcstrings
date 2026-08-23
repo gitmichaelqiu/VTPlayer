@@ -255,6 +255,9 @@
         }
       }
     },
+    "Cached enhanced frames will be removed. Frames currently being played or prepared are retained until they are no longer in use." : {
+
+    },
     "Cached Frames" : {
       "localizations" : {
         "zh-Hans" : {
@@ -340,6 +343,12 @@
           }
         }
       }
+    },
+    "Clear Disk Cache" : {
+
+    },
+    "Clear Enhanced Frame Disk Cache?" : {
+
     },
     "Clear History" : {
       "localizations" : {
@@ -436,6 +445,9 @@
           }
         }
       }
+    },
+    "Current disk usage" : {
+
     },
     "Date Added" : {
       "localizations" : {
