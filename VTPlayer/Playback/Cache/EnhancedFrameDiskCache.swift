@@ -4,7 +4,7 @@ import CryptoKit
 import Foundation
 
 nonisolated struct EnhancedFrameCacheKey: Codable, Equatable, Hashable, Sendable {
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     var sourceFingerprint: String
     var configuration: AppliedPipelineConfiguration
@@ -64,6 +64,7 @@ actor EnhancedFrameDiskCache {
         var groupIndex: Int
         var filename: String
         var byteCount: Int64
+        var sourcePresentationSeconds: Double
     }
 
     private struct GroupHeader: Codable {
@@ -183,7 +184,11 @@ actor EnhancedFrameDiskCache {
         return status(for: manifest)
     }
 
-    func writeGroup(_ frames: [VTFrame], for groupIndex: Int) throws {
+    func writeGroup(
+        _ frames: [VTFrame],
+        for groupIndex: Int,
+        sourcePresentationTime: CMTime? = nil
+    ) throws {
         guard let partialDirectory, var manifest = preparedManifest else {
             throw EnhancedFrameDiskCacheError.cacheNotPrepared
         }
@@ -200,7 +205,13 @@ actor EnhancedFrameDiskCache {
         try fileManager.moveItem(at: temporary, to: destination)
 
         manifest.groups.removeAll { $0.groupIndex == groupIndex }
-        manifest.groups.append(GroupEntry(groupIndex: groupIndex, filename: filename, byteCount: Int64(encoded.count)))
+        let sourceSeconds = CMTimeGetSeconds(sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero)
+        manifest.groups.append(GroupEntry(
+            groupIndex: groupIndex,
+            filename: filename,
+            byteCount: Int64(encoded.count),
+            sourcePresentationSeconds: sourceSeconds.isFinite ? sourceSeconds : 0
+        ))
         manifest.groups.sort { $0.groupIndex < $1.groupIndex }
         manifest.byteCount = manifest.groups.reduce(0) { $0 + $1.byteCount }
         manifest.lastAccess = .now
@@ -208,9 +219,17 @@ actor EnhancedFrameDiskCache {
         try writeManifest(manifest, to: partialDirectory)
     }
 
-    func finalizePreparation() throws -> EnhancedFrameCacheStatus {
+    func finalizePreparation(actualGroupCount: Int? = nil) throws -> EnhancedFrameCacheStatus {
         guard let partialDirectory, var manifest = preparedManifest else {
             throw EnhancedFrameDiskCacheError.cacheNotPrepared
+        }
+        if let actualGroupCount {
+            guard actualGroupCount >= 0, actualGroupCount <= manifest.coverageBitmap.count else {
+                throw EnhancedFrameDiskCacheError.invalidFrameData
+            }
+            manifest.coverageBitmap = Array(manifest.coverageBitmap.prefix(actualGroupCount))
+            manifest.groups.removeAll { $0.groupIndex >= actualGroupCount }
+            manifest.byteCount = manifest.groups.reduce(0) { $0 + $1.byteCount }
         }
         let missing = status(for: manifest).missingGroupIndices
         guard missing.isEmpty else { throw EnhancedFrameDiskCacheError.invalidFrameData }
@@ -258,6 +277,14 @@ actor EnhancedFrameDiskCache {
     func cachedStatus(for key: EnhancedFrameCacheKey) throws -> EnhancedFrameCacheStatus? {
         guard let manifest = try loadManifest(at: directory(for: key)), manifest.key == key else { return nil }
         return status(for: manifest)
+    }
+
+    func groupIndex(atOrAfter presentationTime: CMTime, for key: EnhancedFrameCacheKey) throws -> Int? {
+        guard let manifest = try loadManifest(at: directory(for: key)), manifest.key == key else { return nil }
+        let seconds = CMTimeGetSeconds(presentationTime)
+        guard seconds.isFinite else { return manifest.groups.first?.groupIndex }
+        return manifest.groups.first(where: { $0.sourcePresentationSeconds >= seconds })?.groupIndex
+            ?? manifest.groups.last?.groupIndex
     }
 
     private func directory(for key: EnhancedFrameCacheKey) -> URL {

@@ -66,6 +66,7 @@ extension VTPlayerViewModel {
         let pipelineWidth = videoWidth
         let pipelineHeight = videoHeight
         let configuration = appliedPipelineConfiguration
+        let preparedFrameCacheKey = preparedEnhancedFrameCacheKey
         let targetFrameRate = sourceFrameRate * (configuration.frameInterpolationLevel > 0 ? Double(configuration.frameInterpolationLevel) : 1.0)
         #if os(macOS)
         // Request callback headroom for near-60 fps enhanced streams. The
@@ -477,6 +478,42 @@ extension VTPlayerViewModel {
                     resumeAfterFramePrerollIfReady()
                 }
                 return !Task.isCancelled && gen == self.playbackGeneration
+            }
+
+            if let preparedFrameCacheKey {
+                NSLog("CACHE: playback mode=full")
+                var cachedCursorTime = self.lastPulledTime
+                var cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
+                    atOrAfter: cachedCursorTime,
+                    for: preparedFrameCacheKey
+                )
+                while !Task.isCancelled, gen == self.playbackGeneration,
+                      let groupIndex = cachedGroupIndex {
+                    if self.isPaused && !self.isBuffering {
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        continue
+                    }
+                    if self.lastPulledTime != cachedCursorTime {
+                        cachedCursorTime = self.lastPulledTime
+                        cachedGroupIndex = try? await self.enhancedFrameDiskCache.groupIndex(
+                            atOrAfter: cachedCursorTime,
+                            for: preparedFrameCacheKey
+                        )
+                        continue
+                    }
+                    guard let frames = try? await self.enhancedFrameDiskCache.readGroup(
+                        groupIndex,
+                        for: preparedFrameCacheKey
+                    ) else { break }
+                    for frame in frames {
+                        guard await admitStreamedFrame(frame) else { break }
+                    }
+                    cachedGroupIndex = groupIndex + 1
+                    self.lastPulledTime = frames.last?.presentationTimeStamp ?? cachedCursorTime
+                }
+                resumeAfterFramePrerollIfReady(force: true)
+                await coordinator.endSession()
+                return
             }
 
             while !Task.isCancelled {

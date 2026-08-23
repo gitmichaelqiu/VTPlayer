@@ -95,16 +95,7 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
 
-                Button(action: { viewModel.applyPipelineEnhancements() }) {
-                    Label("Apply", systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .disabled(!viewModel.hasUnappliedPipelineChanges)
-                .help(viewModel.hasUnappliedPipelineChanges
-                    ? "Apply pending pipeline enhancements"
-                    : "No pending pipeline enhancement changes")
+                applyEnhancementsControl
 
                 // Super Resolution Popover
                 Button {
@@ -372,6 +363,33 @@ extension VTPlayerView {
             viewModel.inactivityTask?.cancel()
         } else {
             viewModel.userActivityDetected()
+        }
+    }
+
+    @ViewBuilder
+    private var applyEnhancementsControl: some View {
+        switch viewModel.enhancedCachePreparationState {
+        case .benchmarking:
+            ProgressView("Measuring")
+                .controlSize(.small)
+                .fixedSize()
+        case let .preparing(progress, bytesWritten):
+            VStack(alignment: .leading, spacing: 2) {
+                ProgressView(value: progress)
+                    .frame(width: 92)
+                Text("Preparing \(Int(progress * 100))% · \(ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .fixedSize()
+        default:
+            Button(action: { viewModel.applyPipelineEnhancements() }) {
+                Label("Apply", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(!viewModel.hasUnappliedPipelineChanges)
         }
     }
 

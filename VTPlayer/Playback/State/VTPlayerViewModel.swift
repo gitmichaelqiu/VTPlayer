@@ -22,6 +22,14 @@ enum ContinueVideoPlaybackPreference: Int {
     case off
 }
 
+enum EnhancedCachePreparationState: Equatable {
+    case idle
+    case benchmarking
+    case preparing(progress: Double, bytesWritten: Int64)
+    case ready
+    case failed(String)
+}
+
 /// The Main ViewModel managing the playback loop, synchronization, and processor pipeline.
 @Observable
 @MainActor
@@ -77,6 +85,9 @@ final class VTPlayerViewModel {
     /// macOS edits these controls as a draft. The processor only reads the
     /// applied value, keeping playback stable until the user confirms Apply.
     var appliedPipelineConfiguration = AppliedPipelineConfiguration.disabled
+    var enhancedCachePreparationState: EnhancedCachePreparationState = .idle
+    @ObservationIgnored let enhancedFrameDiskCache = EnhancedFrameDiskCache()
+    @ObservationIgnored var preparedEnhancedFrameCacheKey: EnhancedFrameCacheKey?
 
     var draftPipelineConfiguration: AppliedPipelineConfiguration {
         AppliedPipelineConfiguration(

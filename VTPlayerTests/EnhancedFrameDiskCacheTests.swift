@@ -107,6 +107,36 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertNil(evictedStatus)
     }
 
+    func testGroupLookupStartsAtTheNextCachedSourceTimestamp() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("lookup")
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true, true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0
+        )
+        try await cache.writeGroup(
+            [try makeFrame(value: 1, time: .zero, interpolated: false)],
+            for: 0,
+            sourcePresentationTime: .zero
+        )
+        try await cache.writeGroup(
+            [try makeFrame(value: 2, time: CMTime(seconds: 1, preferredTimescale: 600), interpolated: false)],
+            for: 1,
+            sourcePresentationTime: CMTime(seconds: 1, preferredTimescale: 600)
+        )
+        _ = try await cache.finalizePreparation()
+
+        let nextGroup = try await cache.groupIndex(
+            atOrAfter: CMTime(seconds: 0.5, preferredTimescale: 600),
+            for: key
+        )
+        XCTAssertEqual(nextGroup, 1)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
     }

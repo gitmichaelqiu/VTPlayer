@@ -27,15 +27,6 @@ extension VTPlayerViewModel {
         #endif
     }
 
-    func applyPipelineEnhancements() {
-        validateEnhancementSelections()
-        #if os(macOS)
-        guard hasUnappliedPipelineChanges else { return }
-        appliedPipelineConfiguration = draftPipelineConfiguration
-        #endif
-        restartAppliedEnhancements()
-    }
-
     /// Updates the active processor configuration without changing playback state.
     func restartAppliedEnhancements() {
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
