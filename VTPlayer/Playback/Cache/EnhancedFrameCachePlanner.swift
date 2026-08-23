@@ -2,7 +2,7 @@ import Foundation
 
 /// The persisted portion of a processing configuration. Renderer-only
 /// controls deliberately do not participate in this value.
-struct AppliedPipelineConfiguration: Codable, Equatable, Sendable {
+nonisolated struct AppliedPipelineConfiguration: Codable, Equatable, Hashable, Sendable {
     var superResolutionLevel: Float
     var qualitySuperResolutionScaleFactor: Int
     var frameInterpolationLevel: Int
@@ -34,7 +34,7 @@ struct AppliedPipelineConfiguration: Codable, Equatable, Sendable {
     }
 }
 
-struct EnhancedPipelineBenchmark: Equatable, Sendable {
+nonisolated struct EnhancedPipelineBenchmark: Equatable, Sendable {
     var p50GroupSeconds: Double
     var p95GroupSeconds: Double
     var sourceFramesPerSecond: Double
@@ -54,13 +54,13 @@ struct EnhancedPipelineBenchmark: Equatable, Sendable {
     }
 }
 
-enum EnhancedCachePlaybackMode: String, Codable, Equatable, Sendable {
+nonisolated enum EnhancedCachePlaybackMode: String, Codable, Equatable, Sendable {
     case realTime
     case sparse
     case full
 }
 
-struct SparseCachePlan: Equatable, Sendable {
+nonisolated struct SparseCachePlan: Equatable, Sendable {
     var mode: EnhancedCachePlaybackMode
     var coveragePercent: Int
     var coverageBitmap: [Bool]
@@ -70,7 +70,7 @@ struct SparseCachePlan: Equatable, Sendable {
     }
 }
 
-enum SparseCachePlanner {
+nonisolated enum SparseCachePlanner {
     static let safetyMargin = 0.05
     static let fullCacheThresholdPercent = 90
 
