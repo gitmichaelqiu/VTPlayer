@@ -575,16 +575,12 @@ extension VTPlayerViewModel {
                     let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                     let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
                     let outputFrameCount = streamedFrameCount + outputFrames.count
-                    if frameInterpolationLevel > 0,
-                       processingMilliseconds > sourceFrameBudgetMilliseconds {
-                        let processingText = String(format: "%.1f", processingMilliseconds)
-                        let budgetText = String(format: "%.1f", sourceFrameBudgetMilliseconds)
-                        print("PERF: FI deadline miss processing=\(processingText)ms budget=\(budgetText)ms outputs=\(outputFrameCount) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
-                    }
-
-                    if outputFrameCount < 2 && self.frameInterpolationLevel > 0 {
-                        print("⚠️ FI: expected >=2 output frames, got \(outputFrameCount) for frame at \(CMTimeGetSeconds(vtFrame.presentationTimeStamp))")
-                    }
+                    self.recordFIProcessingTiming(
+                        milliseconds: processingMilliseconds,
+                        budgetMilliseconds: sourceFrameBudgetMilliseconds,
+                        outputFrameCount: outputFrameCount,
+                        expectsInterpolation: sourceFrameOrdinal > 1
+                    )
 
                     if streamedFrameCount > 0 {
                         self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
