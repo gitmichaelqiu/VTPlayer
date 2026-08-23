@@ -43,7 +43,7 @@ extension VTPlayerViewModel {
         // Default display links are commonly capped at 60 Hz even on
         // ProMotion hardware. Request the display maximum for 4x FI and
         // restore the system default for other playback modes.
-        if frameInterpolationLevel == 4 {
+        if appliedPipelineConfiguration.frameInterpolationLevel == 4 {
             let maximumRate = Float(UIScreen.main.maximumFramesPerSecond)
             if #available(iOS 15.0, *) {
                 displayLink.preferredFrameRateRange = CAFrameRateRange(
@@ -88,7 +88,7 @@ extension VTPlayerViewModel {
         var lastFrameToRender: VTFrame? = nil
         var drained = 0
         let now = DispatchTime.now()
-        let needsTimelineCatchUp = frameInterpolationLevel > 0 && sourceFrameRate > 0
+        let needsTimelineCatchUp = appliedPipelineConfiguration.frameInterpolationLevel > 0 && sourceFrameRate > 0
 
         self.lockCache {
             if needsTimelineCatchUp {

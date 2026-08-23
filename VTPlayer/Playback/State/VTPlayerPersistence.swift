@@ -59,16 +59,16 @@ extension VTPlayerViewModel {
     func saveVideoSettings() {
         guard let url = videoURL else { return }
         let settings: [String: Any] = [
-            "superResolutionLevel": superResolutionLevel,
-            "frameInterpolationLevel": frameInterpolationLevel,
+            "superResolutionLevel": appliedPipelineConfiguration.superResolutionLevel,
+            "frameInterpolationLevel": appliedPipelineConfiguration.frameInterpolationLevel,
             "playbackSpeed": playbackSpeed,
             "volume": volume,
             "sharpness": sharpness,
             "hdrStrength": hdrStrength,
             "hdrColorfulness": hdrColorfulness,
-            "qualitySuperResolutionScaleFactor": qualitySuperResolutionScaleFactor,
-            "motionBlurStrength": motionBlurStrength,
-            "denoiseStrength": denoiseStrength,
+            "qualitySuperResolutionScaleFactor": appliedPipelineConfiguration.qualitySuperResolutionScaleFactor,
+            "motionBlurStrength": appliedPipelineConfiguration.motionBlurStrength,
+            "denoiseStrength": appliedPipelineConfiguration.denoiseStrength,
             "qualityPrioritization": qualityPrioritization,
             "continueVideoPlaybackPreference": continueVideoPlaybackPreference.rawValue,
         ]
@@ -100,6 +100,7 @@ extension VTPlayerViewModel {
         continueVideoPlaybackPreference = ContinueVideoPlaybackPreference(
             rawValue: settings["continueVideoPlaybackPreference"] as? Int ?? 0
         ) ?? .default
+        appliedPipelineConfiguration = draftPipelineConfiguration
     }
 
     func applyDefaultPlaybackSettings() {
@@ -125,6 +126,7 @@ extension VTPlayerViewModel {
         denoiseStrength = UserDefaults.standard.double(forKey: "VTDefaultDNLevel")
         qualityPrioritization = 1
         continueVideoPlaybackPreference = .default
+        appliedPipelineConfiguration = draftPipelineConfiguration
     }
 
     #if os(iOS)

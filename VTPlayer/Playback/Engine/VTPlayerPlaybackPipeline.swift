@@ -65,14 +65,15 @@ extension VTPlayerViewModel {
         let decodePreroll = CMTime(seconds: 4, preferredTimescale: 600)
         let pipelineWidth = videoWidth
         let pipelineHeight = videoHeight
-        let targetFrameRate = sourceFrameRate * (frameInterpolationLevel > 0 ? Double(frameInterpolationLevel) : 1.0)
+        let configuration = appliedPipelineConfiguration
+        let targetFrameRate = sourceFrameRate * (configuration.frameInterpolationLevel > 0 ? Double(configuration.frameInterpolationLevel) : 1.0)
         #if os(macOS)
         // Request callback headroom for near-60 fps enhanced streams. The
         // renderer still encodes only when a frame is due, and macOS clamps
         // this request to the display's supported cadence.
-        renderer.preferredFramesPerSecond = frameInterpolationLevel > 0 || sourceFrameRate >= 50 ? 120 : 60
+        renderer.preferredFramesPerSecond = configuration.frameInterpolationLevel > 0 || sourceFrameRate >= 50 ? 120 : 60
         #endif
-        NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(frameInterpolationLevel)x sr=\(superResolutionLevel)x qsr=\(qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
+        NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(configuration.frameInterpolationLevel)x sr=\(configuration.superResolutionLevel)x qsr=\(configuration.qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
 
         lockCache { clearProcessedFrameCache() }
         let restartStartTime: CMTime?
@@ -110,8 +111,8 @@ extension VTPlayerViewModel {
         fpsTimer = .now()
         displayRateMeasurementStart = .now()
 
-        let srLevel = self.superResolutionLevel
-        let fiLevel = self.frameInterpolationLevel
+        let srLevel = configuration.superResolutionLevel
+        let fiLevel = configuration.frameInterpolationLevel
         let highQuality = self.useHighQualityDownsampling
         let realTime = self.useRealTimePriority
         #if os(macOS)
@@ -123,9 +124,9 @@ extension VTPlayerViewModel {
         #else
         let sequentialSRFIFallback = self.useSequentialSRFIFallback
         #endif
-        let qualitySR = self.qualitySuperResolutionScaleFactor
-        let mbStrength = self.motionBlurStrength
-        let dnStrength = self.denoiseStrength
+        let qualitySR = configuration.qualitySuperResolutionScaleFactor
+        let mbStrength = configuration.motionBlurStrength
+        let dnStrength = configuration.denoiseStrength
         let qualPrior = self.qualityPrioritization
 
         producerTask = Task { @MainActor [weak self] in

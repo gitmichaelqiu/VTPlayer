@@ -2,6 +2,36 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
+    @MainActor
+    func testMacOSDraftDoesNotChangeAppliedPipelineUntilApply() {
+        let viewModel = VTPlayerViewModel()
+        let original = viewModel.appliedPipelineConfiguration
+        viewModel.availableSuperResolutionScales = [1.5]
+        viewModel.frameInterpolationIsSupported = true
+        viewModel.superResolutionLevel = 1.5
+        viewModel.frameInterpolationLevel = 2
+
+        viewModel.updateEnhancements()
+
+        #if os(macOS)
+        XCTAssertTrue(viewModel.hasUnappliedPipelineChanges)
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration, original)
+        #endif
+
+        viewModel.applyPipelineEnhancements()
+
+        XCTAssertEqual(
+            viewModel.appliedPipelineConfiguration,
+            AppliedPipelineConfiguration(
+                superResolutionLevel: 1.5,
+                qualitySuperResolutionScaleFactor: 0,
+                frameInterpolationLevel: 2,
+                denoiseStrength: 0,
+                motionBlurStrength: 0
+            )
+        )
+    }
+
     func testRequiredCoverageUsesP95AndRoundsUpWithSafetyMargin() {
         XCTAssertEqual(
             SparseCachePlanner.requiredCoveragePercent(

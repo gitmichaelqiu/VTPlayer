@@ -95,6 +95,17 @@ extension VTPlayerView {
                 Divider()
                     .frame(height: 16)
 
+                Button(action: { viewModel.applyPipelineEnhancements() }) {
+                    Label("Apply", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(!viewModel.hasUnappliedPipelineChanges)
+                .help(viewModel.hasUnappliedPipelineChanges
+                    ? "Apply pending pipeline enhancements"
+                    : "No pending pipeline enhancement changes")
+
                 // Super Resolution Popover
                 Button {
                     showSuperResolutionPopover.toggle()

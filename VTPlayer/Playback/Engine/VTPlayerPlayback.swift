@@ -15,9 +15,29 @@ extension VTPlayerViewModel {
         return Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000.0
     }
 
-    /// Updates coordinator when features are toggled without changing playback state.
+    /// Records a macOS draft change. Other platforms retain their immediate
+    /// enhancement behavior until their Apply workflow is introduced.
     func updateEnhancements() {
         validateEnhancementSelections()
+        #if os(macOS)
+        return
+        #else
+        appliedPipelineConfiguration = draftPipelineConfiguration
+        restartAppliedEnhancements()
+        #endif
+    }
+
+    func applyPipelineEnhancements() {
+        validateEnhancementSelections()
+        #if os(macOS)
+        guard hasUnappliedPipelineChanges else { return }
+        appliedPipelineConfiguration = draftPipelineConfiguration
+        #endif
+        restartAppliedEnhancements()
+    }
+
+    /// Updates the active processor configuration without changing playback state.
+    func restartAppliedEnhancements() {
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         if isPlaying && !isPaused {
             if isPipelineActive {

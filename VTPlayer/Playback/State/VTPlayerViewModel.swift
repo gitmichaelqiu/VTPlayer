@@ -74,6 +74,27 @@ final class VTPlayerViewModel {
     }
     var denoiseStrength: Double = 0.0  // 0.0=off, 0.0-1.0
     var qualityPrioritization: Int = 1  // 1=normal, 2=quality
+    /// macOS edits these controls as a draft. The processor only reads the
+    /// applied value, keeping playback stable until the user confirms Apply.
+    var appliedPipelineConfiguration = AppliedPipelineConfiguration.disabled
+
+    var draftPipelineConfiguration: AppliedPipelineConfiguration {
+        AppliedPipelineConfiguration(
+            superResolutionLevel: superResolutionLevel,
+            qualitySuperResolutionScaleFactor: qualitySuperResolutionScaleFactor,
+            frameInterpolationLevel: frameInterpolationLevel,
+            denoiseStrength: denoiseStrength,
+            motionBlurStrength: motionBlurStrength
+        )
+    }
+
+    var hasUnappliedPipelineChanges: Bool {
+        #if os(macOS)
+        draftPipelineConfiguration != appliedPipelineConfiguration
+        #else
+        false
+        #endif
+    }
     var continueVideoPlaybackPreference: ContinueVideoPlaybackPreference = .default
     var showSidebar = false
     var showLeftSidebar = true
@@ -87,11 +108,11 @@ final class VTPlayerViewModel {
     // Playback Progress & Stats
     var isPipelineActive: Bool {
         #if os(macOS) || os(iOS)
-        return (superResolutionLevel > 0 || 
-                frameInterpolationLevel > 0 || 
-                qualitySuperResolutionScaleFactor > 0 || 
-                denoiseStrength > 0 || 
-                motionBlurStrength > 0 ||
+        return (appliedPipelineConfiguration.superResolutionLevel > 0 ||
+                appliedPipelineConfiguration.frameInterpolationLevel > 0 ||
+                appliedPipelineConfiguration.qualitySuperResolutionScaleFactor > 0 ||
+                appliedPipelineConfiguration.denoiseStrength > 0 ||
+                appliedPipelineConfiguration.motionBlurStrength > 0 ||
                 hdrStrength > 0)
         #else
         return true
@@ -252,7 +273,7 @@ final class VTPlayerViewModel {
             // reach the display. Rebuild only when crossing the activation
             // boundary so ordinary slider adjustments stay immediate.
             if (oldValue > 0) != (hdrStrength > 0), player != nil {
-                updateEnhancements()
+                restartAppliedEnhancements()
             }
         }
     }
@@ -691,6 +712,7 @@ final class VTPlayerViewModel {
             self.frameInterpolationLevel = 2
         }
         #endif
+        self.appliedPipelineConfiguration = self.draftPipelineConfiguration
         #if os(macOS)
         self.reloadRecentVideos()
         
