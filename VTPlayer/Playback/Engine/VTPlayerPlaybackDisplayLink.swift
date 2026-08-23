@@ -92,97 +92,16 @@ extension VTPlayerViewModel {
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
         guard macDisplayLink == nil, macMetalDisplayLink == nil else { return }
-        if #available(macOS 14.0, *) {
-            let driver = MacAppKitDisplayTickDriver(viewModel: self)
-            let link = renderer.displayLink(
-                target: driver,
-                selector: #selector(MacAppKitDisplayTickDriver.displayLinkTick(_:))
-            )
-            let maximumRate = Float(max(60, renderer.window?.screen?.maximumFramesPerSecond ?? 60))
-            link.preferredFrameRateRange = CAFrameRateRange(
-                minimum: maximumRate,
-                maximum: maximumRate,
-                preferred: maximumRate
-            )
-            link.add(to: .main, forMode: .common)
-            link.isPaused = false
-            renderer.onDisplayTick = nil
-            renderer.setExternalDisplayScheduling(true)
-            displayLink = link
-            // The display link belongs to the view's actual screen, which
-            // avoids CAMetalDisplayLink's adaptive callback throttling.
-            macMetalDisplayTickDriver = nil
-            NSLog("RENDER: scheduling=appKitDisplayLink requestedHz=%.0f", maximumRate)
-            return
+        // MTKView owns the drawable and has the most direct knowledge of the
+        // screen's selected refresh cadence. External links were consistently
+        // coalesced to about 60 Hz on ProMotion displays despite a 120 Hz
+        // request, so leave the view's own scheduler active for presentation.
+        renderer.setExternalDisplayScheduling(false)
+        renderer.onDisplayTick = { [weak self] in
+            self?.tickDisplayLink()
         }
-        if #available(macOS 14.0, *),
-           let metalLayer = renderer.layer as? CAMetalLayer {
-            let driver = MacMetalDisplayTickDriver(viewModel: self)
-            let link = CAMetalDisplayLink(metalLayer: metalLayer)
-            let maximumRate = Float(max(60, renderer.window?.screen?.maximumFramesPerSecond ?? 60))
-            // A single frame of allowed latency serializes every callback on
-            // compositor retirement. That can underfeed a ProMotion display
-            // even when encoding has already completed. Keep the link within
-            // CAMetalLayer's normal triple-buffered presentation depth.
-            link.preferredFrameLatency = 3
-            link.preferredFrameRateRange = CAFrameRateRange(
-                minimum: maximumRate,
-                maximum: maximumRate,
-                preferred: maximumRate
-            )
-            link.delegate = driver
-            link.add(to: .main, forMode: .common)
-            link.isPaused = false
-            renderer.onDisplayTick = nil
-            renderer.setExternalDisplayScheduling(true)
-            macMetalDisplayTickDriver = driver
-            macMetalDisplayLink = link
-            NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%.0f", maximumRate)
-            return
-        }
-        var link: CVDisplayLink?
-        let screenNumber = renderer.window?.screen?.deviceDescription[
-            NSDeviceDescriptionKey("NSScreenNumber")
-        ] as? NSNumber
-        let result: CVReturn
-        if let screenNumber {
-            result = CVDisplayLinkCreateWithCGDisplay(
-                CGDirectDisplayID(truncating: screenNumber),
-                &link
-            )
-        } else {
-            result = CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        }
-        guard result == kCVReturnSuccess, let link else {
-            renderer.onDisplayTick = { [weak self] in
-                self?.tickDisplayLink()
-            }
-            return
-        }
-        let driver = MacDisplayTickDriver(viewModel: self)
-        guard CVDisplayLinkSetOutputCallback(
-            link,
-            macDisplayLinkCallback,
-            Unmanaged.passUnretained(driver).toOpaque()
-        ) == kCVReturnSuccess else {
-            renderer.onDisplayTick = { [weak self] in
-                self?.tickDisplayLink()
-            }
-            return
-        }
-        renderer.onDisplayTick = nil
-        renderer.setExternalDisplayScheduling(true)
-        macDisplayTickDriver = driver
-        macDisplayLink = link
-        guard CVDisplayLinkStart(link) == kCVReturnSuccess else {
-            macDisplayLink = nil
-            macDisplayTickDriver = nil
-            renderer.setExternalDisplayScheduling(false)
-            renderer.onDisplayTick = { [weak self] in
-                self?.tickDisplayLink()
-            }
-            return
-        }
+        NSLog("RENDER: scheduling=mtkView requestedHz=%d", renderer.preferredFramesPerSecond)
+        return
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
         #if os(iOS)
