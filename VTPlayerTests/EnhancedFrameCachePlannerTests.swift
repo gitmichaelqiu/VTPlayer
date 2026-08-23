@@ -114,4 +114,34 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         XCTAssertEqual(plan.coveragePercent, 58)
         XCTAssertEqual(plan.cachedGroupCount, 58)
     }
+
+    func testFourTimesInterpolationWithSuperResolutionUsesFullCache() {
+        let benchmark = EnhancedPipelineBenchmark(
+            p50GroupSeconds: 0.05,
+            p95GroupSeconds: 0.06,
+            sourceFramesPerSecond: 59.94,
+            requestedOutputFramesPerSecond: 239.76,
+            measuredDisplayFramesPerSecond: 120,
+            outputFramesPerGroup: 4,
+            averageOutputBytesPerGroup: 1,
+            diskWriteBytesPerSecond: 1
+        )
+        let configuration = AppliedPipelineConfiguration(
+            superResolutionLevel: 1.5,
+            qualitySuperResolutionScaleFactor: 0,
+            frameInterpolationLevel: 4,
+            denoiseStrength: 0,
+            motionBlurStrength: 0
+        )
+
+        let plan = SparseCachePlanner.makePlan(
+            benchmark: benchmark,
+            configuration: configuration,
+            totalGroupCount: 600
+        )
+
+        XCTAssertEqual(plan.mode, .full)
+        XCTAssertEqual(plan.coveragePercent, 100)
+        XCTAssertTrue(plan.coverageBitmap.allSatisfy { $0 })
+    }
 }
