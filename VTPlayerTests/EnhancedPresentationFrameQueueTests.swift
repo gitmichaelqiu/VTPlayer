@@ -4,6 +4,24 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedPresentationFrameQueueTests: XCTestCase {
+    func testHighRateLiveInterpolationUsesDedicatedPresentation() {
+        XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 25,
+            frameInterpolationLevel: 4,
+            screenMaximumFramesPerSecond: 120
+        ))
+        XCTAssertFalse(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 25,
+            frameInterpolationLevel: 2,
+            screenMaximumFramesPerSecond: 120
+        ))
+        XCTAssertFalse(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 25,
+            frameInterpolationLevel: 4,
+            screenMaximumFramesPerSecond: 60
+        ))
+    }
+
     func testFullCachePresentationRejectsStaleGenerationAndStoppedPlayback() {
         XCTAssertTrue(FullCachePresentationGeneration.accepts(
             driverGeneration: 7,
@@ -143,6 +161,29 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
 
         XCTAssertFalse(queue.enqueue(contentsOf: [frame], generation: 1))
         XCTAssertTrue(queue.enqueue(contentsOf: [frame], generation: 2))
+    }
+
+    func testEnqueueResultDistinguishesBackpressureFromRejectedFrames() throws {
+        let queue = EnhancedPresentationFrameQueue(
+            capacityBytes: 1_000_000,
+            capacityFrames: 1,
+            generation: 1
+        )
+        let first = try makeFrame(time: .zero, interpolated: false)
+        let second = try makeFrame(time: CMTime(value: 1, timescale: 120), interpolated: true)
+
+        XCTAssertEqual(
+            queue.enqueueResult(contentsOf: [first], generation: 1),
+            .enqueued
+        )
+        XCTAssertEqual(
+            queue.enqueueResult(contentsOf: [second], generation: 1),
+            .capacityExceeded
+        )
+        XCTAssertEqual(
+            queue.enqueueResult(contentsOf: [second], generation: 2),
+            .rejected
+        )
     }
 
     func testQueueSnapshotSeparatesSamplingStarvationAndLateDrops() throws {

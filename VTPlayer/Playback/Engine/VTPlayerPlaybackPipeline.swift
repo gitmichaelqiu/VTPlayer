@@ -84,6 +84,25 @@ extension VTPlayerViewModel {
         // renderer still encodes only when a frame is due, and macOS clamps
         // this request to the display's supported cadence.
         renderer.preferredFramesPerSecond = configuration.frameInterpolationLevel > 0 || sourceFrameRate >= 50 ? 120 : 60
+        let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+        let usesLiveDedicatedPresentation = preparedFrameCacheMode != .full &&
+            MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+                sourceFramesPerSecond: sourceFPS,
+                frameInterpolationLevel: configuration.frameInterpolationLevel,
+                screenMaximumFramesPerSecond: screenMaximumFrameRate
+            )
+        if usesLiveDedicatedPresentation {
+            fullCachePresentationQueue = EnhancedPresentationFrameQueue(
+                capacityBytes: frameCacheMemoryBudget,
+                capacityFrames: max(initialPrerollFrameCount * 4, screenMaximumFrameRate),
+                generation: gen
+            )
+            NSLog(
+                "RENDER: live dedicated presentation targetFPS=%.3f screenMaxHz=%d",
+                targetFrameRate,
+                screenMaximumFrameRate
+            )
+        }
         #endif
         NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(configuration.frameInterpolationLevel)x sr=\(configuration.superResolutionLevel)x qsr=\(configuration.qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
 
@@ -486,6 +505,35 @@ extension VTPlayerViewModel {
                     self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
                     return false
                 }
+                #if os(macOS)
+                if usesLiveDedicatedPresentation,
+                   let presentationQueue = self.fullCachePresentationQueue {
+                    let admissionStart = DispatchTime.now()
+                    while !Task.isCancelled && gen == self.playbackGeneration {
+                        switch presentationQueue.enqueueResult(
+                            contentsOf: [frame],
+                            generation: gen
+                        ) {
+                        case .enqueued:
+                            let admissionMilliseconds = Double(
+                                DispatchTime.now().uptimeNanoseconds - admissionStart.uptimeNanoseconds
+                            ) / 1_000_000.0
+                            self.recordProducerTiming(
+                                cacheAdmissionMilliseconds: admissionMilliseconds
+                            )
+                            self.producedFramesCount += 1
+                            resumeAfterFramePrerollIfReady()
+                            return true
+                        case .capacityExceeded:
+                            try? await Task.sleep(nanoseconds: 2_000_000)
+                        case .rejected:
+                            self.srInitializationError = "Enhanced frames arrived out of presentation order."
+                            return false
+                        }
+                    }
+                    return false
+                }
+                #endif
                 let admissionStart = DispatchTime.now()
                 guard await waitForCacheCapacity(byteCount) else { return false }
                 let admissionMilliseconds = Double(

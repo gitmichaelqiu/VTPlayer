@@ -20,6 +20,12 @@ nonisolated struct EnhancedPresentationFrameSelection: Sendable {
     let droppedInterpolatedFrames: Int
 }
 
+nonisolated enum EnhancedPresentationEnqueueResult: Sendable, Equatable {
+    case enqueued
+    case capacityExceeded
+    case rejected
+}
+
 nonisolated private struct EnhancedPresentationFrameQueueState: Sendable {
     var frames: [VTFrame] = []
     var startIndex = 0
@@ -60,29 +66,37 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
     }
 
     func enqueue(contentsOf frames: [VTFrame], generation: UInt64) -> Bool {
+        enqueueResult(contentsOf: frames, generation: generation) == .enqueued
+    }
+
+    func enqueueResult(
+        contentsOf frames: [VTFrame],
+        generation: UInt64
+    ) -> EnhancedPresentationEnqueueResult {
         state.withLock { state in
-            guard state.generation == generation else { return false }
+            guard state.generation == generation, !frames.isEmpty else { return .rejected }
             let byteCount = frames.reduce(into: 0) { total, frame in
                 total += CVPixelBufferGetDataSize(frame.buffer)
             }
-            guard !frames.isEmpty,
-                  byteCount <= capacityBytes,
+            guard byteCount <= capacityBytes,
+                  frames.count <= capacityFrames else { return .rejected }
+            guard
                   state.queuedByteUsage <= capacityBytes - byteCount,
                   state.frames.count - state.startIndex <= capacityFrames - frames.count else {
-                return false
+                return .capacityExceeded
             }
             var previousPTS = state.frames.last?.presentationTimeStamp
             for frame in frames {
                 if let previousPTS,
                    CMTimeCompare(previousPTS, frame.presentationTimeStamp) >= 0 {
-                    return false
+                    return .rejected
                 }
                 previousPTS = frame.presentationTimeStamp
             }
             state.frames.append(contentsOf: frames)
             state.queuedByteUsage += byteCount
             state.enqueuedFrames += frames.count
-            return true
+            return .enqueued
         }
     }
 

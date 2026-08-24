@@ -57,6 +57,19 @@ struct FullCachePresentationGeneration {
     }
 }
 
+struct MacDedicatedPresentationPolicy {
+    nonisolated static func shouldUseLiveQueue(
+        sourceFramesPerSecond: Double,
+        frameInterpolationLevel: Int,
+        screenMaximumFramesPerSecond: Int
+    ) -> Bool {
+        guard sourceFramesPerSecond > 0,
+              frameInterpolationLevel > 1,
+              screenMaximumFramesPerSecond > 60 else { return false }
+        return sourceFramesPerSecond * Double(frameInterpolationLevel) > 60
+    }
+}
+
 nonisolated struct MacDisplayTickDriverSnapshot: Sendable {
     var callbacks: Int = 0
     var scheduled: Int = 0
@@ -537,6 +550,7 @@ extension VTPlayerViewModel {
         let scheduling = renderer.schedulingSnapshot()
         let actualPresentationRate = Double(rendererPerformance.presentedFrames) / elapsed
         let submittedRate = Double(driverSnapshot.renderedFrames) / elapsed
+        let cacheMode = preparedEnhancedFrameCacheMode?.rawValue ?? "realTime"
         let hitRate = queue.cacheHitGroups > 0 ? 100.0 : 0.0
 
         NSLog(
@@ -553,9 +567,11 @@ extension VTPlayerViewModel {
             fps
         )
         NSLog(
-            "CACHE: mode=full coverage=%d hits5s=%d misses5s=0 hitRate=%.1f",
+            "CACHE: mode=%@ coverage=%d hits5s=%d misses5s=%d hitRate=%.1f",
+            cacheMode,
             enhancedCacheCoveragePercent,
             queue.cacheHitGroups,
+            enhancedCacheMissGroupCount,
             hitRate
         )
         NSLog(
@@ -643,8 +659,7 @@ extension VTPlayerViewModel {
                 1,
                 renderer.schedulingSnapshot().screenMaximumFramesPerSecond
             )
-            if preparedEnhancedFrameCacheMode == .full,
-               let presentationQueue = fullCachePresentationQueue,
+            if let presentationQueue = fullCachePresentationQueue,
                let encoder = renderer.makeFullCacheMetalEncoder(),
                let player {
                 // The CVDisplayLink timestamp is the sole presentation clock.

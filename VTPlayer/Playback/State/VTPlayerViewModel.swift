@@ -632,6 +632,8 @@ final class VTPlayerViewModel {
             fullCacheReaderControl?.requestSeek(to: lastPulledTime)
             if let control = fullCacheReaderControl {
                 fullCachePresentationQueue?.reset(generation: control.request().generation)
+            } else {
+                fullCachePresentationQueue?.reset(generation: playbackGeneration)
             }
             #endif
         }
