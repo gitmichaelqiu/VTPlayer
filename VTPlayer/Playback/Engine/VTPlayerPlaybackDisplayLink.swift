@@ -152,10 +152,7 @@ final class MacMetalDisplayTickDriver: NSObject, CAMetalDisplayLinkDelegate {
         }
         guard let viewModel else { return }
         viewModel.tickDisplayLink(targetPresentationHostTime: update.targetPresentationTimestamp)
-        viewModel.renderer.draw(
-            to: update.drawable,
-            targetPresentationHostTime: update.targetPresentationTimestamp
-        )
+        viewModel.renderer.draw(to: update.drawable)
     }
 
     func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
