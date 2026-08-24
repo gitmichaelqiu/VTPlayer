@@ -202,6 +202,7 @@ extension VTMetalRenderer {
         configureMacOSPresentationScheduling()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()
+        refreshFullCacheEncoderConfiguration()
         if window != nil, renderingActive, !usesExternalDisplayScheduling {
             isPaused = false
         }
@@ -211,6 +212,7 @@ extension VTMetalRenderer {
         super.viewDidChangeBackingProperties()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()
+        refreshFullCacheEncoderConfiguration()
     }
 
     /// Keep video presentation outside SwiftUI's layer transactions while
@@ -220,6 +222,8 @@ extension VTMetalRenderer {
         guard let metalLayer = layer as? CAMetalLayer else { return }
         metalLayer.presentsWithTransaction = false
         metalLayer.displaySyncEnabled = true
+        metalLayer.maximumDrawableCount = 3
+        metalLayer.allowsNextDrawableTimeout = false
     }
 
     public override func layout() {
@@ -228,6 +232,7 @@ extension VTMetalRenderer {
         if sizeChanged {
             lastLayoutSize = bounds.size
             updateDrawableSizeForBackingScale()
+            refreshFullCacheEncoderConfiguration()
             needsDrawableUpdate = true
             if isPaused {
                 requestPausedLayoutRedraw()

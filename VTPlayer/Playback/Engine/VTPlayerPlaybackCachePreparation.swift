@@ -133,6 +133,7 @@ extension VTPlayerViewModel {
                 }
             } catch {
                 if self.enhancedCachePreparationGeneration == preparationGeneration {
+                    NSLog("CACHE: preparation failed: %@", error.localizedDescription)
                     self.enhancedCachePreparationState = .failed(error.localizedDescription)
                     self.srInitializationError = error.localizedDescription
                     self.setNativeVideoEnabled(true)

@@ -54,59 +54,64 @@ struct RendererPerformanceSnapshot: Equatable {
     }
 }
 
-struct RendererPerformanceAggregate {
-    private var drawAttempts = 0
-    private var drawableAcquisitions = 0
-    private var drawableAcquisitionFailures = 0
-    private var encodedFrames = 0
-    private var totalDrawableAcquisitionNanoseconds: UInt64 = 0
-    private var totalCPUEncodeNanoseconds: UInt64 = 0
+nonisolated private struct RendererPerformanceStorage: Sendable {
+    var drawAttempts = 0
+    var drawableAcquisitions = 0
+    var drawableAcquisitionFailures = 0
+    var encodedFrames = 0
+    var totalDrawableAcquisitionNanoseconds: UInt64 = 0
+    var totalCPUEncodeNanoseconds: UInt64 = 0
+}
 
-    mutating func recordDrawAttempt() {
-        drawAttempts += 1
+final class RendererPerformanceAggregate: @unchecked Sendable {
+    private let storage = Mutex(RendererPerformanceStorage())
+
+    nonisolated func recordDrawAttempt() {
+        storage.withLock { $0.drawAttempts += 1 }
     }
 
-    mutating func recordDrawableAcquisition(start: DispatchTime, end: DispatchTime = .now()) {
-        drawableAcquisitions += 1
-        guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
-        totalDrawableAcquisitionNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
+    nonisolated func recordDrawableAcquisition(start: DispatchTime, end: DispatchTime = .now()) {
+        storage.withLock { storage in
+            storage.drawableAcquisitions += 1
+            guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
+            storage.totalDrawableAcquisitionNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
+        }
     }
 
-    mutating func recordDrawableAcquisitionFailure() {
-        drawableAcquisitionFailures += 1
+    nonisolated func recordDrawableAcquisitionFailure() {
+        storage.withLock { $0.drawableAcquisitionFailures += 1 }
     }
 
-    mutating func recordCPUEncode(start: DispatchTime, end: DispatchTime = .now()) {
-        encodedFrames += 1
-        guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
-        totalCPUEncodeNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
+    nonisolated func recordCPUEncode(start: DispatchTime, end: DispatchTime = .now()) {
+        storage.withLock { storage in
+            storage.encodedFrames += 1
+            guard end.uptimeNanoseconds >= start.uptimeNanoseconds else { return }
+            storage.totalCPUEncodeNanoseconds += end.uptimeNanoseconds - start.uptimeNanoseconds
+        }
     }
 
-    mutating func consumeSnapshot(
+    nonisolated func consumeSnapshot(
         completedGPU: RendererGPUPerformanceSnapshot,
         presentation: RendererPresentationPerformanceSnapshot
     ) -> RendererPerformanceSnapshot {
-        let snapshot = RendererPerformanceSnapshot(
-            drawAttempts: drawAttempts,
-            drawableAcquisitions: drawableAcquisitions,
-            drawableAcquisitionFailures: drawableAcquisitionFailures,
-            encodedFrames: encodedFrames,
-            totalDrawableAcquisitionNanoseconds: totalDrawableAcquisitionNanoseconds,
-            totalCPUEncodeNanoseconds: totalCPUEncodeNanoseconds,
-            completedGPUFrames: completedGPU.completedFrames,
-            totalGPUNanoseconds: completedGPU.totalNanoseconds,
-            presentedFrames: presentation.presentedFrames,
-            droppedPresentations: presentation.droppedPresentations,
-            presentationIntervalSamples: presentation.intervalSamples,
-            totalPresentationIntervalNanoseconds: presentation.totalIntervalNanoseconds
-        )
-        drawAttempts = 0
-        drawableAcquisitions = 0
-        drawableAcquisitionFailures = 0
-        encodedFrames = 0
-        totalDrawableAcquisitionNanoseconds = 0
-        totalCPUEncodeNanoseconds = 0
-        return snapshot
+        storage.withLock { storage in
+            let snapshot = RendererPerformanceSnapshot(
+                drawAttempts: storage.drawAttempts,
+                drawableAcquisitions: storage.drawableAcquisitions,
+                drawableAcquisitionFailures: storage.drawableAcquisitionFailures,
+                encodedFrames: storage.encodedFrames,
+                totalDrawableAcquisitionNanoseconds: storage.totalDrawableAcquisitionNanoseconds,
+                totalCPUEncodeNanoseconds: storage.totalCPUEncodeNanoseconds,
+                completedGPUFrames: completedGPU.completedFrames,
+                totalGPUNanoseconds: completedGPU.totalNanoseconds,
+                presentedFrames: presentation.presentedFrames,
+                droppedPresentations: presentation.droppedPresentations,
+                presentationIntervalSamples: presentation.intervalSamples,
+                totalPresentationIntervalNanoseconds: presentation.totalIntervalNanoseconds
+            )
+            storage = RendererPerformanceStorage()
+            return snapshot
+        }
     }
 }
 
@@ -206,6 +211,162 @@ private final class RendererGPUPerformanceRecorder: @unchecked Sendable {
     }
 }
 
+#if os(macOS)
+struct MacFullCacheRendererConfiguration: @unchecked Sendable {
+    let drawableSize: CGSize
+    let sharpness: Float
+    let hdrStrength: Float
+    let hdrColorfulness: Float
+    let isExtendedDynamicRangeActive: Bool
+    let currentEDRHeadroom: Float
+    let potentialEDRHeadroom: Float
+    let nativeHDRColorSpace: CGColorSpace?
+    let outputColorSpace: CGColorSpace
+}
+
+nonisolated final class MacFullCacheMetalEncoder: @unchecked Sendable {
+    private let commandQueue: MTLCommandQueue
+    private let context: CIContext
+    private let performanceAggregate: RendererPerformanceAggregate
+    private let gpuPerformanceRecorder: RendererGPUPerformanceRecorder
+    private let presentationPerformanceRecorder: RendererPresentationPerformanceRecorder
+    private let configuration: Mutex<MacFullCacheRendererConfiguration>
+    private let midtoneChromaKernel = CIColorKernel(source: """
+        kernel vec4 midtoneChromaCompensation(__sample image, float amount) {
+            float luma = dot(image.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float shadowWeight = smoothstep(0.08, 0.25, luma);
+            float highlightWeight = 1.0 - smoothstep(0.60, 0.95, luma);
+            float compensation = amount * shadowWeight * highlightWeight;
+            vec3 compensated = mix(vec3(luma), image.rgb, 1.0 + compensation);
+            return vec4(compensated, image.a);
+        }
+        """)
+
+    fileprivate init?(
+        device: MTLDevice,
+        configuration: MacFullCacheRendererConfiguration,
+        performanceAggregate: RendererPerformanceAggregate,
+        gpuPerformanceRecorder: RendererGPUPerformanceRecorder,
+        presentationPerformanceRecorder: RendererPresentationPerformanceRecorder
+    ) {
+        guard let commandQueue = device.makeCommandQueue() else { return nil }
+        self.commandQueue = commandQueue
+        self.context = CIContext(mtlCommandQueue: commandQueue, options: [
+            .cacheIntermediates: false,
+            .useSoftwareRenderer: false
+        ])
+        self.configuration = Mutex(configuration)
+        self.performanceAggregate = performanceAggregate
+        self.gpuPerformanceRecorder = gpuPerformanceRecorder
+        self.presentationPerformanceRecorder = presentationPerformanceRecorder
+    }
+
+    func update(configuration: MacFullCacheRendererConfiguration) {
+        self.configuration.withLock { $0 = configuration }
+    }
+
+    func encode(
+        pixelBuffer: CVPixelBuffer,
+        to drawable: CAMetalDrawable,
+        drawableAcquisitionStart: DispatchTime,
+        targetPresentationTime: CFTimeInterval
+    ) -> Bool {
+        let configuration = configuration.withLock { $0 }
+        let drawableSize = configuration.drawableSize
+        guard drawableSize.width > 0, drawableSize.height > 0,
+              let commandBuffer = commandQueue.makeCommandBuffer() else { return false }
+
+        performanceAggregate.recordDrawAttempt()
+        performanceAggregate.recordDrawableAcquisition(start: drawableAcquisitionStart)
+        let encodeStart = DispatchTime.now()
+        var image = CIImage(cvPixelBuffer: pixelBuffer)
+        if configuration.sharpness > 0 {
+            image = image.applyingFilter("CIUnsharpMask", parameters: [
+                kCIInputIntensityKey: configuration.sharpness,
+                kCIInputRadiusKey: 0.5
+            ])
+        }
+
+        if configuration.isExtendedDynamicRangeActive {
+            let normalizedStrength = min(max(configuration.hdrStrength / 2.0, 0), 1)
+            let measuredHeadroom = max(
+                configuration.currentEDRHeadroom,
+                configuration.potentialEDRHeadroom
+            )
+            let exposureEV: CGFloat
+            if configuration.nativeHDRColorSpace != nil {
+                exposureEV = CGFloat(normalizedStrength)
+            } else {
+                let targetHeadroom = 1 + (measuredHeadroom - 1) * normalizedStrength
+                exposureEV = CGFloat(log2(targetHeadroom))
+            }
+            image = image.applyingFilter("CIExposureAdjust", parameters: [
+                kCIInputEVKey: exposureEV
+            ])
+            if configuration.hdrColorfulness > 0, let midtoneChromaKernel {
+                image = midtoneChromaKernel.apply(
+                    extent: image.extent,
+                    arguments: [image, min(max(configuration.hdrColorfulness, 0), 1)]
+                ) ?? image
+            }
+        }
+
+        let imageSize = image.extent.size
+        let scale = min(
+            drawableSize.width / imageSize.width,
+            drawableSize.height / imageSize.height
+        )
+        let offsetX = (drawableSize.width - imageSize.width * scale) / 2
+        let offsetY = (drawableSize.height - imageSize.height * scale) / 2
+        image = image.transformed(
+            by: CGAffineTransform(scaleX: scale, y: scale)
+                .concatenating(CGAffineTransform(translationX: offsetX, y: offsetY))
+        )
+
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
+        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(
+            red: 0, green: 0, blue: 0, alpha: 1
+        )
+        renderPassDescriptor.colorAttachments[0].storeAction = .store
+        if let renderEncoder = commandBuffer.makeRenderCommandEncoder(
+            descriptor: renderPassDescriptor
+        ) {
+            renderEncoder.endEncoding()
+        }
+
+        context.render(
+            image,
+            to: drawable.texture,
+            commandBuffer: commandBuffer,
+            bounds: CGRect(origin: .zero, size: drawableSize),
+            colorSpace: configuration.outputColorSpace
+        )
+        let presentationRecorder = presentationPerformanceRecorder
+        drawable.addPresentedHandler { drawable in
+            presentationRecorder.record(presentedTime: drawable.presentedTime)
+        }
+        let gpuRecorder = gpuPerformanceRecorder
+        commandBuffer.addCompletedHandler { commandBuffer in
+            let start = commandBuffer.gpuStartTime
+            let end = commandBuffer.gpuEndTime
+            guard start.isFinite, end.isFinite, end >= start else { return }
+            let duration = (end - start) * 1_000_000_000
+            guard duration <= Double(UInt64.max) else { return }
+            gpuRecorder.recordCompletion(durationNanoseconds: UInt64(duration))
+        }
+        commandBuffer.present(
+            drawable,
+            atTime: max(targetPresentationTime, CACurrentMediaTime())
+        )
+        commandBuffer.commit()
+        performanceAggregate.recordCPUEncode(start: encodeStart)
+        return true
+    }
+}
+#endif
+
 /// A high-performance Metal-backed view for rendering CVPixelBuffer frames.
 @MainActor
 public final class VTMetalRenderer: MTKView {
@@ -227,6 +388,7 @@ public final class VTMetalRenderer: MTKView {
     #if os(macOS)
     internal var renderingActive = false
     internal var usesExternalDisplayScheduling = false
+    internal var fullCacheMetalEncoder: MacFullCacheMetalEncoder?
     internal var pausedLayoutRedrawPending = false
     internal var lastLayoutSize: CGSize = .zero
     #endif
@@ -237,6 +399,9 @@ public final class VTMetalRenderer: MTKView {
 
     public var sharpness: Float = 0.0 {
         didSet {
+            #if os(macOS)
+            refreshFullCacheEncoderConfiguration()
+            #endif
             requestRedrawForImageAdjustment()
         }
     }
@@ -246,6 +411,9 @@ public final class VTMetalRenderer: MTKView {
     public var hdrStrength: Float = 0.0 {
         didSet {
             configureExtendedDynamicRangePresentation()
+            #if os(macOS)
+            refreshFullCacheEncoderConfiguration()
+            #endif
             requestRedrawForImageAdjustment()
         }
     }
@@ -254,6 +422,9 @@ public final class VTMetalRenderer: MTKView {
     /// It is intentionally neutral by default and affects midtones only.
     public var hdrColorfulness: Float = 0.0 {
         didSet {
+            #if os(macOS)
+            refreshFullCacheEncoderConfiguration()
+            #endif
             requestRedrawForImageAdjustment()
         }
     }
@@ -334,6 +505,49 @@ public final class VTMetalRenderer: MTKView {
     public func setExternalDisplayScheduling(_ enabled: Bool) {
         usesExternalDisplayScheduling = enabled
         isPaused = !renderingActive || enabled
+        if !enabled {
+            fullCacheMetalEncoder = nil
+            (layer as? CAMetalLayer)?.displaySyncEnabled = true
+        }
+    }
+
+    func makeFullCacheMetalEncoder() -> MacFullCacheMetalEncoder? {
+        let configuration = fullCacheEncoderConfiguration()
+        if let fullCacheMetalEncoder {
+            fullCacheMetalEncoder.update(configuration: configuration)
+            return fullCacheMetalEncoder
+        }
+        guard let device else { return nil }
+        let encoder = MacFullCacheMetalEncoder(
+            device: device,
+            configuration: configuration,
+            performanceAggregate: performanceAggregate,
+            gpuPerformanceRecorder: gpuPerformanceRecorder,
+            presentationPerformanceRecorder: presentationPerformanceRecorder
+        )
+        fullCacheMetalEncoder = encoder
+        return encoder
+    }
+
+    internal func refreshFullCacheEncoderConfiguration() {
+        fullCacheMetalEncoder?.update(configuration: fullCacheEncoderConfiguration())
+    }
+
+    private func fullCacheEncoderConfiguration() -> MacFullCacheRendererConfiguration {
+        let outputColorSpace = isExtendedDynamicRangeActive
+            ? (nativeHDRColorSpace ?? extendedLinearDisplayP3ColorSpace)
+            : CGColorSpaceCreateDeviceRGB()
+        return MacFullCacheRendererConfiguration(
+            drawableSize: drawableSize,
+            sharpness: sharpness,
+            hdrStrength: hdrStrength,
+            hdrColorfulness: hdrColorfulness,
+            isExtendedDynamicRangeActive: isExtendedDynamicRangeActive,
+            currentEDRHeadroom: currentEDRHeadroom,
+            potentialEDRHeadroom: potentialEDRHeadroom,
+            nativeHDRColorSpace: nativeHDRColorSpace,
+            outputColorSpace: outputColorSpace
+        )
     }
     #endif
 
@@ -378,6 +592,10 @@ public final class VTMetalRenderer: MTKView {
 
     public override func draw(_ rect: CGRect) {
         #if os(macOS)
+        // CAMetalDisplayLink owns drawable acquisition while external
+        // scheduling is active. Ignore queued MTKView draws from layout or a
+        // previous internal scheduler; calling currentDrawable would abort.
+        guard !usesExternalDisplayScheduling else { return }
         let drawSignpost = MacPresentationSignposts.begin("MTKDraw")
         defer { MacPresentationSignposts.end("MTKDraw", identifier: drawSignpost) }
         #endif

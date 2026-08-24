@@ -5,7 +5,10 @@ import CoreVideo
 import Synchronization
 import os
 
-enum MacPresentationSignposts {
+nonisolated enum MacPresentationSignposts {
+    private static let isEnabled = ProcessInfo.processInfo.environment[
+        "VTPLAYER_ENABLE_PRESENTATION_SIGNPOSTS"
+    ] == "1"
     private static let log = OSLog(
         subsystem: Bundle.main.bundleIdentifier ?? "com.vtplayer.app",
         category: "EnhancedPresentation"
@@ -13,12 +16,16 @@ enum MacPresentationSignposts {
 
     static func begin(_ name: StaticString) -> OSSignpostID {
         let identifier = OSSignpostID(log: log)
-        os_signpost(.begin, log: log, name: name, signpostID: identifier)
+        if isEnabled {
+            os_signpost(.begin, log: log, name: name, signpostID: identifier)
+        }
         return identifier
     }
 
     static func end(_ name: StaticString, identifier: OSSignpostID) {
-        os_signpost(.end, log: log, name: name, signpostID: identifier)
+        if isEnabled {
+            os_signpost(.end, log: log, name: name, signpostID: identifier)
+        }
     }
 }
 

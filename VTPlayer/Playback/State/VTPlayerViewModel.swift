@@ -161,6 +161,12 @@ final class VTPlayerViewModel {
                 player.rate = Float(isPaused ? 0.0 : clamped)
                 enhancedAudioPlayer?.setRate(clamped)
                 resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
+                #if os(macOS)
+                if macDedicatedMetalDisplayTickDriver != nil {
+                    stopDisplayLinkIfNeeded()
+                    startDisplayLinkIfNeeded()
+                }
+                #endif
             }
         }
     }
@@ -339,6 +345,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var macAppKitDisplayTickDriver: MacAppKitDisplayTickDriver?
     @ObservationIgnored var macMetalDisplayLink: CAMetalDisplayLink?
     @ObservationIgnored var macMetalDisplayTickDriver: MacMetalDisplayTickDriver?
+    @ObservationIgnored var macDedicatedMetalDisplayTickDriver: MacDedicatedMetalDisplayTickDriver?
     @ObservationIgnored var macPhysicalDisplayCadenceMonitor: MacPhysicalDisplayCadenceMonitor?
     #endif
     @ObservationIgnored var presentedFramesCount = 0

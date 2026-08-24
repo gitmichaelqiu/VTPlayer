@@ -4,6 +4,37 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedPresentationFrameQueueTests: XCTestCase {
+    func testFullCachePresentationRejectsStaleGenerationAndStoppedPlayback() {
+        XCTAssertTrue(FullCachePresentationGeneration.accepts(
+            driverGeneration: 7,
+            activeGeneration: 7,
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false
+        ))
+        XCTAssertFalse(FullCachePresentationGeneration.accepts(
+            driverGeneration: 7,
+            activeGeneration: 8,
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false
+        ))
+        XCTAssertFalse(FullCachePresentationGeneration.accepts(
+            driverGeneration: 7,
+            activeGeneration: 7,
+            isPlaying: true,
+            isPaused: true,
+            isBuffering: false
+        ))
+        XCTAssertFalse(FullCachePresentationGeneration.accepts(
+            driverGeneration: 7,
+            activeGeneration: 7,
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: true
+        ))
+    }
+
     func testDisplaySchedulingWaitsForPreroll() {
         XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldStart(
             isPlaying: true,

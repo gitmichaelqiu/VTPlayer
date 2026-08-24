@@ -202,6 +202,8 @@ extension VTPlayerViewModel {
     func stopDisplayLinkIfNeeded() {
         #if os(macOS)
         renderer.onDisplayTick = nil
+        macDedicatedMetalDisplayTickDriver?.stop()
+        macDedicatedMetalDisplayTickDriver = nil
         macMetalDisplayLink?.invalidate()
         macMetalDisplayLink = nil
         macMetalDisplayTickDriver = nil

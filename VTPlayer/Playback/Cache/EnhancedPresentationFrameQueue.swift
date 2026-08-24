@@ -3,7 +3,7 @@ import CoreVideo
 import Foundation
 import Synchronization
 
-struct EnhancedPresentationQueueSnapshot: Sendable {
+nonisolated struct EnhancedPresentationQueueSnapshot: Sendable {
     let frameCount: Int
     let byteUsage: Int
     let nextPresentationSeconds: Double?
@@ -15,12 +15,12 @@ struct EnhancedPresentationQueueSnapshot: Sendable {
     let lateInterpolatedDrops: Int
 }
 
-struct EnhancedPresentationFrameSelection {
+nonisolated struct EnhancedPresentationFrameSelection: Sendable {
     let frame: VTFrame
     let droppedInterpolatedFrames: Int
 }
 
-private struct EnhancedPresentationFrameQueueState: Sendable {
+nonisolated private struct EnhancedPresentationFrameQueueState: Sendable {
     var frames: [VTFrame] = []
     var startIndex = 0
     var queuedByteUsage = 0
@@ -33,7 +33,7 @@ private struct EnhancedPresentationFrameQueueState: Sendable {
     var lateInterpolatedDrops = 0
 }
 
-final class EnhancedPresentationFrameQueue: @unchecked Sendable {
+nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
     private let capacityBytes: Int
     private let capacityFrames: Int
     private let state: Mutex<EnhancedPresentationFrameQueueState>
@@ -191,8 +191,8 @@ final class EnhancedPresentationFrameQueue: @unchecked Sendable {
     }
 }
 
-final class EnhancedPresentationReaderControl: @unchecked Sendable {
-    struct Request: Sendable {
+nonisolated final class EnhancedPresentationReaderControl: @unchecked Sendable {
+    nonisolated struct Request: Sendable {
         var generation: UInt64
         var seconds: Double
     }
