@@ -9,19 +9,49 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
             isPlaying: true,
             isPaused: false,
             isBuffering: true,
+            isInitializingPipeline: false,
+            requiresFullCachePreroll: true,
             fullCacheFrameCount: 8
         ))
         XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldStart(
             isPlaying: true,
             isPaused: false,
             isBuffering: false,
+            isInitializingPipeline: false,
+            requiresFullCachePreroll: true,
             fullCacheFrameCount: 0
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false,
+            isInitializingPipeline: true,
+            requiresFullCachePreroll: true,
+            fullCacheFrameCount: 8
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false,
+            isInitializingPipeline: false,
+            requiresFullCachePreroll: true,
+            fullCacheFrameCount: nil
         ))
         XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldStart(
             isPlaying: true,
             isPaused: false,
             isBuffering: false,
+            isInitializingPipeline: false,
+            requiresFullCachePreroll: true,
             fullCacheFrameCount: 8
+        ))
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldStart(
+            isPlaying: true,
+            isPaused: false,
+            isBuffering: false,
+            isInitializingPipeline: false,
+            requiresFullCachePreroll: false,
+            fullCacheFrameCount: nil
         ))
     }
 

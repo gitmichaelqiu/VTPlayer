@@ -12,10 +12,17 @@ struct EnhancedDisplaySchedulingPolicy {
         isPlaying: Bool,
         isPaused: Bool,
         isBuffering: Bool,
+        isInitializingPipeline: Bool,
+        requiresFullCachePreroll: Bool,
         fullCacheFrameCount: Int?
     ) -> Bool {
-        guard isPlaying, !isPaused, !isBuffering else { return false }
-        return fullCacheFrameCount.map { $0 > 0 } ?? true
+        guard isPlaying, !isPaused, !isBuffering, !isInitializingPipeline else {
+            return false
+        }
+        if requiresFullCachePreroll {
+            return fullCacheFrameCount.map { $0 > 0 } ?? false
+        }
+        return true
     }
 }
 
@@ -226,6 +233,8 @@ extension VTPlayerViewModel {
             isPlaying: isPlaying,
             isPaused: isPaused,
             isBuffering: isBuffering,
+            isInitializingPipeline: isInitializingPipeline,
+            requiresFullCachePreroll: preparedEnhancedFrameCacheMode == .full,
             fullCacheFrameCount: fullCacheFrameCount
         ) else { return }
         guard displayLink == nil else { return }

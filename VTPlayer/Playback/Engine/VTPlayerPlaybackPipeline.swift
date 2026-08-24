@@ -43,6 +43,10 @@ extension VTPlayerViewModel {
         setNativeVideoEnabled(true)
         #endif
         isBuffering = false
+        // Mark initialization before the producer task is created. Otherwise
+        // the synchronous tail of this method can start a display link before
+        // the producer establishes buffering and the full-cache preroll queue.
+        isInitializingPipeline = true
         playbackGeneration += 1
         qualityModelRetryTask?.cancel()
         qualityModelRetryTask = nil
