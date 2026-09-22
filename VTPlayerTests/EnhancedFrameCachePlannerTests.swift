@@ -185,4 +185,48 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         XCTAssertEqual(plan.coveragePercent, 100)
         XCTAssertTrue(plan.coverageBitmap.allSatisfy { $0 })
     }
+
+    func testPresentationGateUsesPhysicalDisplayCeiling() {
+        XCTAssertTrue(EnhancedPresentationGate.passes(
+            measuredFramesPerSecond: 116.5,
+            physicalFramesPerSecond: 120,
+            requestedFramesPerSecond: 239.76,
+            renderedTimelineRatio: 1.0
+        ))
+        XCTAssertFalse(EnhancedPresentationGate.passes(
+            measuredFramesPerSecond: 110,
+            physicalFramesPerSecond: 120,
+            requestedFramesPerSecond: 239.76,
+            renderedTimelineRatio: 1.0
+        ))
+        XCTAssertFalse(EnhancedPresentationGate.passes(
+            measuredFramesPerSecond: 119,
+            physicalFramesPerSecond: 120,
+            requestedFramesPerSecond: 119.88,
+            renderedTimelineRatio: 0.96
+        ))
+    }
+
+    @MainActor
+    func testVideoIdentityKeysDoNotCollideForSameFilename() {
+        let first = URL(fileURLWithPath: "/tmp/one/video.mp4")
+        let second = URL(fileURLWithPath: "/tmp/two/video.mp4")
+
+        XCTAssertNotEqual(
+            VTPlayerViewModel.videoSettingsKey(for: first),
+            VTPlayerViewModel.videoSettingsKey(for: second)
+        )
+        XCTAssertNotEqual(
+            VTPlayerViewModel.videoProgressKey(for: first),
+            VTPlayerViewModel.videoProgressKey(for: second)
+        )
+    }
+
+    func testPlaybackPhaseLabelsDescribeTransportState() {
+        #if os(macOS)
+        XCTAssertEqual(PlaybackPhase.readyPaused.label, "Ready · Paused")
+        XCTAssertEqual(PlaybackPhase.ended.label, "Ended")
+        XCTAssertEqual(PlaybackPhase.monitoringEnhanced.label, "Checking presentation")
+        #endif
+    }
 }

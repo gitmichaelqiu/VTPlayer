@@ -391,8 +391,11 @@ extension VTPlayerViewModel {
     #if os(macOS)
     func handlePlaybackEnd(for endingPlayer: AVPlayer) {
         guard player === endingPlayer else { return }
+        // Stop producer/consumer work as well as the display link. Leaving a
+        // completed enhanced pipeline alive would keep decoding and filling a
+        // cache that can no longer be presented.
+        stopPlaybackLoopOnly()
         stopEnhancedAudioPlayback()
-        stopDisplayLinkIfNeeded()
         isPlaying = false
         isPaused = true
         isBuffering = false

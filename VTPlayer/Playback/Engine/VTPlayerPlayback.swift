@@ -385,7 +385,7 @@ extension VTPlayerViewModel {
     /// Leaves playback on AVPlayer's native video output if an enhancement
     /// session cannot be started. Settings stay intact so the user can adjust
     /// them and retry without the player going dark or losing audio.
-    func restoreNativePresentationAfterPipelineFailure() {
+    func restoreNativePresentationAfterPipelineFailure(stage: PlaybackIssueStage = .pipeline) {
         stopEnhancedAudioPlayback()
         isInitializingPipeline = false
         pipelinePresentationReady = false
@@ -396,7 +396,7 @@ extension VTPlayerViewModel {
         isPlaying = false
         isPaused = true
         reportPlaybackIssue(
-            stage: .pipeline,
+            stage: stage,
             message: srInitializationError ?? "Enhanced playback could not be started."
         )
     }

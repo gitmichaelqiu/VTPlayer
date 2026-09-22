@@ -10,8 +10,10 @@ extension VTPlayerViewModel {
     private static var videoHistoryKeyPrefixes: [String] {
         [
             "VTSettings_",
+            "VTSettingsV2_",
             "VTVideoSettings_",
             "VTPlaybackProgress_",
+            "VTPlaybackProgressV2_",
             "VTLastSRLevel_",
             "VTLastFILevel_",
             "VTLastQSRLevel_",
@@ -56,29 +58,98 @@ extension VTPlayerViewModel {
         return "VTSettings_\(path)"
     }
 
+    static func videoSettingsKey(for url: URL) -> String {
+        "VTSettingsV2_\(videoIdentityToken(for: url))"
+    }
+
+    static func videoProgressKey(for url: URL) -> String {
+        "VTPlaybackProgressV2_\(videoIdentityToken(for: url))"
+    }
+
+    private static func videoIdentityToken(for url: URL) -> String {
+        let standardizedURL = url.resolvingSymlinksInPath().standardizedFileURL
+        // Use the same sampled source fingerprint as the disk cache. This
+        // keeps settings/progress tied to the actual file contents while the
+        // canonical path prevents identical filenames from colliding.
+        let fingerprint = (try? EnhancedFrameDiskCache.sourceFingerprint(for: standardizedURL))
+            ?? "unreadable"
+        let identity = "\(standardizedURL.path)|\(fingerprint)"
+        return SHA256.hash(data: Data(identity.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private func hasUnambiguousLegacyIdentity(for url: URL) -> Bool {
+        let matches = recentVideos.filter { $0.lastPathComponent == url.lastPathComponent }
+        return matches.count <= 1
+    }
+
+    func savedProgress(for url: URL) -> Double? {
+        let defaults = UserDefaults.standard
+        let currentKey = Self.videoProgressKey(for: url)
+        if let value = defaults.object(forKey: currentKey) as? NSNumber {
+            return value.doubleValue
+        }
+
+        // One-time compatibility read for versions that keyed progress only
+        // by the filename. Copying it to the identity key prevents future
+        // collisions without invalidating existing user progress.
+        guard hasUnambiguousLegacyIdentity(for: url) else { return nil }
+        let legacyKey = "VTPlaybackProgress_\(url.lastPathComponent)"
+        guard let legacy = defaults.object(forKey: legacyKey) as? NSNumber else { return nil }
+        defaults.set(legacy.doubleValue, forKey: currentKey)
+        return legacy.doubleValue
+    }
+
+    func clearPersistedVideoState(for url: URL) {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.videoSettingsKey(for: url))
+        defaults.removeObject(forKey: Self.videoProgressKey(for: url))
+        guard hasUnambiguousLegacyIdentity(for: url) else { return }
+        defaults.removeObject(forKey: Self.videoSettingsKey(for: url.lastPathComponent))
+        defaults.removeObject(forKey: "VTVideoSettings_\(url.lastPathComponent)")
+        defaults.removeObject(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
+    }
+
     func saveVideoSettings() {
         guard let url = videoURL else { return }
+        #if os(macOS)
+        let pipelineConfiguration = hasUnappliedPipelineChanges
+            ? persistedPipelineConfiguration
+            : appliedPipelineConfiguration
+        #else
+        let pipelineConfiguration = appliedPipelineConfiguration
+        #endif
         let settings: [String: Any] = [
-            "superResolutionLevel": appliedPipelineConfiguration.superResolutionLevel,
-            "frameInterpolationLevel": appliedPipelineConfiguration.frameInterpolationLevel,
+            "superResolutionLevel": pipelineConfiguration.superResolutionLevel,
+            "frameInterpolationLevel": pipelineConfiguration.frameInterpolationLevel,
             "playbackSpeed": playbackSpeed,
             "volume": volume,
             "sharpness": sharpness,
             "hdrStrength": hdrStrength,
             "hdrColorfulness": hdrColorfulness,
-            "qualitySuperResolutionScaleFactor": appliedPipelineConfiguration.qualitySuperResolutionScaleFactor,
-            "motionBlurStrength": appliedPipelineConfiguration.motionBlurStrength,
-            "denoiseStrength": appliedPipelineConfiguration.denoiseStrength,
+            "qualitySuperResolutionScaleFactor": pipelineConfiguration.qualitySuperResolutionScaleFactor,
+            "motionBlurStrength": pipelineConfiguration.motionBlurStrength,
+            "denoiseStrength": pipelineConfiguration.denoiseStrength,
             "qualityPrioritization": qualityPrioritization,
             "continueVideoPlaybackPreference": continueVideoPlaybackPreference.rawValue,
         ]
-        UserDefaults.standard.set(settings, forKey: Self.videoSettingsKey(for: url.lastPathComponent))
+        UserDefaults.standard.set(settings, forKey: Self.videoSettingsKey(for: url))
     }
 
     func loadVideoSettings(for url: URL) {
-        guard let settings = UserDefaults.standard.dictionary(forKey: Self.videoSettingsKey(for: url.lastPathComponent)) else {
+        let defaults = UserDefaults.standard
+        let currentKey = Self.videoSettingsKey(for: url)
+        let settings = defaults.dictionary(forKey: currentKey)
+            ?? (hasUnambiguousLegacyIdentity(for: url)
+                ? defaults.dictionary(forKey: Self.videoSettingsKey(for: url.lastPathComponent))
+                : nil)
+        guard let settings else {
             applyDefaultPlaybackSettings()
             return
+        }
+        if defaults.dictionary(forKey: currentKey) == nil {
+            defaults.set(settings, forKey: currentKey)
         }
         superResolutionLevel = (settings["superResolutionLevel"] as? NSNumber)?.floatValue ?? 0
         frameInterpolationLevel = settings["frameInterpolationLevel"] as? Int ?? 0
@@ -131,6 +202,7 @@ extension VTPlayerViewModel {
 
     private func stageLoadedPipelineConfigurationForApply() {
         #if os(macOS)
+        persistedPipelineConfiguration = draftPipelineConfiguration
         // Saved processor settings are intentionally restored as a draft.
         // The first transport action therefore prepares the exact cache
         // before enhanced presentation begins.

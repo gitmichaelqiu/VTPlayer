@@ -111,6 +111,9 @@ struct VTPlayerView: View {
     @State var showSettingsSheet = false
     @State var showDiagnosticsSheet = false
     @State var showClearAllAlert = false
+    #if os(macOS)
+    @State var showPlaybackIssueAlert = false
+    #endif
     @State var showDenoisePopover = false
     @State var showMotionBlurPopover = false
     @State var showSuperResolutionPopover = false
@@ -202,6 +205,22 @@ struct VTPlayerView: View {
         } message: {
             Text("This will clear your recent playback history. Your video files will remain safe.")
         }
+        .alert("Playback Issue", isPresented: $showPlaybackIssueAlert) {
+            Button("Retry Enhanced") {
+                viewModel.retryEnhancedPlayback()
+            }
+            Button("Continue Native") {
+                viewModel.continueNativePlayback()
+            }
+            Button("Dismiss", role: .cancel) {
+                viewModel.clearPlaybackIssue()
+            }
+        } message: {
+            Text(viewModel.playbackIssue?.message ?? "Playback could not continue.")
+        }
+        .onChange(of: viewModel.playbackIssue) { _, issue in
+            showPlaybackIssueAlert = issue != nil
+        }
         #endif
         .fileImporter(
             isPresented: $showFileImporter,
@@ -213,7 +232,14 @@ struct VTPlayerView: View {
                 guard let url = urls.first else { return }
                 viewModel.openVideo(url)
             case .failure(let error):
+                #if os(macOS)
+                viewModel.reportPlaybackIssue(
+                    stage: .loading,
+                    message: "The video could not be selected: \(error.localizedDescription)"
+                )
+                #else
                 print("Failed to import file: \(error.localizedDescription)")
+                #endif
             }
         }
         #if canImport(PhotosUI)

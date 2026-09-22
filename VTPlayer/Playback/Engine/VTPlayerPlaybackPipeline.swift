@@ -228,6 +228,7 @@ extension VTPlayerViewModel {
             // Check Quality SR model availability before starting (macOS only)
             var effectiveQualitySR = qualitySR
             var effectiveSRLevel = srLevel
+            var qualityModelFailureMessage: String?
 
             #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
             @MainActor func fallBackFromQualitySR(preserveSelection: Bool = false) {
@@ -280,14 +281,23 @@ extension VTPlayerViewModel {
                         self.retryAfterQualityModelDownload(generation: gen)
                         fallBackFromQualitySR(preserveSelection: true)
                     case .failed(let message):
-                        self.srInitializationError = "Quality SR model unavailable: \(message)"
-                        fallBackFromQualitySR()
+                        qualityModelFailureMessage = "Quality SR model unavailable: \(message)"
                     case .notChecked:
-                        fallBackFromQualitySR()
+                        qualityModelFailureMessage = "Quality SR model status could not be determined."
                     }
                 } else {
-                    fallBackFromQualitySR()
+                    qualityModelFailureMessage = "Quality SR is unavailable for this video on this device."
                 }
+            }
+
+            if let qualityModelFailureMessage {
+                self.srInitializationError = qualityModelFailureMessage
+                #if os(macOS)
+                self.restoreNativePresentationAfterPipelineFailure(stage: .capabilities)
+                #else
+                self.stop()
+                #endif
+                return
             }
 
             #if os(macOS)
