@@ -20,6 +20,40 @@ struct EnhancementsSettingsTab: View {
     var body: some View {
         SettingsContainer(.enhancements) {
             VStack(alignment: .leading, spacing: 20) {
+                if let viewModel = VTPlayerViewModel.activeInstance,
+                   viewModel.videoURL != nil {
+                    SettingsSection("Current Video") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Label(
+                                    viewModel.hasUnappliedPipelineChanges ? "Enhancements pending" : "Enhancements active",
+                                    systemImage: viewModel.hasUnappliedPipelineChanges ? "circle.dotted" : "checkmark.circle"
+                                )
+                                .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
+                                Spacer()
+                            }
+
+                            Text("Per-video enhancement changes stay paused until you press Apply. These controls are separate from the defaults below.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            HStack {
+                                Button("Apply") {
+                                    viewModel.applyPipelineEnhancements()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(!viewModel.hasUnappliedPipelineChanges || viewModel.isPreparingEnhancedCache)
+
+                                Button("Cancel/Revert") {
+                                    viewModel.dismissPendingEnhancementChanges()
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(!viewModel.hasUnappliedPipelineChanges)
+                            }
+                        }
+                    }
+                }
+
                 SettingsSection("Neural Engine Enhancements") {
                     SliderSettingsRow(
                         "Enhanced frame cache",

@@ -9,11 +9,20 @@ import MediaPlayer
 
 extension VTPlayerViewModel {
     func stop() {
-        cancelEnhancedCachePreparation()
+        cancelEnhancedCachePreparation(restorePreviousPlayback: false)
         stopEnhancedAudioPlayback()
         inactivityTask?.cancel()
         inactivityTask = nil
         #if os(macOS)
+        scrubPreviewTask?.cancel()
+        scrubPreviewTask = nil
+        enhancedPresentationMonitorTask?.cancel()
+        enhancedPresentationMonitorTask = nil
+        forceFullCachePreparation = false
+        nativeFallbackActive = false
+        livePresentationGateValidated = false
+        playbackIssue = nil
+        transitionPlayback(to: .empty)
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(false)
@@ -84,6 +93,11 @@ extension VTPlayerViewModel {
         self.duration = 0.0
         self.fps = 0.0
         self.displayRate1PercentLow = 0.0
+        #if os(macOS)
+        self.actualPresentedFrameRate = 0.0
+        self.actualPresented1PercentLow = 0.0
+        self.actualPresentedRateSamples.removeAll(keepingCapacity: true)
+        #endif
         self.presentedFramesCount = 0
         self.diagnosticPresentedFramesCount = 0
         self.diagnosticPresentedInterpolatedCount = 0

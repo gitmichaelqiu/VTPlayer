@@ -78,6 +78,27 @@ extension VTPlayerViewModel {
     func togglePlayPause() {
         guard !isPreparingEnhancedCache else { return }
         guard player != nil else { return }
+        #if os(macOS)
+        if playbackPhase == .ended {
+            let endingPlayer = player
+            seek(to: 0)
+            nativeFallbackActive = false
+            let replayGeneration = seekGeneration
+            Task { @MainActor [weak self, weak endingPlayer] in
+                guard let self, let endingPlayer else { return }
+                let completed = await endingPlayer.seek(
+                    to: .zero,
+                    toleranceBefore: .zero,
+                    toleranceAfter: .zero
+                )
+                guard completed,
+                      self.seekGeneration == replayGeneration,
+                      self.player === endingPlayer else { return }
+                self.play()
+            }
+            return
+        }
+        #endif
         if isPaused || !isPlaying {
             play()
         } else {
@@ -88,6 +109,11 @@ extension VTPlayerViewModel {
     /// Starts playback and the VideoToolbox processing loop.
     func play() {
         guard let player = player else { return }
+
+        #if os(macOS)
+        clearPlaybackIssue()
+        nativeFallbackActive = false
+        #endif
 
         self.isPlaying = true
         self.isPaused = false
@@ -113,17 +139,44 @@ extension VTPlayerViewModel {
         // or if the loop has not yet been initialized. Otherwise, the existing
         // active loop will automatically resume processing when isPaused is false.
         if isPipelineActive {
+            #if os(macOS)
+            transitionPlayback(to: .prerollingEnhanced)
+            #endif
             if enhancementsPendingRestart || producerTask == nil {
                 enhancementsPendingRestart = false
                 startPlaybackLoop()
             } else {
                 startDisplayLinkIfNeeded()
             }
+            #if os(macOS)
+            if preparedEnhancedFrameCacheMode == nil,
+               enhancedPresentationMonitorTask == nil,
+               !livePresentationGateValidated,
+               let url = videoURL,
+               liveFallbackCandidateConfiguration == appliedPipelineConfiguration {
+                // A play action from a stable paused state starts a new live
+                // validation window. If that window is cancelled, restore the
+                // paused state instead of accidentally continuing the draft.
+                if enhancedCachePreparationState == .ready {
+                    enhancementTransactionWasPlaying = false
+                    enhancementTransactionPreviousPhase = .paused
+                    enhancementTransactionPreviousConfiguration = appliedPipelineConfiguration
+                }
+                startEnhancedPresentationGateMonitor(
+                    url: url,
+                    candidate: appliedPipelineConfiguration,
+                    preparationGeneration: enhancedCachePreparationGeneration
+                )
+            }
+            #endif
         } else {
             #if os(macOS)
             setNativeVideoEnabled(true)
             #endif
             stopPlaybackLoopOnly()
+            #if os(macOS)
+            transitionPlayback(to: .playingNative)
+            #endif
         }
         #endif
         self.userActivityDetected()
@@ -134,26 +187,37 @@ extension VTPlayerViewModel {
     /// a UI affordance; this guard protects the pipeline from stale state.
     func validateEnhancementSelections() {
         var disabledSelection = false
+        var disabledMessages: [String] = []
         if superResolutionLevel > 0,
            !availableSuperResolutionScales.contains(superResolutionLevel) {
             superResolutionLevel = 0
             disabledSelection = true
+            disabledMessages.append("Super Resolution is unavailable for this video on this device.")
         }
         if qualitySuperResolutionScaleFactor > 0,
            !availableQualitySuperResolutionScales.contains(qualitySuperResolutionScaleFactor) {
             qualitySuperResolutionScaleFactor = 0
             disabledSelection = true
+            disabledMessages.append("Quality Super Resolution is unavailable for this video on this device.")
         }
         if frameInterpolationLevel > 0, !frameInterpolationIsAvailable {
             frameInterpolationLevel = 0
-            // Capability filtering already removes this combination from the
-            // menu. Keep the fallback silent instead of exposing an internal
-            // device/configuration detail as a confusing playback error.
-            srInitializationError = nil
+            disabledMessages.append("Frame Interpolation is unavailable for this video or enhancement combination.")
         }
         if disabledSelection {
-            srInitializationError = "Selected super-resolution mode is unavailable for this video on this device."
+            srInitializationError = disabledMessages.first
         }
+        #if os(macOS)
+        if !disabledMessages.isEmpty, videoURL != nil {
+            if appliedPipelineConfiguration == .disabled {
+                persistedPipelineConfiguration = draftPipelineConfiguration
+            }
+            reportPlaybackIssue(
+                stage: .capabilities,
+                message: "Some saved enhancement settings were reset:\n\n" + disabledMessages.joined(separator: "\n")
+            )
+        }
+        #endif
     }
 
     /// Pauses player
@@ -170,6 +234,8 @@ extension VTPlayerViewModel {
         self.isPaused = true
         self.isBuffering = false
         #if os(macOS)
+        enhancedPresentationMonitorTask?.cancel()
+        enhancedPresentationMonitorTask = nil
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
         #else
@@ -180,6 +246,11 @@ extension VTPlayerViewModel {
         #endif
         self.saveProgress()
         self.saveVideoSettings()
+        #if os(macOS)
+        if playbackPhase != .ended, playbackPhase != .failed {
+            transitionPlayback(to: isPipelineActive ? .paused : .readyPaused)
+        }
+        #endif
         self.userActivityDetected()
     }
 
@@ -246,9 +317,13 @@ extension VTPlayerViewModel {
     }
 
     func stopPlaybackLoopOnly() {
-        cancelEnhancedCachePreparation()
+        cancelEnhancedCachePreparation(restorePreviousPlayback: false)
         stopEnhancedAudioPlayback()
         #if os(macOS)
+        scrubPreviewTask?.cancel()
+        scrubPreviewTask = nil
+        enhancedPresentationMonitorTask?.cancel()
+        enhancedPresentationMonitorTask = nil
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(true)
@@ -283,6 +358,11 @@ extension VTPlayerViewModel {
         pipelineRestartAnchorPTS = nil
         isInitializingPipeline = false
         presentedFramesCount = 0
+        #if os(macOS)
+        actualPresentedFrameRate = 0
+        actualPresented1PercentLow = 0
+        actualPresentedRateSamples.removeAll(keepingCapacity: true)
+        #endif
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0
         diagnosticPresentedSourceCount = 0
@@ -293,6 +373,11 @@ extension VTPlayerViewModel {
         displayRate1PercentLow = 0
         displayRateMeasurementStart = .now()
         isBuffering = false
+        #if os(macOS)
+        if videoURL != nil, playbackPhase != .empty, playbackPhase != .failed {
+            transitionPlayback(to: isPipelineActive ? .paused : .readyPaused)
+        }
+        #endif
         lockCache { clearProcessedFrameCache() }
     }
 
@@ -307,12 +392,13 @@ extension VTPlayerViewModel {
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
         setNativeVideoEnabled(true)
-        if let player {
-            player.play()
-            player.rate = Float(playbackSpeed)
-            isPlaying = true
-            isPaused = false
-        }
+        nativeFallbackActive = true
+        isPlaying = false
+        isPaused = true
+        reportPlaybackIssue(
+            stage: .pipeline,
+            message: srInitializationError ?? "Enhanced playback could not be started."
+        )
     }
     #endif
 
@@ -344,6 +430,11 @@ extension VTPlayerViewModel {
             lastRenderedPTS = anchor
             resetPresentationClock(at: CMTimeGetSeconds(anchor))
         }
+
+        #if os(macOS)
+        transitionPlayback(to: .prerollingEnhanced)
+        enhancedCachePreparationState = .prerolling
+        #endif
 
         if let coordinatorTeardownTask {
             playbackGeneration += 1

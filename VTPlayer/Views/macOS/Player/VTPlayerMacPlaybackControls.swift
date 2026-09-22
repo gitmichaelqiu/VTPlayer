@@ -19,22 +19,39 @@ extension VTPlayerView {
     #if os(macOS)
     @ViewBuilder
     var playPauseButton: some View {
-        if viewModel.shouldShowTransportApplyAction {
-            Button(action: { viewModel.applyPipelineEnhancements() }) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3.weight(.semibold))
+        Button(action: { viewModel.togglePlayPause() }) {
+            Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+        .buttonStyle(.glass)
+        .keyboardShortcut(.space, modifiers: [])
+        .disabled(viewModel.playbackPhase == .loading || viewModel.playbackPhase == .benchmarking)
+    }
+
+    @ViewBuilder
+    var pendingEnhancementControls: some View {
+        if viewModel.hasUnappliedPipelineChanges {
+            HStack(spacing: 6) {
+                Label("Pending", systemImage: "circle.dotted")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+
+                Button("Apply") {
+                    viewModel.applyPipelineEnhancements()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .help("Apply enhancement changes")
+
+                Button("Cancel") {
+                    viewModel.dismissPendingEnhancementChanges()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Discard pending enhancement changes")
             }
-            .buttonStyle(.glassProminent)
-            .keyboardShortcut(.space, modifiers: [])
-            .help("Apply enhancement changes")
-        } else {
-            Button(action: { viewModel.togglePlayPause() }) {
-                Image(systemName: (viewModel.isPlaying && !viewModel.isPaused) ? "pause.fill" : "play.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-            }
-            .buttonStyle(.glass)
-            .keyboardShortcut(.space, modifiers: [])
+            .padding(.horizontal, 6)
         }
     }
 
@@ -62,16 +79,6 @@ extension VTPlayerView {
                     set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.playbackSpeed = newValue } }
                 ), in: 0.5...2.0, step: 0.25)
 
-                Divider()
-
-                Picker("Continue video playback", selection: Binding(
-                    get: { viewModel.continueVideoPlaybackPreference },
-                    set: { viewModel.setContinueVideoPlaybackPreference($0) }
-                )) {
-                    Text("Default").tag(ContinueVideoPlaybackPreference.default)
-                    Text("On").tag(ContinueVideoPlaybackPreference.on)
-                    Text("Off").tag(ContinueVideoPlaybackPreference.off)
-                }
             }
             .padding(16)
             .frame(width: 220)

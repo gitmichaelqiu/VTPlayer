@@ -4,6 +4,12 @@ import VideoToolbox
 
 extension VTPlayerViewModel {
     func setupPlayer(with url: URL) {
+        #if os(macOS)
+        transitionPlayback(to: .loading)
+        clearPlaybackIssue()
+        nativeFallbackActive = false
+        livePresentationGateValidated = false
+        #endif
         // A prepared cache is specific to both the source fingerprint and the
         // applied processing configuration. Never let a previous title select
         // cache-backed playback while this title is still loading metadata.
@@ -36,6 +42,14 @@ extension VTPlayerViewModel {
                 
                 let tracks = try await asset.loadTracks(withMediaType: .video)
                 guard let videoTrack = tracks.first else {
+                    await MainActor.run {
+                        guard setupGeneration == self.playbackGeneration,
+                              self.videoURL == url else { return }
+                        self.reportPlaybackIssue(
+                            stage: .loading,
+                            message: "This file does not contain a playable video track."
+                        )
+                    }
                     return
                 }
                 
@@ -197,7 +211,9 @@ extension VTPlayerViewModel {
                     }
                     self.timeObserverToken = timeObserver
                     
-                    // Observe play ending to auto-rewind
+                    // Natural completion is a stable transport state. The
+                    // next explicit Play action is responsible for replaying
+                    // from the beginning.
                     let observer = NotificationCenter.default.addObserver(
                         forName: .AVPlayerItemDidPlayToEndTime,
                         object: item,
@@ -205,7 +221,7 @@ extension VTPlayerViewModel {
                     ) { [self] _ in
                         Task { @MainActor [weak self] in
                             guard let self, self.player === newPlayer else { return }
-                            await self.rewindAfterPlaybackEnd(for: newPlayer)
+                            self.handlePlaybackEnd(for: newPlayer)
                         }
                     }
                     self.playerItemObserver = observer
@@ -227,6 +243,12 @@ extension VTPlayerViewModel {
                     self.rateObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [self] player, change in
                         Task { @MainActor [weak self] in
                             guard let self else { return }
+                            #if os(macOS)
+                            guard !self.suppressRateObserver,
+                                  self.playbackPhase != .benchmarking,
+                                  self.playbackPhase != .prerollingEnhanced,
+                                  self.playbackPhase != .preparingCache else { return }
+                            #endif
                             switch player.timeControlStatus {
                             case .paused:
                                 if !self.isInitializingPipeline,
@@ -253,14 +275,16 @@ extension VTPlayerViewModel {
                         }
                     }
                     
-                    // Restore per-video enhancement settings
+                    // Restore per-video enhancement settings. On macOS these
+                    // values are intentionally a draft until the user presses
+                    // the explicit Apply action.
                     self.loadVideoSettings(for: url)
                     self.validateEnhancementSelections()
                     #if os(macOS)
                     self.setNativeVideoEnabled(!self.isPipelineActive)
                     #endif
 
-                    let savedProgress = UserDefaults.standard.double(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
+                    let savedProgress = self.savedProgress(for: url) ?? 0
                     let resumeTime: CMTime?
                     if self.shouldContinueVideoPlayback,
                        savedProgress > 0,
@@ -285,7 +309,14 @@ extension VTPlayerViewModel {
                             return
                         }
                         #endif
+                        #if os(macOS)
+                        self.isPlaying = false
+                        self.isPaused = true
+                        self.transitionPlayback(to: .readyPaused)
+                        self.renderer.setRenderingActive(false)
+                        #else
                         self.play()
+                        #endif
                         return
                     }
                     let completionViewModel = self
@@ -323,11 +354,30 @@ extension VTPlayerViewModel {
                             return
                         }
                         #endif
+                        #if os(macOS)
+                        completionViewModel.isPlaying = false
+                        completionViewModel.isPaused = true
+                        completionViewModel.transitionPlayback(to: .readyPaused)
+                        completionViewModel.renderer.setRenderingActive(false)
+                        #else
                         completionViewModel.play()
+                        #endif
                     }
                 }
             } catch {
                 print("Error loading video properties: \(error.localizedDescription)")
+                #if os(macOS)
+                guard setupGeneration == self.playbackGeneration,
+                      self.videoURL == url else { return }
+                self.player = nil
+                self.duration = 0
+                self.isPlaying = false
+                self.isPaused = true
+                self.reportPlaybackIssue(
+                    stage: .loading,
+                    message: "This video could not be opened: \(error.localizedDescription)"
+                )
+                #endif
                 #if os(iOS)
                 if isManagedImportedVideo(url),
                    let idx = self.recentVideos.firstIndex(of: url) {
@@ -337,5 +387,19 @@ extension VTPlayerViewModel {
             }
         }
     }
+
+    #if os(macOS)
+    func handlePlaybackEnd(for endingPlayer: AVPlayer) {
+        guard player === endingPlayer else { return }
+        stopEnhancedAudioPlayback()
+        stopDisplayLinkIfNeeded()
+        isPlaying = false
+        isPaused = true
+        isBuffering = false
+        pipelinePresentationReady = isPipelineActive ? pipelinePresentationReady : false
+        transitionPlayback(to: .ended)
+        saveProgress()
+    }
+    #endif
     
 }

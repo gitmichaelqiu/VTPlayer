@@ -61,8 +61,10 @@ extension VTPlayerView {
 
                 Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
                     isScrubbing = editing
-                    if !editing {
-                        viewModel.seek(to: scrubTime)
+                    if editing {
+                        viewModel.beginScrub()
+                    } else {
+                        viewModel.finishScrub(to: scrubTime)
                     }
                 })
                 .labelsHidden()
@@ -91,6 +93,7 @@ extension VTPlayerView {
                     HStack(spacing: 8) {
                 // Play/Pause button
                 playPauseButton
+                pendingEnhancementControls
 
                 // Super Resolution Popover
                 Button {
