@@ -214,19 +214,33 @@ extension VTPlayerView {
         Form {
             if viewModel.isPipelineActive {
                 Section("Real-Time Metrics") {
+                    LabeledContent("Playback State") {
+                        Text(viewModel.playbackPhase.label)
+                            .foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Applied Enhancements", value: viewModel.appliedEnhancementSummary)
                     LabeledContent("Frame Processing") {
                         Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
                             .monospacedDigit()
                     }
-                    LabeledContent("Display Rate") {
-                        Text(String(format: "%.1f Hz", viewModel.displayFrameRate))
+                    LabeledContent("Submitted Rate") {
+                        Text(String(format: "%.1f Hz", viewModel.fps))
                             .monospacedDigit()
-                            .foregroundStyle(viewModel.displayFrameRate > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                            .foregroundStyle(.secondary)
                     }
-                    LabeledContent("Display 1st Percentile Low") {
-                        Text(String(format: "%.1f Hz", viewModel.displayRate1PercentLow))
+                    LabeledContent("Presented Rate") {
+                        Text(String(format: "%.1f Hz", viewModel.actualPresentedFrameRate))
                             .monospacedDigit()
-                            .foregroundStyle(viewModel.displayRate1PercentLow > (viewModel.sourceFrameRate * 0.8) ? .blue : .red)
+                            .foregroundStyle(viewModel.actualPresentedFrameRate >= viewModel.displayTargetFrameRate * 0.97 ? .blue : .red)
+                    }
+                    LabeledContent("Presented 1% Low") {
+                        Text(String(format: "%.1f Hz", viewModel.actualPresented1PercentLow))
+                            .monospacedDigit()
+                            .foregroundStyle(viewModel.actualPresented1PercentLow >= viewModel.displayTargetFrameRate * 0.97 ? .blue : .red)
+                    }
+                    LabeledContent("Display Target") {
+                        Text(String(format: "%.1f Hz", viewModel.displayTargetFrameRate))
+                            .monospacedDigit()
                     }
                     LabeledContent("Rendered Timeline") {
                         if viewModel.renderedTimelineSampleDuration > 0 {
@@ -243,10 +257,10 @@ extension VTPlayerView {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    LabeledContent("Cached Frames") {
-                        Text("\(viewModel.frameCacheCount)")
+                    LabeledContent("Buffered Frames") {
+                        Text("\(viewModel.presentationQueueFrameCount)")
                             .monospacedDigit()
-                            .foregroundStyle(viewModel.frameCacheCount > 10 ? .blue : .secondary)
+                            .foregroundStyle(viewModel.presentationQueueFrameCount > 10 ? .blue : .secondary)
                     }
                 }
             }
@@ -257,8 +271,10 @@ extension VTPlayerView {
                     Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
                         .monospacedDigit()
                 }
-                LabeledContent("Target Rate") {
-                    let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
+                LabeledContent("Generated Rate") {
+                    let scale = viewModel.appliedPipelineConfiguration.frameInterpolationLevel > 0
+                        ? Double(viewModel.appliedPipelineConfiguration.frameInterpolationLevel)
+                        : 1.0
                     let rate = viewModel.sourceFrameRate * scale
                     Text(String(format: "%.2f fps", rate))
                         .monospacedDigit()

@@ -19,6 +19,12 @@ extension VTPlayerView {
                 case .benchmarking:
                     Text("Measuring the selected pipeline before playback.")
                         .foregroundStyle(.secondary)
+                case .prerolling:
+                    Text("Warming the enhanced frame queue before playback.")
+                        .foregroundStyle(.secondary)
+                case .monitoring:
+                    Text("Checking live presentation cadence.")
+                        .foregroundStyle(.secondary)
                 case let .preparing(progress, bytesWritten):
                     ProgressView(value: progress)
                         .frame(width: 260)

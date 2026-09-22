@@ -70,6 +70,24 @@ struct MacDedicatedPresentationPolicy {
     }
 }
 
+struct EnhancedPresentationGate {
+    nonisolated static func passes(
+        measuredFramesPerSecond: Double,
+        physicalFramesPerSecond: Double,
+        requestedFramesPerSecond: Double,
+        renderedTimelineRatio: Double = 1
+    ) -> Bool {
+        guard measuredFramesPerSecond.isFinite,
+              requestedFramesPerSecond > 0 else { return false }
+        let physicalCeiling = physicalFramesPerSecond > 0
+            ? physicalFramesPerSecond
+            : requestedFramesPerSecond
+        let target = min(requestedFramesPerSecond, physicalCeiling)
+        guard measuredFramesPerSecond >= target * 0.97 else { return false }
+        return renderedTimelineRatio == 0 || (0.99...1.01).contains(renderedTimelineRatio)
+    }
+}
+
 nonisolated struct MacDisplayTickDriverSnapshot: Sendable {
     var callbacks: Int = 0
     var scheduled: Int = 0
@@ -511,6 +529,10 @@ extension VTPlayerViewModel {
                 setNativeVideoEnabled(false)
             }
             enhancedAudioPlayer?.frameRendered(at: update.presentationTimeStamp)
+            if playbackPhase == .prerollingEnhanced {
+                transitionPlayback(to: .monitoringEnhanced)
+                enhancedCachePreparationState = .monitoring
+            }
         }
         lastRenderedPTS = update.presentationTimeStamp
         lastPresentationWall = .now()
@@ -901,6 +923,10 @@ extension VTPlayerViewModel {
             if !self.pipelinePresentationReady {
                 self.pipelinePresentationReady = true
                 self.setNativeVideoEnabled(false)
+                if self.playbackPhase == .prerollingEnhanced {
+                    self.transitionPlayback(to: .monitoringEnhanced)
+                    self.enhancedCachePreparationState = .monitoring
+                }
             }
             #endif
             self.renderer.render(pixelBuffer: frame.buffer, isInterpolated: frame.isInterpolated)
@@ -1004,6 +1030,12 @@ extension VTPlayerViewModel {
             let cacheMisses = enhancedCacheMissGroupCount
             #if os(macOS)
             let rendererPerformance = renderer.consumePerformanceSnapshot()
+            actualPresentedFrameRate = Double(rendererPerformance.presentedFrames) / diagElapsed
+            actualPresentedRateSamples.append(actualPresentedFrameRate)
+            if actualPresentedRateSamples.count > 5 {
+                actualPresentedRateSamples.removeFirst(actualPresentedRateSamples.count - 5)
+            }
+            actualPresented1PercentLow = actualPresentedRateSamples.min() ?? actualPresentedFrameRate
             let drawRate = Double(rendererPerformance.drawAttempts) / diagElapsed
             let drawableRate = Double(rendererPerformance.drawableAcquisitions) / diagElapsed
             let drawableSize = renderer.drawableSize

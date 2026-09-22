@@ -37,6 +37,8 @@ extension VTPlayerViewModel {
         pipelineRestartAnchorPTS = nil
         stopEnhancedAudioPlayback()
         #if os(macOS)
+        transitionPlayback(to: .prerollingEnhanced)
+        nativeFallbackActive = false
         stopDisplayLinkIfNeeded()
         pipelinePresentationReady = false
         renderer.setRenderingActive(true)
@@ -137,6 +139,15 @@ extension VTPlayerViewModel {
         audioSyncLatency = 0
         fps = 0
         presentedFramesCount = 0
+        #if os(macOS)
+        actualPresentedFrameRate = 0
+        actualPresented1PercentLow = 0
+        actualPresentedRateSamples.removeAll(keepingCapacity: true)
+        // Presentation handlers complete asynchronously. Clear metrics at
+        // the start of every generation so the live gate only evaluates the
+        // current pipeline, never stale native or prior-pipeline drawables.
+        _ = renderer.consumePerformanceSnapshot()
+        #endif
         displayRateSamples.removeAll(keepingCapacity: true)
         displayRate1PercentLow = 0
         fpsTimer = .now()
@@ -474,6 +485,8 @@ extension VTPlayerViewModel {
                 self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
                 player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 #if os(macOS)
+                self.transitionPlayback(to: .playingEnhanced)
+                self.enhancedCachePreparationState = .ready
                 self.startDisplayLinkIfNeeded()
                 #endif
             }
