@@ -56,10 +56,12 @@ public actor VTFrameProcessorCoordinator {
             return false
         }
         if #available(macOS 27.0, iOS 27.0, tvOS 27.0, visionOS 27.0, *) {
-            let maximumDimension = VTLowLatencyFrameInterpolationConfiguration
-                .maximumDimension(forSpatialScaleFactor: 1)
-            let maximumPixelCount = VTLowLatencyFrameInterpolationConfiguration
-                .maximumPixelCount(forSpatialScaleFactor: 1)
+            guard let maximumDimension = VTLowLatencyFrameInterpolationConfiguration
+                    .maximumDimension(forSpatialScaleFactor: 1),
+                  let maximumPixelCount = VTLowLatencyFrameInterpolationConfiguration
+                    .maximumPixelCount(forSpatialScaleFactor: 1) else {
+                return false
+            }
             return maximumDimension > 0 && maximumPixelCount > 0 &&
                 width <= maximumDimension && height <= maximumDimension &&
                 Int64(width) * Int64(height) <= Int64(maximumPixelCount)
