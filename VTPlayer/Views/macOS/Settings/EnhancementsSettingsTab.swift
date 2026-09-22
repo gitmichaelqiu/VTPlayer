@@ -24,27 +24,39 @@ struct EnhancementsSettingsTab: View {
                    viewModel.videoURL != nil {
                     SettingsSection("Current Video") {
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Label(
-                                    viewModel.hasUnappliedPipelineChanges ? "Enhancements pending" : "Enhancements active",
-                                    systemImage: viewModel.hasUnappliedPipelineChanges ? "circle.dotted" : "checkmark.circle"
-                                )
-                                .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
-                                Spacer()
+                            Label(
+                                viewModel.hasUnappliedPipelineChanges
+                                    ? "Selected enhancements are not active"
+                                    : "Active enhancements",
+                                systemImage: viewModel.hasUnappliedPipelineChanges
+                                    ? "circle.dotted"
+                                    : "checkmark.circle"
+                            )
+                            .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
+
+                            LabeledContent("Active now", value: viewModel.appliedEnhancementSummary)
+                                .font(.caption)
+                            if viewModel.hasUnappliedPipelineChanges {
+                                LabeledContent("Selected", value: viewModel.draftEnhancementSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                Text("Selected values are staged only. Apply to Video starts them; Revert Changes returns to Active now.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Changes to this video are active immediately after a successful apply.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
 
-                            Text("Per-video enhancement changes stay paused until you press Apply. These controls are separate from the defaults below.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
                             HStack {
-                                Button("Apply") {
+                                Button("Apply to Video") {
                                     viewModel.applyPipelineEnhancements()
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(!viewModel.hasUnappliedPipelineChanges || viewModel.isPreparingEnhancedCache)
 
-                                Button("Cancel/Revert") {
+                                Button("Revert Changes") {
                                     viewModel.dismissPendingEnhancementChanges()
                                 }
                                 .buttonStyle(.bordered)

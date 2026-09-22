@@ -33,23 +33,28 @@ extension VTPlayerView {
     var pendingEnhancementControls: some View {
         if viewModel.hasUnappliedPipelineChanges {
             HStack(spacing: 6) {
-                Label("Pending", systemImage: "circle.dotted")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Label("Selected — not active", systemImage: "circle.dotted")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text("Active: (viewModel.appliedEnhancementSummary)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
 
-                Button("Apply") {
+                Button("Apply to Video") {
                     viewModel.applyPipelineEnhancements()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help("Apply enhancement changes")
+                .help("Apply the selected enhancement settings to this video")
 
-                Button("Cancel") {
+                Button("Revert Changes") {
                     viewModel.dismissPendingEnhancementChanges()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help("Discard pending enhancement changes")
+                .help("Discard selected settings and restore the active settings")
             }
             .padding(.horizontal, 6)
         }
@@ -147,16 +152,38 @@ extension VTPlayerView {
 
     @ViewBuilder
     func enhancementControlLabel(_ title: String, isActive: Bool) -> some View {
-        Text(title)
+        let isPending = viewModel.hasUnappliedPipelineChanges
+        HStack(spacing: 4) {
+            Text(title)
+            if isPending {
+                Image(systemName: "circle.dotted")
+                    .imageScale(.small)
+                    .accessibilityHidden(true)
+            }
+        }
             .font(.caption.weight(.semibold))
-            .foregroundStyle(isActive ? .primary : .secondary)
+            .foregroundStyle(isPending ? .orange : (isActive ? .primary : .secondary))
             .padding(.vertical, 5)
             .padding(.horizontal, 10)
             // Use the adaptive primary color so active controls remain
             // distinguishable on the light appearance without changing the
             // existing dark-appearance contrast.
-            .background(Color.primary.opacity(isActive ? 0.12 : 0.04))
+            .background(
+                isPending
+                    ? Color.orange.opacity(0.12)
+                    : Color.primary.opacity(isActive ? 0.12 : 0.04)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(
+                        isPending ? Color.orange.opacity(0.45) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+            .accessibilityLabel(
+                isPending ? "\(title), selected but not active" : title
+            )
     }
 
     @ViewBuilder

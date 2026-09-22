@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import VTPlayer
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
@@ -47,6 +48,52 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
 
         viewModel.isPaused = true
         XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSRestoringSpeedCannotStartAStoppedPlayer() {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        let player = AVPlayer()
+        viewModel.player = player
+        viewModel.isPlaying = false
+        viewModel.isPaused = false // the post-stop compatibility state
+
+        viewModel.playbackSpeed = 1.5
+
+        XCTAssertEqual(player.rate, 0)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSRendererEnhancementsAreStagedUntilApplyOrRevert() {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        viewModel.sharpness = 0.8
+        viewModel.hdrStrength = 0.4
+        viewModel.hdrColorfulness = 0.2
+        viewModel.updateEnhancements()
+
+        XCTAssertTrue(viewModel.hasUnappliedPipelineChanges)
+        XCTAssertEqual(viewModel.appliedSharpness, 0)
+        XCTAssertEqual(viewModel.appliedHDRStrength, 0)
+        XCTAssertEqual(viewModel.appliedHDRColorfulness, 0)
+
+        viewModel.dismissPendingEnhancementChanges()
+        XCTAssertEqual(viewModel.sharpness, 0)
+        XCTAssertEqual(viewModel.hdrStrength, 0)
+        XCTAssertEqual(viewModel.hdrColorfulness, 0)
+        XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
+
+        viewModel.sharpness = 0.6
+        viewModel.hdrStrength = 0.3
+        viewModel.hdrColorfulness = 0.1
+        viewModel.applyPipelineEnhancements()
+        XCTAssertEqual(viewModel.appliedSharpness, 0.6)
+        XCTAssertEqual(viewModel.appliedHDRStrength, 0.3)
+        XCTAssertEqual(viewModel.appliedHDRColorfulness, 0.1)
+        XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
         #endif
     }
 

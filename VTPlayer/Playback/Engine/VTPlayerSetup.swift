@@ -9,6 +9,15 @@ extension VTPlayerViewModel {
         clearPlaybackIssue()
         nativeFallbackActive = false
         livePresentationGateValidated = false
+        // The previous video's applied values must not make the new title
+        // look enhanced while its settings/capabilities are still loading.
+        appliedPipelineConfiguration = .disabled
+        appliedSharpness = 0
+        appliedHDRStrength = 0
+        appliedHDRColorfulness = 0
+        renderer.sharpness = 0
+        renderer.hdrStrength = 0
+        renderer.hdrColorfulness = 0
         #endif
         // A prepared cache is specific to both the source fingerprint and the
         // applied processing configuration. Never let a previous title select
@@ -161,6 +170,15 @@ extension VTPlayerViewModel {
 
                 let newPlayer = AVPlayer(playerItem: item)
                 newPlayer.automaticallyWaitsToMinimizeStalling = false
+                // A newly opened video is always a paused transport on macOS.
+                // AVPlayer can otherwise retain a non-zero rate while its
+                // item is being prepared, which is especially easy to trigger
+                // when restoring a saved playback speed.  Keep both the video
+                // and audio clocks stopped until the user presses Play.
+                #if os(macOS)
+                newPlayer.pause()
+                newPlayer.rate = 0
+                #endif
                 #if os(iOS)
                 configureAudioSessionForPlayback()
                 #endif
@@ -188,6 +206,12 @@ extension VTPlayerViewModel {
                     self.availableQualitySuperResolutionScales = availableQualityScales
                     self.readyQualitySuperResolutionScales = readyQualityScales
                     
+                    #if os(macOS)
+                    self.isPlaying = false
+                    self.isPaused = true
+                    newPlayer.pause()
+                    newPlayer.rate = 0
+                    #endif
                     self.player = newPlayer
                     #if os(iOS)
                     self.publishNowPlayingArtwork(for: url, duration: durationSecs)
@@ -245,9 +269,13 @@ extension VTPlayerViewModel {
                             guard let self else { return }
                             #if os(macOS)
                             guard !self.suppressRateObserver,
+                                  self.playbackPhase != .loading,
+                                  self.playbackPhase != .readyPaused,
                                   self.playbackPhase != .benchmarking,
                                   self.playbackPhase != .prerollingEnhanced,
-                                  self.playbackPhase != .preparingCache else { return }
+                                  self.playbackPhase != .preparingCache,
+                                  self.playbackPhase != .ended,
+                                  self.playbackPhase != .failed else { return }
                             #endif
                             switch player.timeControlStatus {
                             case .paused:
@@ -302,14 +330,6 @@ extension VTPlayerViewModel {
                     // the player clock still briefly reports zero.
                     guard let resumeTime else {
                         #if os(macOS)
-                        guard !self.hasUnappliedPipelineChanges else {
-                            self.isPlaying = false
-                            self.isPaused = true
-                            self.renderer.setRenderingActive(false)
-                            return
-                        }
-                        #endif
-                        #if os(macOS)
                         self.isPlaying = false
                         self.isPaused = true
                         self.transitionPlayback(to: .readyPaused)
@@ -346,14 +366,6 @@ extension VTPlayerViewModel {
                         completionViewModel.ignoreAutomaticTimeJumpsUntil = DispatchTime(
                             uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + 5_000_000_000
                         )
-                        #if os(macOS)
-                        guard !completionViewModel.hasUnappliedPipelineChanges else {
-                            completionViewModel.isPlaying = false
-                            completionViewModel.isPaused = true
-                            completionViewModel.renderer.setRenderingActive(false)
-                            return
-                        }
-                        #endif
                         #if os(macOS)
                         completionViewModel.isPlaying = false
                         completionViewModel.isPaused = true

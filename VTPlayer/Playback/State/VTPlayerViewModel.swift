@@ -139,12 +139,24 @@ final class VTPlayerViewModel {
     @ObservationIgnored var enhancementTransactionWasPlaying = false
     @ObservationIgnored var enhancementTransactionPreviousPhase: PlaybackPhase = .readyPaused
     @ObservationIgnored var enhancementTransactionPreviousConfiguration = AppliedPipelineConfiguration.disabled
+    @ObservationIgnored var enhancementTransactionPreviousSharpness = 0.0
+    @ObservationIgnored var enhancementTransactionPreviousHDRStrength = 0.0
+    @ObservationIgnored var enhancementTransactionPreviousHDRColorfulness = 0.0
     /// The last configuration committed to this video's settings. A newly
     /// opened video's saved values are staged as a draft, so the active
     /// processor remains disabled until Apply succeeds. Keeping this baseline
     /// separate prevents closing the video from overwriting it with that
     /// temporary disabled state.
     @ObservationIgnored var persistedPipelineConfiguration = AppliedPipelineConfiguration.disabled
+    @ObservationIgnored var persistedSharpness = 0.0
+    @ObservationIgnored var persistedHDRStrength = 0.0
+    @ObservationIgnored var persistedHDRColorfulness = 0.0
+    /// Renderer-only controls are staged on macOS just like processor
+    /// controls. Native AVPlayer cannot consume these values, so the applied
+    /// values stay separate from the sliders until Apply succeeds.
+    var appliedSharpness = 0.0
+    var appliedHDRStrength = 0.0
+    var appliedHDRColorfulness = 0.0
     @ObservationIgnored var enhancedPresentationMonitorTask: Task<Void, Never>?
     @ObservationIgnored var forceFullCachePreparation = false
     @ObservationIgnored var liveFallbackPreviousConfiguration = AppliedPipelineConfiguration.disabled
@@ -209,7 +221,10 @@ final class VTPlayerViewModel {
 
     var hasUnappliedPipelineChanges: Bool {
         #if os(macOS)
-        draftPipelineConfiguration != appliedPipelineConfiguration
+        draftPipelineConfiguration != appliedPipelineConfiguration ||
+            abs(sharpness - appliedSharpness) > 0.0001 ||
+            abs(hdrStrength - appliedHDRStrength) > 0.0001 ||
+            abs(hdrColorfulness - appliedHDRColorfulness) > 0.0001
         #else
         false
         #endif
@@ -237,13 +252,16 @@ final class VTPlayerViewModel {
         #if os(macOS) || os(iOS)
         #if os(macOS)
         if nativeFallbackActive { return false }
+        let hdrIsActive = appliedHDRStrength > 0
+        #else
+        let hdrIsActive = hdrStrength > 0
         #endif
         return (appliedPipelineConfiguration.superResolutionLevel > 0 ||
                 appliedPipelineConfiguration.frameInterpolationLevel > 0 ||
                 appliedPipelineConfiguration.qualitySuperResolutionScaleFactor > 0 ||
                 appliedPipelineConfiguration.denoiseStrength > 0 ||
                 appliedPipelineConfiguration.motionBlurStrength > 0 ||
-                hdrStrength > 0)
+                hdrIsActive)
         #else
         return true
         #endif
@@ -257,7 +275,13 @@ final class VTPlayerViewModel {
                 playbackSpeed = clamped
             }
             if let player = player {
-                player.rate = Float(isPaused ? 0.0 : clamped)
+                // Loading a new AVPlayer restores the saved speed before the
+                // transport is allowed to play.  Using only `isPaused` here
+                // made the post-stop state (isPlaying=false, isPaused=false)
+                // look like active playback and could start audio while the
+                // newly opened video was still paused.  A rate is meaningful
+                // only for an explicitly playing transport.
+                player.rate = (isPlaying && !isPaused) ? Float(clamped) : 0.0
                 enhancedAudioPlayer?.setRate(clamped)
                 resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
                 #if os(macOS)
@@ -328,7 +352,23 @@ final class VTPlayerViewModel {
         frameInterpolationLevel = appliedPipelineConfiguration.frameInterpolationLevel
         denoiseStrength = appliedPipelineConfiguration.denoiseStrength
         motionBlurStrength = appliedPipelineConfiguration.motionBlurStrength
+        sharpness = appliedSharpness
+        hdrStrength = appliedHDRStrength
+        hdrColorfulness = appliedHDRColorfulness
+        applyActiveRendererSettings()
         clearPlaybackIssue()
+    }
+
+    func applyActiveRendererSettings() {
+        #if os(macOS)
+        renderer.sharpness = Float(appliedSharpness)
+        renderer.hdrStrength = Float(appliedHDRStrength)
+        renderer.hdrColorfulness = Float(appliedHDRColorfulness)
+        #else
+        renderer.sharpness = Float(sharpness)
+        renderer.hdrStrength = Float(hdrStrength)
+        renderer.hdrColorfulness = Float(hdrColorfulness)
+        #endif
     }
 
     func retryEnhancedPlayback() {
@@ -415,11 +455,43 @@ final class VTPlayerViewModel {
     }
 
     var appliedEnhancementSummary: String {
-        let config = appliedPipelineConfiguration
-        let scale = max(config.superResolutionLevel, Float(config.qualitySuperResolutionScaleFactor))
+        enhancementSummary(
+            configuration: appliedPipelineConfiguration,
+            sharpness: appliedSharpness,
+            hdrStrength: appliedHDRStrength,
+            hdrColorfulness: appliedHDRColorfulness
+        )
+    }
+
+    var draftEnhancementSummary: String {
+        enhancementSummary(
+            configuration: draftPipelineConfiguration,
+            sharpness: sharpness,
+            hdrStrength: hdrStrength,
+            hdrColorfulness: hdrColorfulness
+        )
+    }
+
+    private func enhancementSummary(
+        configuration: AppliedPipelineConfiguration,
+        sharpness: Double,
+        hdrStrength: Double,
+        hdrColorfulness: Double
+    ) -> String {
+        let scale = max(configuration.superResolutionLevel, Float(configuration.qualitySuperResolutionScaleFactor))
         let sr = scale > 0 ? String(format: "%.1fx SR", scale) : "SR off"
-        let fi = config.frameInterpolationLevel > 0 ? "FI \(config.frameInterpolationLevel)x" : "FI off"
-        return "\(sr), \(fi)"
+        let fi = configuration.frameInterpolationLevel > 0 ? "FI \(configuration.frameInterpolationLevel)x" : "FI off"
+        var summary = "\(sr), \(fi)"
+        if sharpness > 0 {
+            summary += String(format: ", Sharpness %.2f", sharpness)
+        }
+        if hdrStrength > 0 {
+            summary += String(format: ", HDR %.2f", hdrStrength)
+        }
+        if hdrColorfulness > 0 {
+            summary += String(format: ", Color %.2f", hdrColorfulness)
+        }
+        return summary
     }
     #endif
     var droppedFrames = 0
@@ -482,19 +554,34 @@ final class VTPlayerViewModel {
     // Sharpness Control (0.0 = off, >0 applies CIUnsharpMask)
     var sharpness: Double = 0.0 {
         didSet {
+            #if os(macOS)
+            renderer.sharpness = Float(appliedSharpness)
+            #else
             renderer.sharpness = Float(sharpness)
+            #endif
         }
     }
 
     // HDR Tone Mapping (0.0 = off, >0 maps SDR into EDR headroom)
     var hdrStrength: Double = 0.0 {
         didSet {
+            #if os(macOS)
+            renderer.hdrStrength = Float(appliedHDRStrength)
+            #else
             renderer.hdrStrength = Float(hdrStrength)
+            #endif
             // HDR-only playback must use the decoded-frame renderer; otherwise
             // the native AVPlayer layer remains on top and no EDR content can
             // reach the display. Rebuild only when crossing the activation
             // boundary so ordinary slider adjustments stay immediate.
-            if (oldValue > 0) != (hdrStrength > 0), player != nil {
+            #if os(macOS)
+            let oldAppliedHDR = appliedHDRStrength
+            let newAppliedHDR = appliedHDRStrength
+            #else
+            let oldAppliedHDR = oldValue
+            let newAppliedHDR = hdrStrength
+            #endif
+            if (oldAppliedHDR > 0) != (newAppliedHDR > 0), player != nil {
                 restartAppliedEnhancements()
             }
         }
@@ -509,7 +596,11 @@ final class VTPlayerViewModel {
                 hdrColorfulness = clamped
                 return
             }
+            #if os(macOS)
+            renderer.hdrColorfulness = Float(appliedHDRColorfulness)
+            #else
             renderer.hdrColorfulness = Float(clamped)
+            #endif
         }
     }
 

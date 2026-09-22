@@ -117,17 +117,23 @@ extension VTPlayerViewModel {
         let pipelineConfiguration = hasUnappliedPipelineChanges
             ? persistedPipelineConfiguration
             : appliedPipelineConfiguration
+        let savedSharpness = hasUnappliedPipelineChanges ? persistedSharpness : appliedSharpness
+        let savedHDRStrength = hasUnappliedPipelineChanges ? persistedHDRStrength : appliedHDRStrength
+        let savedHDRColorfulness = hasUnappliedPipelineChanges ? persistedHDRColorfulness : appliedHDRColorfulness
         #else
         let pipelineConfiguration = appliedPipelineConfiguration
+        let savedSharpness = sharpness
+        let savedHDRStrength = hdrStrength
+        let savedHDRColorfulness = hdrColorfulness
         #endif
         let settings: [String: Any] = [
             "superResolutionLevel": pipelineConfiguration.superResolutionLevel,
             "frameInterpolationLevel": pipelineConfiguration.frameInterpolationLevel,
             "playbackSpeed": playbackSpeed,
             "volume": volume,
-            "sharpness": sharpness,
-            "hdrStrength": hdrStrength,
-            "hdrColorfulness": hdrColorfulness,
+            "sharpness": savedSharpness,
+            "hdrStrength": savedHDRStrength,
+            "hdrColorfulness": savedHDRColorfulness,
             "qualitySuperResolutionScaleFactor": pipelineConfiguration.qualitySuperResolutionScaleFactor,
             "motionBlurStrength": pipelineConfiguration.motionBlurStrength,
             "denoiseStrength": pipelineConfiguration.denoiseStrength,
@@ -203,10 +209,19 @@ extension VTPlayerViewModel {
     private func stageLoadedPipelineConfigurationForApply() {
         #if os(macOS)
         persistedPipelineConfiguration = draftPipelineConfiguration
+        persistedSharpness = sharpness
+        persistedHDRStrength = hdrStrength
+        persistedHDRColorfulness = hdrColorfulness
         // Saved processor settings are intentionally restored as a draft.
         // The first transport action therefore prepares the exact cache
         // before enhanced presentation begins.
         appliedPipelineConfiguration = .disabled
+        appliedSharpness = 0
+        appliedHDRStrength = 0
+        appliedHDRColorfulness = 0
+        renderer.sharpness = 0
+        renderer.hdrStrength = 0
+        renderer.hdrColorfulness = 0
         #else
         appliedPipelineConfiguration = draftPipelineConfiguration
         #endif
