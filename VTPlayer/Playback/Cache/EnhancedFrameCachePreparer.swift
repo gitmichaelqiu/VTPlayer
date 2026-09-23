@@ -48,7 +48,7 @@ actor EnhancedFrameCachePreparer {
         let coordinator = makeCoordinator(
             configuration: configuration,
             qualityPrioritization: qualityPrioritization,
-            preferSequentialSRFI: preferSequentialSRFI
+            preferSequentialSRFI: preferSequentialSRFI || configuration.requiresSequentialSRFIFallback
         )
         try await coordinator.startSession(width: width, height: height)
         do {
@@ -164,7 +164,7 @@ actor EnhancedFrameCachePreparer {
         let coordinator = makeCoordinator(
             configuration: configuration,
             qualityPrioritization: qualityPrioritization,
-            preferSequentialSRFI: preferSequentialSRFI
+            preferSequentialSRFI: preferSequentialSRFI || configuration.requiresSequentialSRFIFallback
         )
         do {
             try await coordinator.startSession(width: width, height: height)

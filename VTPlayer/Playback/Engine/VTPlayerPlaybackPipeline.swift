@@ -160,7 +160,7 @@ extension VTPlayerViewModel {
         // than native FI followed by SR on macOS. Prefer the temporal-first
         // sequential path for this quality-sensitive combination.
         let sequentialSRFIFallback = self.useSequentialSRFIFallback ||
-            (srLevel == 2 && fiLevel == 2)
+            configuration.requiresSequentialSRFIFallback
         #else
         let sequentialSRFIFallback = self.useSequentialSRFIFallback
         #endif

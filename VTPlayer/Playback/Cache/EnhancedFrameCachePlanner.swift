@@ -9,6 +9,14 @@ nonisolated struct AppliedPipelineConfiguration: Codable, Equatable, Hashable, S
     var denoiseStrength: Double
     var motionBlurStrength: Int
 
+    var requiresSequentialSRFIFallback: Bool {
+        #if os(macOS)
+        superResolutionLevel == 2 && frameInterpolationLevel == 2
+        #else
+        false
+        #endif
+    }
+
     static let disabled = AppliedPipelineConfiguration(
         superResolutionLevel: 0,
         qualitySuperResolutionScaleFactor: 0,
