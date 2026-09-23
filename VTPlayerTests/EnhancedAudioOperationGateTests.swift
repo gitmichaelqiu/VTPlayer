@@ -89,8 +89,10 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
         let presentation = RendererPresentationPerformanceSnapshot(
             presentedFrames: 1,
             droppedPresentations: 0,
+            duplicatePresentations: 0,
             intervalSamples: 0,
-            totalIntervalNanoseconds: 0
+            totalIntervalNanoseconds: 0,
+            intervalsNanoseconds: []
         )
         let snapshot = aggregate.consumeSnapshot(
             completedGPU: completedGPU,
@@ -110,8 +112,10 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
         ), presentation: RendererPresentationPerformanceSnapshot(
             presentedFrames: 0,
             droppedPresentations: 0,
+            duplicatePresentations: 0,
             intervalSamples: 0,
-            totalIntervalNanoseconds: 0
+            totalIntervalNanoseconds: 0,
+            intervalsNanoseconds: []
         )), RendererPerformanceSnapshot(
             drawAttempts: 0,
             drawableAcquisitions: 0,
@@ -123,8 +127,10 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
             totalGPUNanoseconds: 0,
             presentedFrames: 0,
             droppedPresentations: 0,
+            duplicatePresentations: 0,
             presentationIntervalSamples: 0,
-            totalPresentationIntervalNanoseconds: 0
+            totalPresentationIntervalNanoseconds: 0,
+            presentationIntervalsNanoseconds: []
         ))
     }
 }

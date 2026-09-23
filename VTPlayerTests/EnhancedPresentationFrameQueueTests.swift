@@ -220,18 +220,25 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
     func testPresentationRecorderExcludesZeroPresentedTime() {
         let recorder = RendererPresentationPerformanceRecorder()
         recorder.record(presentedTime: 0)
-        recorder.record(presentedTime: 10)
-        recorder.record(presentedTime: 10 + 1.0 / 120.0)
+        recorder.record(presentedTime: 1.000)
+        recorder.record(presentedTime: 1.008)
+        recorder.record(presentedTime: 1.017)
+        recorder.record(presentedTime: 1.017)
+        recorder.record(presentedTime: 1.049)
 
         let snapshot = recorder.consumeSnapshot()
-        XCTAssertEqual(snapshot.presentedFrames, 2)
+        XCTAssertEqual(snapshot.presentedFrames, 4)
         XCTAssertEqual(snapshot.droppedPresentations, 1)
-        XCTAssertEqual(snapshot.intervalSamples, 1)
-        XCTAssertEqual(
-            Double(snapshot.totalIntervalNanoseconds) / 1_000_000,
-            1_000.0 / 120.0,
-            accuracy: 0.001
+        XCTAssertEqual(snapshot.duplicatePresentations, 1)
+        XCTAssertEqual(snapshot.intervalSamples, 3)
+        let performance = RendererPerformanceAggregate().consumeSnapshot(
+            completedGPU: RendererGPUPerformanceSnapshot(completedFrames: 0, totalNanoseconds: 0),
+            presentation: snapshot
         )
+        XCTAssertEqual(performance.p50PresentationIntervalMilliseconds, 9, accuracy: 0.01)
+        XCTAssertEqual(performance.p95PresentationIntervalMilliseconds, 32, accuracy: 0.01)
+        XCTAssertEqual(performance.maximumPresentationGapMilliseconds, 32, accuracy: 0.01)
+        XCTAssertEqual(performance.presentationIntervalStandardDeviationMilliseconds, 11.09, accuracy: 0.05)
     }
 
     private func makeFrame(time: CMTime, interpolated: Bool) throws -> VTFrame {

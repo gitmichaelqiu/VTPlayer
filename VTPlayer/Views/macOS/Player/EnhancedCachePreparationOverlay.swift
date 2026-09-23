@@ -36,6 +36,14 @@ extension VTPlayerView {
                     EmptyView()
                 }
 
+                if viewModel.nativeFallbackActive &&
+                    (!viewModel.isPlaying || viewModel.isPaused) {
+                    Button("Continue Native Playback") {
+                        viewModel.play()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
                 Button(cancelButtonTitle, role: .cancel) {
                     if viewModel.enhancedCachePreparationState == .prerolling {
                         viewModel.cancelEnhancedPlaybackPreroll()
@@ -73,6 +81,52 @@ extension VTPlayerView {
         viewModel.enhancedCachePreparationState == .prerolling
             ? "Cancel Playback Start"
             : "Cancel Preparation"
+    }
+
+    @ViewBuilder
+    var enhancedCachePreparationIndicator: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(preparationTitle)
+                    .font(.caption.weight(.semibold))
+                Text(preparationStatus)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if case let .preparing(progress, _) = viewModel.enhancedCachePreparationState {
+                Text("\(Int((progress * 100).rounded()))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Button("Cancel") {
+                viewModel.cancelEnhancedCachePreparation()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(16)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Enhancement preparation; native playback continues")
+    }
+
+    private var preparationStatus: String {
+        switch viewModel.enhancedCachePreparationState {
+        case .benchmarking:
+            return "Checking processing speed · native playback continues"
+        case .preparing:
+            return "Writing bounded enhanced cache · native playback continues"
+        case .prerolling:
+            return "Loading prepared frames"
+        case .monitoring:
+            return "Checking presentation smoothness"
+        case .idle, .ready, .failed:
+            return ""
+        }
     }
 
     @ViewBuilder

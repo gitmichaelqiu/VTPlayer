@@ -69,6 +69,26 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
         enqueueResult(contentsOf: frames, generation: generation) == .enqueued
     }
 
+    func enqueue(_ frame: VTFrame, generation: UInt64) -> EnhancedPresentationEnqueueResult {
+        state.withLock { state in
+            guard state.generation == generation else { return .rejected }
+            let byteCount = CVPixelBufferGetDataSize(frame.buffer)
+            guard byteCount <= capacityBytes else { return .rejected }
+            guard state.queuedByteUsage <= capacityBytes - byteCount,
+                  state.frames.count - state.startIndex < capacityFrames else {
+                return .capacityExceeded
+            }
+            if let previous = state.frames.last,
+               CMTimeCompare(previous.presentationTimeStamp, frame.presentationTimeStamp) >= 0 {
+                return .rejected
+            }
+            state.frames.append(frame)
+            state.queuedByteUsage += byteCount
+            state.enqueuedFrames += 1
+            return .enqueued
+        }
+    }
+
     func enqueueResult(
         contentsOf frames: [VTFrame],
         generation: UInt64
@@ -101,9 +121,13 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
     }
 
     func recordCacheHitGroup(generation: UInt64, sampledOutFrames: Int = 0) {
+        recordCacheHitGroups(1, generation: generation, sampledOutFrames: sampledOutFrames)
+    }
+
+    func recordCacheHitGroups(_ count: Int, generation: UInt64, sampledOutFrames: Int = 0) {
         state.withLock { state in
             guard state.generation == generation else { return }
-            state.cacheHitGroups += 1
+            state.cacheHitGroups += max(0, count)
             state.intentionallySampledOutFrames += max(0, sampledOutFrames)
         }
     }

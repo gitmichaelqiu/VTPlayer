@@ -88,7 +88,7 @@ struct EnhancementsSettingsTab: View {
 
                     SliderSettingsRow(
                         "Enhanced frame disk cache",
-                        helperText: "Maximum persistent storage for lossless enhanced frames.",
+                        helperText: "Maximum space for high-quality HEVC-compressed enhanced playback. The cache may be lossy; your source file is never changed.",
                         value: Binding(
                             get: { Double(min(max(enhancedFrameCacheDiskGB, 2), 200)) },
                             set: { enhancedFrameCacheDiskGB = Int($0.rounded()) }

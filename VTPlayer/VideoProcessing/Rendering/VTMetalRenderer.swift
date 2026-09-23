@@ -29,8 +29,10 @@ struct RendererPerformanceSnapshot: Equatable {
     let totalGPUNanoseconds: UInt64
     let presentedFrames: Int
     let droppedPresentations: Int
+    let duplicatePresentations: Int
     let presentationIntervalSamples: Int
     let totalPresentationIntervalNanoseconds: UInt64
+    let presentationIntervalsNanoseconds: [UInt64]
 
     var averageDrawableAcquisitionMilliseconds: Double {
         guard drawableAcquisitions > 0 else { return 0 }
@@ -51,6 +53,39 @@ struct RendererPerformanceSnapshot: Equatable {
         guard presentationIntervalSamples > 0 else { return 0 }
         return Double(totalPresentationIntervalNanoseconds) /
             Double(presentationIntervalSamples) / 1_000_000.0
+    }
+
+    var p50PresentationIntervalMilliseconds: Double {
+        percentilePresentationInterval(0.50)
+    }
+
+    var p95PresentationIntervalMilliseconds: Double {
+        percentilePresentationInterval(0.95)
+    }
+
+    var maximumPresentationGapMilliseconds: Double {
+        Double(presentationIntervalsNanoseconds.max() ?? 0) / 1_000_000.0
+    }
+
+    var presentationIntervalStandardDeviationMilliseconds: Double {
+        guard presentationIntervalsNanoseconds.count > 1 else { return 0 }
+        let sampleCount = Double(presentationIntervalsNanoseconds.count)
+        let mean = Double(presentationIntervalsNanoseconds.reduce(UInt64(0), +)) / sampleCount
+        let squaredDeviation = presentationIntervalsNanoseconds.reduce(into: 0.0) { total, interval in
+            let deviation = Double(interval) - mean
+            total += deviation * deviation
+        }
+        return sqrt(squaredDeviation / sampleCount) / 1_000_000.0
+    }
+
+    private func percentilePresentationInterval(_ percentile: Double) -> Double {
+        guard !presentationIntervalsNanoseconds.isEmpty else { return 0 }
+        let sorted = presentationIntervalsNanoseconds.sorted()
+        let index = min(
+            sorted.count - 1,
+            max(0, Int((Double(sorted.count - 1) * percentile).rounded(.up)))
+        )
+        return Double(sorted[index]) / 1_000_000.0
     }
 }
 
@@ -106,8 +141,10 @@ final class RendererPerformanceAggregate: @unchecked Sendable {
                 totalGPUNanoseconds: completedGPU.totalNanoseconds,
                 presentedFrames: presentation.presentedFrames,
                 droppedPresentations: presentation.droppedPresentations,
+                duplicatePresentations: presentation.duplicatePresentations,
                 presentationIntervalSamples: presentation.intervalSamples,
-                totalPresentationIntervalNanoseconds: presentation.totalIntervalNanoseconds
+                totalPresentationIntervalNanoseconds: presentation.totalIntervalNanoseconds,
+                presentationIntervalsNanoseconds: presentation.intervalsNanoseconds
             )
             storage = RendererPerformanceStorage()
             return snapshot
@@ -118,16 +155,20 @@ final class RendererPerformanceAggregate: @unchecked Sendable {
 struct RendererPresentationPerformanceSnapshot: Equatable, Sendable {
     let presentedFrames: Int
     let droppedPresentations: Int
+    let duplicatePresentations: Int
     let intervalSamples: Int
     let totalIntervalNanoseconds: UInt64
+    let intervalsNanoseconds: [UInt64]
 }
 
 private struct RendererPresentationPerformanceStorage: Sendable {
     var presentedFrames = 0
     var totalPresentedFrames = 0
     var droppedPresentations = 0
+    var duplicatePresentations = 0
     var intervalSamples = 0
     var totalIntervalNanoseconds: UInt64 = 0
+    var intervalsNanoseconds: [UInt64] = []
     var previousPresentedTime: CFTimeInterval?
 }
 
@@ -140,15 +181,28 @@ final class RendererPresentationPerformanceRecorder: @unchecked Sendable {
                 storage.droppedPresentations += 1
                 return
             }
-            storage.presentedFrames += 1
-            storage.totalPresentedFrames += 1
-            if let previous = storage.previousPresentedTime, presentedTime >= previous {
+            if let previous = storage.previousPresentedTime {
+                if presentedTime == previous {
+                    storage.duplicatePresentations += 1
+                    return
+                }
+                guard presentedTime > previous else {
+                    storage.droppedPresentations += 1
+                    return
+                }
                 let interval = (presentedTime - previous) * 1_000_000_000
                 if interval <= Double(UInt64.max) {
-                    storage.totalIntervalNanoseconds += UInt64(interval)
+                    let intervalNanoseconds = UInt64(interval)
+                    storage.totalIntervalNanoseconds += intervalNanoseconds
                     storage.intervalSamples += 1
+                    if storage.intervalsNanoseconds.count >= 2_048 {
+                        storage.intervalsNanoseconds.removeFirst(1_024)
+                    }
+                    storage.intervalsNanoseconds.append(intervalNanoseconds)
                 }
             }
+            storage.presentedFrames += 1
+            storage.totalPresentedFrames += 1
             storage.previousPresentedTime = presentedTime
         }
     }
@@ -158,13 +212,17 @@ final class RendererPresentationPerformanceRecorder: @unchecked Sendable {
             let snapshot = RendererPresentationPerformanceSnapshot(
                 presentedFrames: storage.presentedFrames,
                 droppedPresentations: storage.droppedPresentations,
+                duplicatePresentations: storage.duplicatePresentations,
                 intervalSamples: storage.intervalSamples,
-                totalIntervalNanoseconds: storage.totalIntervalNanoseconds
+                totalIntervalNanoseconds: storage.totalIntervalNanoseconds,
+                intervalsNanoseconds: storage.intervalsNanoseconds
             )
             storage.presentedFrames = 0
             storage.droppedPresentations = 0
+            storage.duplicatePresentations = 0
             storage.intervalSamples = 0
             storage.totalIntervalNanoseconds = 0
+            storage.intervalsNanoseconds.removeAll(keepingCapacity: true)
             storage.previousPresentedTime = nil
             return snapshot
         }

@@ -57,10 +57,10 @@ enum PlaybackPhase: Equatable {
         case .loading: return "Loading"
         case .readyPaused: return "Ready · Paused"
         case .playingNative: return "Playing · Native"
-        case .benchmarking: return "Measuring"
+        case .benchmarking: return "Preparing enhancements · Measuring"
         case .prerollingEnhanced: return "Warming enhanced playback"
         case .monitoringEnhanced: return "Playing · Checking smoothness"
-        case .preparingCache: return "Preparing cache"
+        case .preparingCache: return "Preparing enhancements · Caching"
         case .playingEnhanced: return "Playing · Enhanced"
         case .paused: return "Paused"
         case .ended: return "Ended"
@@ -137,6 +137,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var wasPlayingBeforeScrub = false
     @ObservationIgnored var suppressRateObserver = false
     @ObservationIgnored var enhancementTransactionWasPlaying = false
+    @ObservationIgnored var enhancementTransactionReachedEnd = false
     @ObservationIgnored var enhancementTransactionPreviousPhase: PlaybackPhase = .readyPaused
     @ObservationIgnored var enhancementTransactionPreviousConfiguration = AppliedPipelineConfiguration.disabled
     @ObservationIgnored var enhancementTransactionPreviousSharpness = 0.0
@@ -163,6 +164,9 @@ final class VTPlayerViewModel {
     @ObservationIgnored var liveFallbackPreviousConfiguration = AppliedPipelineConfiguration.disabled
     @ObservationIgnored var liveFallbackCandidateConfiguration = AppliedPipelineConfiguration.disabled
     @ObservationIgnored var liveFallbackWasPlaying = false
+    @ObservationIgnored var liveFallbackBenchmark: EnhancedPipelineBenchmark?
+    @ObservationIgnored var liveFallbackBenchmarkURL: URL?
+    @ObservationIgnored var liveFallbackBenchmarkConfiguration: AppliedPipelineConfiguration?
     @ObservationIgnored var livePresentationGateValidated = false
     @ObservationIgnored var actualPresentedRateSamples: [Double] = []
     @ObservationIgnored var actualPresentedFrameBaseline = 0
@@ -203,6 +207,15 @@ final class VTPlayerViewModel {
         case .benchmarking, .prerolling, .preparing:
             true
         case .idle, .monitoring, .ready, .failed:
+            false
+        }
+    }
+
+    var isPreparingEnhancementTransaction: Bool {
+        switch enhancedCachePreparationState {
+        case .benchmarking, .preparing:
+            true
+        case .idle, .prerolling, .monitoring, .ready, .failed:
             false
         }
     }
@@ -378,8 +391,18 @@ final class VTPlayerViewModel {
         guard videoURL != nil,
               isPipelineActive || hasUnappliedPipelineChanges ||
                 playbackIssue?.stage == .pipeline || playbackIssue?.stage == .preparation else { return }
+        let shouldReprepareInvalidatedCache = playbackIssue?.stage == .preparation &&
+            !hasUnappliedPipelineChanges &&
+            isPipelineActive &&
+            preparedEnhancedFrameCacheKey == nil
         clearPlaybackIssue()
         nativeFallbackActive = false
+        isPlaying = true
+        isPaused = false
+        if shouldReprepareInvalidatedCache {
+            retryEnhancedPreparation(configuration: appliedPipelineConfiguration)
+            return
+        }
         if hasUnappliedPipelineChanges {
             applyPipelineEnhancements()
         } else {

@@ -633,7 +633,7 @@ extension VTPlayerViewModel {
             queue.lateInterpolatedDrops
         )
         NSLog(
-            "RENDER-CADENCE: physicalHz=%.1f callbacks=%d driverHz=%.1f callbackIntervalMs=%.2f scheduledHz=%.1f coalesced=%d mainQueueDelayMs=%.2f deadlineMarginMs=%.2f submitHz=%.1f actualHz=%.1f actualIntervalMs=%.2f minRefreshMs=%.2f maxRefreshMs=%.2f displayModeHz=%.1f",
+            "RENDER-CADENCE: physicalHz=%.1f callbacks=%d driverHz=%.1f callbackIntervalMs=%.2f scheduledHz=%.1f coalesced=%d mainQueueDelayMs=%.2f deadlineMarginMs=%.2f submitHz=%.1f actualHz=%.1f actualIntervalMs=%.2f intervalP50Ms=%.2f intervalP95Ms=%.2f intervalStdDevMs=%.2f maxGapMs=%.2f minRefreshMs=%.2f maxRefreshMs=%.2f displayModeHz=%.1f",
             physicalCadence?.framesPerSecond ?? 0,
             physicalCadence?.callbacks ?? 0,
             Double(driverSnapshot.callbacks) / elapsed,
@@ -645,9 +645,23 @@ extension VTPlayerViewModel {
             submittedRate,
             actualPresentationRate,
             rendererPerformance.averagePresentationIntervalMilliseconds,
+            rendererPerformance.p50PresentationIntervalMilliseconds,
+            rendererPerformance.p95PresentationIntervalMilliseconds,
+            rendererPerformance.presentationIntervalStandardDeviationMilliseconds,
+            rendererPerformance.maximumPresentationGapMilliseconds,
             scheduling.screenMinimumRefreshInterval * 1_000,
             scheduling.screenMaximumRefreshInterval * 1_000,
             scheduling.displayModeRefreshRate
+        )
+        NSLog(
+            "RENDER-INTERVALS: p50Ms=%.2f p95Ms=%.2f stdDevMs=%.2f maxGapMs=%.2f duplicates=%d drops=%d samples=%d",
+            rendererPerformance.p50PresentationIntervalMilliseconds,
+            rendererPerformance.p95PresentationIntervalMilliseconds,
+            rendererPerformance.presentationIntervalStandardDeviationMilliseconds,
+            rendererPerformance.maximumPresentationGapMilliseconds,
+            rendererPerformance.duplicatePresentations,
+            rendererPerformance.droppedPresentations,
+            rendererPerformance.presentationIntervalSamples
         )
         NSLog(
             "RENDER: drawsHz=%.1f drawableHz=%.1f drawableFailures=%d drawableWaitMs=%.2f encodeMs=%.2f gpuMs=%.2f gpuFrames=%d presented=%d presentationDrops=%d drawable=%dx%d requestHz=%d screenMaxHz=%d transaction=%@ vsync=%@ encodes=%d",
@@ -1110,6 +1124,7 @@ extension VTPlayerViewModel {
             #if os(macOS)
             let actualPresentationRate = actualPresentedFrameRate
             NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) driverHz=\(String(format: "%.1f", Double(displayTickDriver?.callbacks ?? 0) / diagElapsed)) callbackIntervalMs=\(String(format: "%.2f", displayTickDriver?.averageCallbackIntervalMilliseconds ?? 0)) scheduledHz=\(String(format: "%.1f", Double(displayTickDriver?.scheduled ?? 0) / diagElapsed)) coalesced=\(displayTickDriver?.coalesced ?? 0) mainQueueDelayMs=\(String(format: "%.2f", displayTickDriver?.averageMainQueueDelayMilliseconds ?? 0)) deadlineMarginMs=\(String(format: "%.2f", displayTickDriver?.averageDeadlineMarginMilliseconds ?? 0)) submitHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) actualHz=\(String(format: "%.1f", actualPresentationRate)) actualIntervalMs=\(String(format: "%.2f", rendererPerformance.averagePresentationIntervalMilliseconds)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
+            NSLog("RENDER-INTERVALS: p50Ms=\(String(format: "%.2f", rendererPerformance.p50PresentationIntervalMilliseconds)) p95Ms=\(String(format: "%.2f", rendererPerformance.p95PresentationIntervalMilliseconds)) stdDevMs=\(String(format: "%.2f", rendererPerformance.presentationIntervalStandardDeviationMilliseconds)) maxGapMs=\(String(format: "%.2f", rendererPerformance.maximumPresentationGapMilliseconds)) duplicates=\(rendererPerformance.duplicatePresentations) drops=\(rendererPerformance.droppedPresentations) samples=\(rendererPerformance.presentationIntervalSamples)")
             NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableFailures=\(rendererPerformance.drawableAcquisitionFailures) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) presented=\(rendererPerformance.presentedFrames) presentationDrops=\(rendererPerformance.droppedPresentations) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
             #endif
             producedFramesCount = 0

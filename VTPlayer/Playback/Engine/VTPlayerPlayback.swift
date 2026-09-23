@@ -82,7 +82,7 @@ extension VTPlayerViewModel {
 
     /// Toggles play and pause state.
     func togglePlayPause() {
-        guard !isPreparingEnhancedCache else { return }
+        guard enhancedCachePreparationState != .prerolling else { return }
         guard player != nil else { return }
         #if os(macOS)
         if playbackPhase == .ended {
@@ -117,6 +117,16 @@ extension VTPlayerViewModel {
         guard let player = player else { return }
 
         #if os(macOS)
+        if isPreparingEnhancementTransaction {
+            enhancementTransactionWasPlaying = true
+            nativeFallbackActive = true
+            setNativeVideoEnabled(true)
+            isPlaying = true
+            isPaused = false
+            player.play()
+            player.rate = Float(playbackSpeed)
+            return
+        }
         clearPlaybackIssue()
         nativeFallbackActive = false
         #endif
@@ -223,6 +233,12 @@ extension VTPlayerViewModel {
     /// Pauses player
     func pause() {
         guard let player = player else { return }
+        #if os(macOS)
+        let preparationWasInProgress = isPreparingEnhancementTransaction
+        if preparationWasInProgress {
+            enhancementTransactionWasPlaying = false
+        }
+        #endif
         player.pause()
         enhancedAudioPlayer?.pause()
         #if os(iOS)
@@ -252,7 +268,9 @@ extension VTPlayerViewModel {
         self.saveProgress()
         self.saveVideoSettings()
         #if os(macOS)
-        if playbackPhase != .ended, playbackPhase != .failed {
+        if !preparationWasInProgress,
+           playbackPhase != .ended,
+           playbackPhase != .failed {
             transitionPlayback(to: isPipelineActive ? .paused : .readyPaused)
         }
         #endif
@@ -390,6 +408,8 @@ extension VTPlayerViewModel {
     /// session cannot be started. Settings stay intact so the user can adjust
     /// them and retry without the player going dark or losing audio.
     func restoreNativePresentationAfterPipelineFailure(stage: PlaybackIssueStage = .pipeline) {
+        player?.pause()
+        enhancedAudioPlayer?.pause()
         stopEnhancedAudioPlayback()
         isInitializingPipeline = false
         pipelinePresentationReady = false

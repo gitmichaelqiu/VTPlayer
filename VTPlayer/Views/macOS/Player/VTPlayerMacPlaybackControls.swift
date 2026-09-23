@@ -26,13 +26,40 @@ extension VTPlayerView {
         }
         .buttonStyle(.glass)
         .keyboardShortcut(.space, modifiers: [])
-        .disabled(viewModel.playbackPhase == .loading || viewModel.isPreparingEnhancedCache)
+        .disabled(viewModel.playbackPhase == .loading || viewModel.enhancedCachePreparationState == .prerolling)
         .help(viewModel.isPipelineActive ? "Play video with active enhancements" : "Play video")
     }
 
     @ViewBuilder
     var pendingEnhancementControls: some View {
-        if viewModel.hasUnappliedPipelineChanges {
+        if viewModel.isPreparingEnhancedCache {
+            HStack(spacing: 7) {
+                ProgressView()
+                    .controlSize(.small)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Preparing enhancement")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(viewModel.enhancedCachePreparationState == .prerolling
+                        ? "Loading prepared frames"
+                        : (viewModel.isPlaying && !viewModel.isPaused
+                            ? "Native playback continues"
+                            : "Playback is paused"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Button("Cancel") {
+                    if viewModel.enhancedCachePreparationState == .prerolling {
+                        viewModel.cancelEnhancedPlaybackPreroll()
+                    } else {
+                        viewModel.cancelEnhancedCachePreparation()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 6)
+        } else if viewModel.hasUnappliedPipelineChanges {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
                     Label("Pending — not active", systemImage: "circle.dotted")

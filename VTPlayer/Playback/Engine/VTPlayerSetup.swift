@@ -403,6 +403,17 @@ extension VTPlayerViewModel {
     #if os(macOS)
     func handlePlaybackEnd(for endingPlayer: AVPlayer) {
         guard player === endingPlayer else { return }
+        if isPreparingEnhancedCache || enhancedCachePreparationTask != nil {
+            enhancementTransactionWasPlaying = false
+            enhancementTransactionReachedEnd = true
+            stopEnhancedAudioPlayback()
+            isPlaying = false
+            isPaused = true
+            isBuffering = false
+            transitionPlayback(to: .ended)
+            saveProgress()
+            return
+        }
         // Stop producer/consumer work as well as the display link. Leaving a
         // completed enhanced pipeline alive would keep decoding and filling a
         // cache that can no longer be presented.
