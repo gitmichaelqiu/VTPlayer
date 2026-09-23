@@ -26,7 +26,8 @@ extension VTPlayerView {
         }
         .buttonStyle(.glass)
         .keyboardShortcut(.space, modifiers: [])
-        .disabled(viewModel.playbackPhase == .loading || viewModel.playbackPhase == .benchmarking)
+        .disabled(viewModel.playbackPhase == .loading || viewModel.isPreparingEnhancedCache)
+        .help(viewModel.isPipelineActive ? "Play video with active enhancements" : "Play video")
     }
 
     @ViewBuilder
@@ -34,27 +35,27 @@ extension VTPlayerView {
         if viewModel.hasUnappliedPipelineChanges {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Label("Selected — not active", systemImage: "circle.dotted")
+                    Label("Pending — not active", systemImage: "circle.dotted")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
-                    Text("Active: (viewModel.appliedEnhancementSummary)")
+                    Text("Active now: \(viewModel.appliedEnhancementSummary)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
 
-                Button("Apply to Video") {
+                Button("Apply & Prepare") {
                     viewModel.applyPipelineEnhancements()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help("Apply the selected enhancement settings to this video")
+                .help("Measure the selected settings and prepare an enhanced cache if needed")
 
-                Button("Revert Changes") {
+                Button("Discard Selection") {
                     viewModel.dismissPendingEnhancementChanges()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help("Discard selected settings and restore the active settings")
+                .help("Discard the pending settings and keep the active settings")
             }
             .padding(.horizontal, 6)
         }

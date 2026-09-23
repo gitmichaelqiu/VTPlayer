@@ -183,6 +183,11 @@ struct VTPlayerView: View {
                 enhancedCachePreparationOverlay
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if viewModel.enhancedCachePreparationState == .monitoring {
+                livePresentationMonitoringIndicator
+            }
+        }
         #endif
         .alert("Rename Video", isPresented: $showRenameAlert) {
             TextField("New Name", text: $renameText)

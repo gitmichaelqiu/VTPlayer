@@ -40,23 +40,23 @@ struct EnhancementsSettingsTab: View {
                                 LabeledContent("Selected", value: viewModel.draftEnhancementSummary)
                                     .font(.caption)
                                     .foregroundStyle(.orange)
-                                Text("Selected values are staged only. Apply to Video starts them; Revert Changes returns to Active now.")
+                                Text("Selected values are pending. Apply & Prepare makes them active and may build a cache; Discard Selection keeps Active now.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("Changes to this video are active immediately after a successful apply.")
+                                Text("Changes become active after Apply & Prepare completes.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
 
                             HStack {
-                                Button("Apply to Video") {
+                                Button("Apply & Prepare") {
                                     viewModel.applyPipelineEnhancements()
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(!viewModel.hasUnappliedPipelineChanges || viewModel.isPreparingEnhancedCache)
 
-                                Button("Revert Changes") {
+                                Button("Discard Selection") {
                                     viewModel.dismissPendingEnhancementChanges()
                                 }
                                 .buttonStyle(.bordered)

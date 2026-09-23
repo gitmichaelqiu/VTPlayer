@@ -59,7 +59,7 @@ enum PlaybackPhase: Equatable {
         case .playingNative: return "Playing · Native"
         case .benchmarking: return "Measuring"
         case .prerollingEnhanced: return "Warming enhanced playback"
-        case .monitoringEnhanced: return "Checking presentation"
+        case .monitoringEnhanced: return "Playing · Checking smoothness"
         case .preparingCache: return "Preparing cache"
         case .playingEnhanced: return "Playing · Enhanced"
         case .paused: return "Paused"
@@ -197,9 +197,9 @@ final class VTPlayerViewModel {
 
     var isPreparingEnhancedCache: Bool {
         switch enhancedCachePreparationState {
-        case .benchmarking, .prerolling, .monitoring, .preparing:
+        case .benchmarking, .prerolling, .preparing:
             true
-        case .idle, .ready, .failed:
+        case .idle, .monitoring, .ready, .failed:
             false
         }
     }

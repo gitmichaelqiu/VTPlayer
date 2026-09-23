@@ -20,6 +20,12 @@ extension VTPlayerViewModel {
     func updateEnhancements() {
         validateEnhancementSelections()
         #if os(macOS)
+        // Live-presentation monitoring measures the active configuration, not
+        // the independently editable draft. Let that short gate finish while
+        // the user chooses a possible next configuration.
+        if enhancedCachePreparationState == .monitoring {
+            return
+        }
         cancelEnhancedCachePreparation()
         return
         #else
@@ -236,6 +242,9 @@ extension VTPlayerViewModel {
         #if os(macOS)
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = nil
+        if enhancedCachePreparationState == .monitoring {
+            enhancedCachePreparationState = .ready
+        }
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
         #else

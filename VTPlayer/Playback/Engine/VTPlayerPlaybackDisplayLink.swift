@@ -530,8 +530,13 @@ extension VTPlayerViewModel {
             }
             enhancedAudioPlayer?.frameRendered(at: update.presentationTimeStamp)
             if playbackPhase == .prerollingEnhanced {
-                transitionPlayback(to: .monitoringEnhanced)
-                enhancedCachePreparationState = .monitoring
+                if preparedEnhancedFrameCacheMode == nil {
+                    transitionPlayback(to: .monitoringEnhanced)
+                    enhancedCachePreparationState = .monitoring
+                } else {
+                    transitionPlayback(to: .playingEnhanced)
+                    enhancedCachePreparationState = .ready
+                }
             }
         }
         lastRenderedPTS = update.presentationTimeStamp
@@ -924,8 +929,13 @@ extension VTPlayerViewModel {
                 self.pipelinePresentationReady = true
                 self.setNativeVideoEnabled(false)
                 if self.playbackPhase == .prerollingEnhanced {
-                    self.transitionPlayback(to: .monitoringEnhanced)
-                    self.enhancedCachePreparationState = .monitoring
+                    if self.preparedEnhancedFrameCacheMode == nil {
+                        self.transitionPlayback(to: .monitoringEnhanced)
+                        self.enhancedCachePreparationState = .monitoring
+                    } else {
+                        self.transitionPlayback(to: .playingEnhanced)
+                        self.enhancedCachePreparationState = .ready
+                    }
                 }
             }
             #endif

@@ -58,19 +58,39 @@ extension VTPlayerViewModel {
         }
     }
 
+    func cancelEnhancedPlaybackPreroll() {
+        guard enhancedCachePreparationState == .prerolling else { return }
+        player?.pause()
+        isPlaying = false
+        isPaused = true
+        stopPlaybackLoopOnly()
+        enhancedCachePreparationState = .ready
+        transitionPlayback(to: isPipelineActive ? .paused : .readyPaused)
+        saveProgress()
+    }
+
     func applyPipelineEnhancements() {
+        applyPipelineEnhancements(fullCacheConfiguration: nil, rendererSettings: nil)
+    }
+
+    private func applyPipelineEnhancements(
+        fullCacheConfiguration: AppliedPipelineConfiguration?,
+        rendererSettings: (sharpness: Double, hdrStrength: Double, hdrColorfulness: Double)?
+    ) {
         validateEnhancementSelections()
         #if os(macOS)
-        guard hasUnappliedPipelineChanges else { return }
-        let candidate = draftPipelineConfiguration
+        guard fullCacheConfiguration != nil || hasUnappliedPipelineChanges else { return }
+        let candidate = fullCacheConfiguration ?? draftPipelineConfiguration
         let previousConfiguration = appliedPipelineConfiguration
-        let candidateSharpness = sharpness
-        let candidateHDRStrength = hdrStrength
-        let candidateHDRColorfulness = hdrColorfulness
+        let candidateSharpness = rendererSettings?.sharpness ?? sharpness
+        let candidateHDRStrength = rendererSettings?.hdrStrength ?? hdrStrength
+        let candidateHDRColorfulness = rendererSettings?.hdrColorfulness ?? hdrColorfulness
         let previousSharpness = appliedSharpness
         let previousHDRStrength = appliedHDRStrength
         let previousHDRColorfulness = appliedHDRColorfulness
         let wasPipelineActive = isPipelineActive
+        let forceFullCache = fullCacheConfiguration != nil || forceFullCachePreparation
+        let preservesDraft = fullCacheConfiguration != nil
         let candidateWouldBePipelineActive = candidate.superResolutionLevel > 0 ||
             candidate.qualitySuperResolutionScaleFactor > 0 ||
             candidate.frameInterpolationLevel > 0 ||
@@ -103,7 +123,7 @@ extension VTPlayerViewModel {
         // Renderer-only edits do not require another frame-cache benchmark.
         // Commit them transactionally, then rebuild the transport only when
         // the HDR edit changes whether the decoded-frame pipeline is needed.
-        if candidate == previousConfiguration {
+        if candidate == previousConfiguration && !forceFullCache {
             appliedSharpness = candidateSharpness
             appliedHDRStrength = candidateHDRStrength
             appliedHDRColorfulness = candidateHDRColorfulness
@@ -136,7 +156,6 @@ extension VTPlayerViewModel {
             return
         }
 
-        let forceFullCache = forceFullCachePreparation
         forceFullCachePreparation = false
         player?.pause()
         isPaused = true
@@ -144,7 +163,6 @@ extension VTPlayerViewModel {
         enhancedCachePreparationState = .benchmarking
         transitionPlayback(to: .benchmarking)
 
-        cancelEnhancedCachePreparation(restorePreviousPlayback: false)
         enhancedCachePreparationGeneration &+= 1
         let preparationGeneration = enhancedCachePreparationGeneration
         enhancedCachePreparationTask = Task { @MainActor [weak self] in
@@ -160,10 +178,12 @@ extension VTPlayerViewModel {
             }
             guard self.enhancedCachePreparationGeneration == preparationGeneration,
                   self.videoURL == url,
-                  self.draftPipelineConfiguration == candidate,
-                  abs(self.sharpness - candidateSharpness) <= 0.0001,
-                  abs(self.hdrStrength - candidateHDRStrength) <= 0.0001,
-                  abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001 else { return }
+                  preservesDraft || (
+                    self.draftPipelineConfiguration == candidate &&
+                    abs(self.sharpness - candidateSharpness) <= 0.0001 &&
+                    abs(self.hdrStrength - candidateHDRStrength) <= 0.0001 &&
+                    abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
+                  ) else { return }
 
             let sourceRate = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30
             let preparer = EnhancedFrameCachePreparer(diskCache: self.enhancedFrameDiskCache)
@@ -179,10 +199,12 @@ extension VTPlayerViewModel {
                 )
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
                       self.videoURL == url,
-                      self.draftPipelineConfiguration == candidate,
-                      abs(self.sharpness - candidateSharpness) <= 0.0001,
-                      abs(self.hdrStrength - candidateHDRStrength) <= 0.0001,
-                      abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001 else { return }
+                      preservesDraft || (
+                        self.draftPipelineConfiguration == candidate &&
+                        abs(self.sharpness - candidateSharpness) <= 0.0001 &&
+                        abs(self.hdrStrength - candidateHDRStrength) <= 0.0001 &&
+                        abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
+                      ) else { return }
 
                 let asset = AVURLAsset(url: url)
                 let duration = try await asset.load(.duration)
@@ -261,10 +283,12 @@ extension VTPlayerViewModel {
                 }
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
                       self.videoURL == url,
-                      self.draftPipelineConfiguration == candidate,
-                      abs(self.sharpness - candidateSharpness) <= 0.0001,
-                      abs(self.hdrStrength - candidateHDRStrength) <= 0.0001,
-                      abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001 else { return }
+                      preservesDraft || (
+                        self.draftPipelineConfiguration == candidate &&
+                        abs(self.sharpness - candidateSharpness) <= 0.0001 &&
+                        abs(self.hdrStrength - candidateHDRStrength) <= 0.0001 &&
+                        abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
+                      ) else { return }
                 self.preparedEnhancedFrameCacheKey = result.key
                 self.preparedEnhancedFrameCacheMode = result.mode
                 self.enhancedCacheCoveragePercent = result.status.coverageBitmap.isEmpty
@@ -383,7 +407,7 @@ extension VTPlayerViewModel {
             }
             guard !Task.isCancelled,
                   self.videoURL == url,
-                  self.draftPipelineConfiguration == candidate,
+                  self.appliedPipelineConfiguration == candidate,
                   self.isPlaying,
                   !self.isPaused else {
                 self.enhancedPresentationMonitorTask = nil
@@ -394,7 +418,7 @@ extension VTPlayerViewModel {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 guard self.videoURL == url,
-                      self.draftPipelineConfiguration == candidate,
+                      self.appliedPipelineConfiguration == candidate,
                       self.isPlaying,
                       !self.isPaused else {
                     self.enhancedPresentationMonitorTask = nil
@@ -449,8 +473,13 @@ extension VTPlayerViewModel {
     private func fallbackToFullCacheAfterPresentationFailure() {
         guard videoURL != nil,
               liveFallbackWasPlaying,
-              liveFallbackCandidateConfiguration == draftPipelineConfiguration else { return }
+              liveFallbackCandidateConfiguration == appliedPipelineConfiguration else { return }
         let candidate = liveFallbackCandidateConfiguration
+        let rendererSettings = (
+            sharpness: appliedSharpness,
+            hdrStrength: appliedHDRStrength,
+            hdrColorfulness: appliedHDRColorfulness
+        )
         appliedPipelineConfiguration = liveFallbackPreviousConfiguration
         appliedSharpness = enhancementTransactionPreviousSharpness
         appliedHDRStrength = enhancementTransactionPreviousHDRStrength
@@ -462,10 +491,12 @@ extension VTPlayerViewModel {
         forceFullCachePreparation = true
         stopPlaybackLoopOnly()
         appliedPipelineConfiguration = liveFallbackPreviousConfiguration
-        // Keep the candidate in the draft fields and reuse the normal
-        // transactional preparation path with a forced full-cache plan.
-        guard draftPipelineConfiguration == candidate else { return }
-        applyPipelineEnhancements()
+        // Preserve any newer selection as a draft while preparing a full
+        // cache for the configuration that actually failed the live gate.
+        applyPipelineEnhancements(
+            fullCacheConfiguration: candidate,
+            rendererSettings: rendererSettings
+        )
     }
     #endif
 }

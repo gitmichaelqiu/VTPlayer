@@ -12,18 +12,20 @@ extension VTPlayerView {
                 ProgressView()
                     .controlSize(.large)
 
-                Text("Preparing Enhancements")
+                Text(preparationTitle)
                     .font(.headline)
 
                 switch viewModel.enhancedCachePreparationState {
                 case .benchmarking:
-                    Text("Measuring the selected pipeline before playback.")
+                    Text("Checking whether these settings can play smoothly. If not, VTPlayer will prepare a cache.")
                         .foregroundStyle(.secondary)
                 case .prerolling:
-                    Text("Warming the enhanced frame queue before playback.")
+                    Text(viewModel.preparedEnhancedFrameCacheMode == nil
+                        ? "Preparing the first enhanced frames. Playback starts automatically when enough are ready."
+                        : "Loading prepared enhanced frames. Playback starts automatically when the queue is ready.")
                         .foregroundStyle(.secondary)
                 case .monitoring:
-                    Text("Checking live presentation cadence.")
+                    Text("Playback is running; smoothness is being checked in the background.")
                         .foregroundStyle(.secondary)
                 case let .preparing(progress, bytesWritten):
                     ProgressView(value: progress)
@@ -34,8 +36,12 @@ extension VTPlayerView {
                     EmptyView()
                 }
 
-                Button("Cancel", role: .cancel) {
-                    viewModel.cancelEnhancedCachePreparation()
+                Button(cancelButtonTitle, role: .cancel) {
+                    if viewModel.enhancedCachePreparationState == .prerolling {
+                        viewModel.cancelEnhancedPlaybackPreroll()
+                    } else {
+                        viewModel.cancelEnhancedCachePreparation()
+                    }
                 }
                 .keyboardShortcut(.escape, modifiers: [])
             }
@@ -46,6 +52,47 @@ extension VTPlayerView {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Enhancement preparation in progress")
+    }
+
+    private var preparationTitle: String {
+        switch viewModel.enhancedCachePreparationState {
+        case .benchmarking:
+            return "Measuring selected enhancements"
+        case .prerolling:
+            return "Loading frames for playback"
+        case .monitoring:
+            return "Checking playback smoothness"
+        case .preparing:
+            return "Building enhanced frame cache"
+        case .idle, .ready, .failed:
+            return "Preparing enhancements"
+        }
+    }
+
+    private var cancelButtonTitle: String {
+        viewModel.enhancedCachePreparationState == .prerolling
+            ? "Cancel Playback Start"
+            : "Cancel Preparation"
+    }
+
+    @ViewBuilder
+    var livePresentationMonitoringIndicator: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Playback is running")
+                    .font(.caption.weight(.semibold))
+                Text("Checking smoothness in the background")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(16)
+        .accessibilityElement(children: .combine)
     }
 }
 #endif
