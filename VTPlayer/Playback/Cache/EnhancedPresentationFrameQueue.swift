@@ -37,6 +37,7 @@ nonisolated private struct EnhancedPresentationFrameQueueState: Sendable {
     var dequeueAttempts = 0
     var starvationCount = 0
     var lateInterpolatedDrops = 0
+    var didNotifyPreroll = false
 }
 
 nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
@@ -62,6 +63,19 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
             state.dequeueAttempts = 0
             state.starvationCount = 0
             state.lateInterpolatedDrops = 0
+            state.didNotifyPreroll = false
+        }
+    }
+
+    func claimPrerollNotification(generation: UInt64, minimumFrameCount: Int) -> Bool {
+        state.withLock { state in
+            guard state.generation == generation,
+                  !state.didNotifyPreroll,
+                  state.frames.count - state.startIndex >= max(1, minimumFrameCount) else {
+                return false
+            }
+            state.didNotifyPreroll = true
+            return true
         }
     }
 
@@ -232,24 +246,35 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
 nonisolated final class EnhancedPresentationReaderControl: @unchecked Sendable {
     nonisolated struct Request: Sendable {
         var generation: UInt64
-        var seconds: Double
+        var presentationTime: CMTime
     }
 
     private let state: Mutex<Request>
 
     init(startTime: CMTime, generation: UInt64) {
-        self.state = Mutex(Request(generation: generation, seconds: CMTimeGetSeconds(startTime)))
+        self.state = Mutex(Request(
+            generation: generation,
+            presentationTime: Self.normalizedPresentationTime(startTime)
+        ))
     }
 
     func requestSeek(to time: CMTime) {
-        let seconds = CMTimeGetSeconds(time)
+        let presentationTime = Self.normalizedPresentationTime(time)
         state.withLock { request in
             request.generation &+= 1
-            request.seconds = seconds.isFinite ? max(0, seconds) : 0
+            request.presentationTime = presentationTime
         }
     }
 
     func request() -> Request {
         state.withLock { $0 }
+    }
+
+    private static func normalizedPresentationTime(_ time: CMTime) -> CMTime {
+        let seconds = CMTimeGetSeconds(time)
+        guard time.isValid, seconds.isFinite, CMTimeCompare(time, .zero) >= 0 else {
+            return .zero
+        }
+        return time
     }
 }

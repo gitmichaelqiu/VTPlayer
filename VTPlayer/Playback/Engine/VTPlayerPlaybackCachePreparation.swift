@@ -572,7 +572,9 @@ extension VTPlayerViewModel {
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let startupDeadline = DispatchTime.now().uptimeNanoseconds + 2_000_000_000
+            let startupAllowanceNanoseconds: UInt64 =
+                self.preparedEnhancedFrameCacheMode == .full ? 6_000_000_000 : 2_000_000_000
+            let startupDeadline = DispatchTime.now().uptimeNanoseconds + startupAllowanceNanoseconds
             while !Task.isCancelled,
                   self.enhancedPresentationMonitorGeneration == monitorGeneration,
                   self.enhancedCachePreparationGeneration == preparationGeneration,
@@ -596,7 +598,9 @@ extension VTPlayerViewModel {
                     requestedRate: self.sourceFrameRate *
                         (candidate.frameInterpolationLevel > 0 ? Double(candidate.frameInterpolationLevel) : 1) *
                         self.playbackSpeed,
-                    reason: "No enhanced frame reached the display within 2 seconds."
+                    reason: self.enhancedPresentationStartupFailureDetail(
+                        allowanceNanoseconds: startupAllowanceNanoseconds
+                    )
                 )
                 return
             }
@@ -672,6 +676,37 @@ extension VTPlayerViewModel {
         }
     }
 
+    private func enhancedPresentationStartupFailureDetail(allowanceNanoseconds: UInt64) -> String {
+        let allowedSeconds = Double(allowanceNanoseconds) / 1_000_000_000
+        guard preparedEnhancedFrameCacheMode == .full else {
+            return "No enhanced frame was submitted within \(String(format: "%.0f", allowedSeconds)) seconds."
+        }
+
+        let queue = fullCachePresentationQueue?.snapshot()
+        let driver = macDedicatedMetalDisplayTickDriver?.startupSnapshot()
+        let presentedSincePipelineStart = max(
+            0,
+            renderer.totalPresentedFrameCount() - actualPresentedFrameBaseline
+        )
+        let nextPresentationTime = queue?.nextPresentationSeconds.map {
+            String(format: "%.3f", $0)
+        } ?? "none"
+        let metalDisplayLinkCallbacks = macMetalDisplayTickDriver?.startupCallbackCount() ?? 0
+        let driverDetails: String
+        if let driver {
+            driverDetails = "dedicated callbacks=\(driver.callbacks), submitted=\(driver.renderedFrames), drawableFailures=\(driver.drawableAcquisitionFailures), encodeFailures=\(driver.encodingFailures)"
+        } else if dedicatedPresentationFallbackURL == videoURL,
+                  dedicatedPresentationFallbackConfiguration == appliedPipelineConfiguration,
+                  let dedicatedPresentationFallbackSummary {
+            driverDetails = "\(dedicatedPresentationFallbackSummary); CAMetalDisplayLink callbacks=\(metalDisplayLinkCallbacks)"
+        } else {
+            driverDetails = "CAMetalDisplayLink callbacks=\(metalDisplayLinkCallbacks)"
+        }
+        let diagnostics = "queueFrames=\(queue?.frameCount ?? 0), nextPTS=\(nextPresentationTime), actualPresentations=\(presentedSincePipelineStart), \(driverDetails)"
+        NSLog("RENDER: full-cache first-frame startup timed out after %.0f seconds: %@", allowedSeconds, diagnostics)
+        return "No enhanced frame reached the display within \(String(format: "%.0f", allowedSeconds)) seconds. Diagnostics: \(diagnostics)."
+    }
+
     private func handleEnhancedPresentationFailure(
         url: URL,
         candidate: AppliedPipelineConfiguration,
@@ -703,9 +738,9 @@ extension VTPlayerViewModel {
         actualPresented1PercentLow = actualPresentedRateSamples.min() ?? measuredRate
         reportPlaybackIssue(
             stage: .pipeline,
-            message: "Enhanced playback was paused because the full-cache presentation path also missed its target.\n\n" +
+            message: "Enhanced playback was paused because the prepared cache could not be presented.\n\n" +
                 "\(reason) Presented \(String(format: "%.1f", measuredRate)) Hz; target \(String(format: "%.1f", targetRate)) Hz. " +
-                "The full cache is already active, so preparing more cached frames cannot fix this. Retry Enhanced or continue with native playback."
+                "The prepared cache is retained. Retry Enhanced or continue with native playback."
         )
     }
 

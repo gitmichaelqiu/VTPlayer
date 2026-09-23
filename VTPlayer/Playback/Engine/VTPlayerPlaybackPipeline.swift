@@ -606,7 +606,7 @@ extension VTPlayerViewModel {
                     presentationReserveTarget
                 )
                 let readerControl = EnhancedPresentationReaderControl(
-                    startTime: self.lastPulledTime,
+                    startTime: self.lastRenderedPTS,
                     generation: 1
                 )
                 let presentationQueue = EnhancedPresentationFrameQueue(
@@ -625,7 +625,6 @@ extension VTPlayerViewModel {
 
                 let readerTask = Task.detached(priority: .userInitiated) {
                     var handledGeneration: UInt64 = 0
-                    var notifiedPrerollGeneration: UInt64?
 
                     while !Task.isCancelled {
                         let request = readerControl.request()
@@ -634,9 +633,8 @@ extension VTPlayerViewModel {
                             continue
                         }
                         handledGeneration = request.generation
-                        notifiedPrerollGeneration = nil
                         presentationQueue.reset(generation: handledGeneration)
-                        let startTime = CMTime(seconds: request.seconds, preferredTimescale: 60_000)
+                        let startTime = request.presentationTime
                         guard let chunkIndices = try? await diskCache.encodedChunkIndices(for: preparedFrameCacheKey),
                               !chunkIndices.isEmpty,
                               let firstChunkIndex = try? await diskCache.encodedChunkIndex(
@@ -674,8 +672,32 @@ extension VTPlayerViewModel {
                                         guard readerControl.request().generation == chunkGeneration else {
                                             throw CancellationError()
                                         }
+                                        guard CMTimeCompare(
+                                            frame.presentationTimeStamp,
+                                            startTime
+                                        ) >= 0 else {
+                                            return
+                                        }
                                         switch presentationQueue.enqueue(frame, generation: chunkGeneration) {
                                         case .enqueued:
+                                            if presentationQueue.claimPrerollNotification(
+                                                generation: chunkGeneration,
+                                                minimumFrameCount: prerollFrameCount
+                                            ) {
+                                                Task { @MainActor in
+                                                    guard self.playbackGeneration == gen,
+                                                          self.fullCacheReaderControl === readerControl else {
+                                                        return
+                                                    }
+                                                    NSLog(
+                                                        "CACHE: HEVC playback preroll ready frames=%d chunk=%d startPTS=%.6f",
+                                                        presentationQueue.snapshot().frameCount,
+                                                        chunkIndex,
+                                                        CMTimeGetSeconds(startTime)
+                                                    )
+                                                    resumeAfterFramePrerollIfReady()
+                                                }
+                                            }
                                             return
                                         case .capacityExceeded:
                                             try await Task.sleep(nanoseconds: 2_000_000)
@@ -702,15 +724,6 @@ extension VTPlayerViewModel {
                                 sourceGroupCount,
                                 generation: handledGeneration
                             )
-                            if notifiedPrerollGeneration != handledGeneration,
-                               presentationQueue.snapshot().frameCount >= prerollFrameCount {
-                                notifiedPrerollGeneration = handledGeneration
-                                Task { @MainActor in
-                                    guard self.playbackGeneration == gen,
-                                          self.fullCacheReaderControl === readerControl else { return }
-                                    resumeAfterFramePrerollIfReady()
-                                }
-                            }
                             chunkOffset += 1
                         }
                         if decodeFailed,
@@ -801,10 +814,7 @@ extension VTPlayerViewModel {
                         handledGeneration = request.generation
                         notifiedPrerollGeneration = nil
                         presentationQueue.reset(generation: handledGeneration)
-                        let startTime = CMTime(
-                            seconds: request.seconds,
-                            preferredTimescale: 600
-                        )
+                        let startTime = request.presentationTime
                         guard var groupIndex = try? await diskCache.groupIndex(
                             atOrAfter: startTime,
                             for: preparedFrameCacheKey

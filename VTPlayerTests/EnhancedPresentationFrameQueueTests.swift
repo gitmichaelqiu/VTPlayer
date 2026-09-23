@@ -104,6 +104,39 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
         ))
     }
 
+    func testDedicatedFullCacheSchedulerFallsBackWhenStartupCannotPresent() {
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 0,
+            queuedFrames: 0,
+            submittedFrames: 0,
+            presentedFrames: 0
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 0,
+            submittedFrames: 0,
+            presentedFrames: 0
+        ))
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 12,
+            submittedFrames: 0,
+            presentedFrames: 0
+        ))
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 12,
+            submittedFrames: 8,
+            presentedFrames: 0
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 12,
+            submittedFrames: 8,
+            presentedFrames: 8
+        ))
+    }
+
     func testDisplayTargetClockExtrapolatesToPredictedPresentation() {
         XCTAssertEqual(
             DisplayTargetClock.presentationSeconds(
@@ -161,6 +194,41 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
 
         XCTAssertFalse(queue.enqueue(contentsOf: [frame], generation: 1))
         XCTAssertTrue(queue.enqueue(contentsOf: [frame], generation: 2))
+    }
+
+    func testPrerollNotificationIsClaimedOnceForCurrentQueueGeneration() throws {
+        let queue = EnhancedPresentationFrameQueue(
+            capacityBytes: 1_000_000,
+            capacityFrames: 4,
+            generation: 1
+        )
+        let first = try makeFrame(time: .zero, interpolated: false)
+        let second = try makeFrame(time: CMTime(value: 1, timescale: 120), interpolated: true)
+
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 2, minimumFrameCount: 2))
+        XCTAssertEqual(queue.enqueue(first, generation: 1), .enqueued)
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 2))
+        XCTAssertEqual(queue.enqueue(second, generation: 1), .enqueued)
+        XCTAssertTrue(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 2))
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 2))
+
+        queue.reset(generation: 2)
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 1))
+        XCTAssertEqual(queue.enqueue(first, generation: 2), .enqueued)
+        XCTAssertTrue(queue.claimPrerollNotification(generation: 2, minimumFrameCount: 1))
+    }
+
+    func testReaderControlPreservesExactPresentationTimeAcrossSeeks() {
+        let control = EnhancedPresentationReaderControl(
+            startTime: CMTime(value: 59_940, timescale: 10_000),
+            generation: 4
+        )
+        XCTAssertEqual(control.request().presentationTime, CMTime(value: 59_940, timescale: 10_000))
+        XCTAssertEqual(control.request().generation, 4)
+
+        control.requestSeek(to: CMTime(value: 1001, timescale: 60_000))
+        XCTAssertEqual(control.request().presentationTime, CMTime(value: 1001, timescale: 60_000))
+        XCTAssertEqual(control.request().generation, 5)
     }
 
     func testEnqueueResultDistinguishesBackpressureFromRejectedFrames() throws {

@@ -224,6 +224,9 @@ final class VTPlayerViewModel {
     @ObservationIgnored var preparedEnhancedFrameCacheMode: EnhancedCachePlaybackMode?
     @ObservationIgnored var enhancedCachePreparationTask: Task<Void, Never>?
     @ObservationIgnored var enhancedCachePreparationGeneration: UInt64 = 0
+    @ObservationIgnored var dedicatedPresentationFallbackURL: URL?
+    @ObservationIgnored var dedicatedPresentationFallbackConfiguration: AppliedPipelineConfiguration?
+    @ObservationIgnored var dedicatedPresentationFallbackSummary: String?
 
     var draftPipelineConfiguration: AppliedPipelineConfiguration {
         AppliedPipelineConfiguration(
