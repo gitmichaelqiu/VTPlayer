@@ -124,6 +124,7 @@ struct RendererPresentationPerformanceSnapshot: Equatable, Sendable {
 
 private struct RendererPresentationPerformanceStorage: Sendable {
     var presentedFrames = 0
+    var totalPresentedFrames = 0
     var droppedPresentations = 0
     var intervalSamples = 0
     var totalIntervalNanoseconds: UInt64 = 0
@@ -140,6 +141,7 @@ final class RendererPresentationPerformanceRecorder: @unchecked Sendable {
                 return
             }
             storage.presentedFrames += 1
+            storage.totalPresentedFrames += 1
             if let previous = storage.previousPresentedTime, presentedTime >= previous {
                 let interval = (presentedTime - previous) * 1_000_000_000
                 if interval <= Double(UInt64.max) {
@@ -166,6 +168,10 @@ final class RendererPresentationPerformanceRecorder: @unchecked Sendable {
             storage.previousPresentedTime = nil
             return snapshot
         }
+    }
+
+    nonisolated func totalPresentedFrames() -> Int {
+        storage.withLock { $0.totalPresentedFrames }
     }
 }
 
@@ -567,6 +573,10 @@ public final class VTMetalRenderer: MTKView {
             completedGPU: gpuPerformanceRecorder.consumeSnapshot(),
             presentation: presentationPerformanceRecorder.consumeSnapshot()
         )
+    }
+
+    internal func totalPresentedFrameCount() -> Int {
+        presentationPerformanceRecorder.totalPresentedFrames()
     }
 
     #if os(macOS)

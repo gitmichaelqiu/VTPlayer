@@ -158,12 +158,15 @@ final class VTPlayerViewModel {
     var appliedHDRStrength = 0.0
     var appliedHDRColorfulness = 0.0
     @ObservationIgnored var enhancedPresentationMonitorTask: Task<Void, Never>?
+    @ObservationIgnored var enhancedPresentationMonitorGeneration: UInt64 = 0
     @ObservationIgnored var forceFullCachePreparation = false
     @ObservationIgnored var liveFallbackPreviousConfiguration = AppliedPipelineConfiguration.disabled
     @ObservationIgnored var liveFallbackCandidateConfiguration = AppliedPipelineConfiguration.disabled
     @ObservationIgnored var liveFallbackWasPlaying = false
     @ObservationIgnored var livePresentationGateValidated = false
     @ObservationIgnored var actualPresentedRateSamples: [Double] = []
+    @ObservationIgnored var actualPresentedFrameBaseline = 0
+    @ObservationIgnored var actualPresentedMetricWindowStart = DispatchTime.now()
     var actualPresentedFrameRate: Double = 0
     var actualPresented1PercentLow: Double = 0
     #endif
@@ -372,7 +375,9 @@ final class VTPlayerViewModel {
     }
 
     func retryEnhancedPlayback() {
-        guard videoURL != nil, isPipelineActive || hasUnappliedPipelineChanges else { return }
+        guard videoURL != nil,
+              isPipelineActive || hasUnappliedPipelineChanges ||
+                playbackIssue?.stage == .pipeline || playbackIssue?.stage == .preparation else { return }
         clearPlaybackIssue()
         nativeFallbackActive = false
         if hasUnappliedPipelineChanges {
@@ -380,8 +385,18 @@ final class VTPlayerViewModel {
         } else {
             isPlaying = true
             isPaused = false
+            liveFallbackCandidateConfiguration = appliedPipelineConfiguration
+            liveFallbackWasPlaying = true
+            livePresentationGateValidated = false
             transitionPlayback(to: .prerollingEnhanced)
             startPlaybackLoop()
+            if let url = videoURL {
+                startEnhancedPresentationGateMonitor(
+                    url: url,
+                    candidate: appliedPipelineConfiguration,
+                    preparationGeneration: enhancedCachePreparationGeneration
+                )
+            }
         }
     }
 
@@ -445,6 +460,18 @@ final class VTPlayerViewModel {
         let physical = Double(renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
         guard physical > 0 else { return requestedOutputFrameRate }
         return min(requestedOutputFrameRate, physical)
+    }
+
+    var enhancedProcessingModeSummary: String {
+        guard let mode = preparedEnhancedFrameCacheMode else { return "Live processing" }
+        switch mode {
+        case .realTime:
+            return "Live processing"
+        case .sparse:
+            return "Sparse cache · \(enhancedCacheCoveragePercent)%"
+        case .full:
+            return "Full cache · 100%"
+        }
     }
 
     var presentationQueueFrameCount: Int {

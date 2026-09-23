@@ -219,9 +219,11 @@ extension VTPlayerView {
                             .foregroundStyle(.secondary)
                     }
                     LabeledContent("Applied Enhancements", value: viewModel.appliedEnhancementSummary)
+                    LabeledContent("Processing Mode", value: viewModel.enhancedProcessingModeSummary)
                     LabeledContent("Frame Processing") {
                         Text(String(format: "%.1f ms", viewModel.frameProcessingTime))
                             .monospacedDigit()
+                            .help("Latest observed enhancement-processing time. Full-cache playback reuses saved frames instead of processing each frame live.")
                     }
                     LabeledContent("Submitted Rate") {
                         Text(String(format: "%.1f Hz", viewModel.fps))

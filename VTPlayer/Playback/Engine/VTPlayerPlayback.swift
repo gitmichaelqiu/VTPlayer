@@ -23,7 +23,7 @@ extension VTPlayerViewModel {
         // Live-presentation monitoring measures the active configuration, not
         // the independently editable draft. Let that short gate finish while
         // the user chooses a possible next configuration.
-        if enhancedCachePreparationState == .monitoring {
+        if enhancedPresentationMonitorTask != nil {
             return
         }
         cancelEnhancedCachePreparation()
@@ -155,19 +155,13 @@ extension VTPlayerViewModel {
                 startDisplayLinkIfNeeded()
             }
             #if os(macOS)
-            if preparedEnhancedFrameCacheMode == nil,
-               enhancedPresentationMonitorTask == nil,
-               !livePresentationGateValidated,
-               let url = videoURL,
-               liveFallbackCandidateConfiguration == appliedPipelineConfiguration {
-                // A play action from a stable paused state starts a new live
-                // validation window. If that window is cancelled, restore the
-                // paused state instead of accidentally continuing the draft.
-                if enhancedCachePreparationState == .ready {
-                    enhancementTransactionWasPlaying = false
-                    enhancementTransactionPreviousPhase = .paused
-                    enhancementTransactionPreviousConfiguration = appliedPipelineConfiguration
-                }
+            if enhancedPresentationMonitorTask == nil, let url = videoURL {
+                // A monitor is required for live, sparse-cache, and full-cache
+                // playback. Cache mode only changes the recovery action if the
+                // measured presentation cadence misses its target.
+                liveFallbackCandidateConfiguration = appliedPipelineConfiguration
+                liveFallbackWasPlaying = true
+                livePresentationGateValidated = false
                 startEnhancedPresentationGateMonitor(
                     url: url,
                     candidate: appliedPipelineConfiguration,
@@ -240,11 +234,13 @@ extension VTPlayerViewModel {
         self.isPaused = true
         self.isBuffering = false
         #if os(macOS)
+        enhancedPresentationMonitorGeneration &+= 1
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = nil
         if enhancedCachePreparationState == .monitoring {
             enhancedCachePreparationState = .ready
         }
+        livePresentationGateValidated = false
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
         #else
@@ -331,6 +327,7 @@ extension VTPlayerViewModel {
         #if os(macOS)
         scrubPreviewTask?.cancel()
         scrubPreviewTask = nil
+        enhancedPresentationMonitorGeneration &+= 1
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = nil
         pipelinePresentationReady = false
@@ -368,9 +365,7 @@ extension VTPlayerViewModel {
         isInitializingPipeline = false
         presentedFramesCount = 0
         #if os(macOS)
-        actualPresentedFrameRate = 0
-        actualPresented1PercentLow = 0
-        actualPresentedRateSamples.removeAll(keepingCapacity: true)
+        resetActualPresentedFrameMetrics()
         #endif
         diagnosticPresentedFramesCount = 0
         diagnosticPresentedInterpolatedCount = 0

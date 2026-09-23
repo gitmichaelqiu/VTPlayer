@@ -140,13 +140,11 @@ extension VTPlayerViewModel {
         fps = 0
         presentedFramesCount = 0
         #if os(macOS)
-        actualPresentedFrameRate = 0
-        actualPresented1PercentLow = 0
-        actualPresentedRateSamples.removeAll(keepingCapacity: true)
         // Presentation handlers complete asynchronously. Clear metrics at
         // the start of every generation so the live gate only evaluates the
         // current pipeline, never stale native or prior-pipeline drawables.
         _ = renderer.consumePerformanceSnapshot()
+        resetActualPresentedFrameMetrics()
         #endif
         displayRateSamples.removeAll(keepingCapacity: true)
         displayRate1PercentLow = 0

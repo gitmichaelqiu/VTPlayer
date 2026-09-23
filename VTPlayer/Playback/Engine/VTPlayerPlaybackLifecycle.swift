@@ -16,6 +16,7 @@ extension VTPlayerViewModel {
         #if os(macOS)
         scrubPreviewTask?.cancel()
         scrubPreviewTask = nil
+        enhancedPresentationMonitorGeneration &+= 1
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = nil
         forceFullCachePreparation = false
@@ -94,9 +95,7 @@ extension VTPlayerViewModel {
         self.fps = 0.0
         self.displayRate1PercentLow = 0.0
         #if os(macOS)
-        self.actualPresentedFrameRate = 0.0
-        self.actualPresented1PercentLow = 0.0
-        self.actualPresentedRateSamples.removeAll(keepingCapacity: true)
+        self.resetActualPresentedFrameMetrics()
         #endif
         self.presentedFramesCount = 0
         self.diagnosticPresentedFramesCount = 0

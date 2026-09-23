@@ -514,6 +514,29 @@ import MediaPlayer
 
 extension VTPlayerViewModel {
     #if os(macOS)
+    func resetActualPresentedFrameMetrics() {
+        actualPresentedFrameBaseline = renderer.totalPresentedFrameCount()
+        actualPresentedMetricWindowStart = .now()
+        actualPresentedFrameRate = 0
+        actualPresented1PercentLow = 0
+        actualPresentedRateSamples.removeAll(keepingCapacity: true)
+    }
+
+    func refreshActualPresentedFrameMetrics(at now: DispatchTime = .now()) {
+        let elapsed = elapsedUptimeSeconds(since: actualPresentedMetricWindowStart, until: now)
+        guard elapsed >= 1 else { return }
+        let currentTotal = renderer.totalPresentedFrameCount()
+        let presentedFrames = max(0, currentTotal - actualPresentedFrameBaseline)
+        actualPresentedFrameRate = Double(presentedFrames) / elapsed
+        actualPresentedRateSamples.append(actualPresentedFrameRate)
+        if actualPresentedRateSamples.count > 5 {
+            actualPresentedRateSamples.removeFirst(actualPresentedRateSamples.count - 5)
+        }
+        actualPresented1PercentLow = actualPresentedRateSamples.min() ?? actualPresentedFrameRate
+        actualPresentedFrameBaseline = currentTotal
+        actualPresentedMetricWindowStart = now
+    }
+
     func applyDedicatedPresentationUpdate(_ update: DedicatedPresentationUpdate) {
         guard FullCachePresentationGeneration.accepts(
             driverGeneration: update.generation,
@@ -560,6 +583,7 @@ extension VTPlayerViewModel {
             displayRateSamples.append(measuredFPS)
             displayRate1PercentLow = displayRateSamples.min() ?? measuredFPS
         }
+        refreshActualPresentedFrameMetrics()
         logDedicatedPresentationDiagnosticsIfNeeded()
     }
 
@@ -575,7 +599,7 @@ extension VTPlayerViewModel {
         let driverSnapshot = driver.consumeSnapshot()
         let physicalCadence = macPhysicalDisplayCadenceMonitor?.consumeSnapshot()
         let scheduling = renderer.schedulingSnapshot()
-        let actualPresentationRate = Double(rendererPerformance.presentedFrames) / elapsed
+        let actualPresentationRate = actualPresentedFrameRate
         let submittedRate = Double(driverSnapshot.renderedFrames) / elapsed
         let cacheMode = preparedEnhancedFrameCacheMode?.rawValue ?? "realTime"
         let hitRate = queue.cacheHitGroups > 0 ? 100.0 : 0.0
@@ -985,6 +1009,10 @@ extension VTPlayerViewModel {
             fpsTimer = statsNow
         }
 
+        #if os(macOS)
+        refreshActualPresentedFrameMetrics(at: statsNow)
+        #endif
+
         let diagElapsed = elapsedUptimeSeconds(since: diagTimer, until: now)
         if diagElapsed >= 5.0 {
             let curRate = player.rate
@@ -1040,12 +1068,6 @@ extension VTPlayerViewModel {
             let cacheMisses = enhancedCacheMissGroupCount
             #if os(macOS)
             let rendererPerformance = renderer.consumePerformanceSnapshot()
-            actualPresentedFrameRate = Double(rendererPerformance.presentedFrames) / diagElapsed
-            actualPresentedRateSamples.append(actualPresentedFrameRate)
-            if actualPresentedRateSamples.count > 5 {
-                actualPresentedRateSamples.removeFirst(actualPresentedRateSamples.count - 5)
-            }
-            actualPresented1PercentLow = actualPresentedRateSamples.min() ?? actualPresentedFrameRate
             let drawRate = Double(rendererPerformance.drawAttempts) / diagElapsed
             let drawableRate = Double(rendererPerformance.drawableAcquisitions) / diagElapsed
             let drawableSize = renderer.drawableSize
@@ -1086,7 +1108,7 @@ extension VTPlayerViewModel {
                 NSLog("FI: processMs=\(String(format: "%.2f", averageFIProcessing)) maxMs=\(String(format: "%.2f", fiProcessingMaximumMilliseconds)) deadlineMisses=\(fiDeadlineMissCount)/\(fiProcessingSampleCount) outputShortfalls=\(fiOutputShortfallCount) budgetMs=\(String(format: "%.2f", sourceFrameRate > 0 ? 1_000.0 / sourceFrameRate : 0))")
             }
             #if os(macOS)
-            let actualPresentationRate = Double(rendererPerformance.presentedFrames) / diagElapsed
+            let actualPresentationRate = actualPresentedFrameRate
             NSLog("RENDER-CADENCE: physicalHz=\(String(format: "%.1f", physicalCadence?.framesPerSecond ?? 0)) callbacks=\(physicalCadence?.callbacks ?? 0) driverHz=\(String(format: "%.1f", Double(displayTickDriver?.callbacks ?? 0) / diagElapsed)) callbackIntervalMs=\(String(format: "%.2f", displayTickDriver?.averageCallbackIntervalMilliseconds ?? 0)) scheduledHz=\(String(format: "%.1f", Double(displayTickDriver?.scheduled ?? 0) / diagElapsed)) coalesced=\(displayTickDriver?.coalesced ?? 0) mainQueueDelayMs=\(String(format: "%.2f", displayTickDriver?.averageMainQueueDelayMilliseconds ?? 0)) deadlineMarginMs=\(String(format: "%.2f", displayTickDriver?.averageDeadlineMarginMilliseconds ?? 0)) submitHz=\(String(format: "%.1f", Double(presented) / diagElapsed)) actualHz=\(String(format: "%.1f", actualPresentationRate)) actualIntervalMs=\(String(format: "%.2f", rendererPerformance.averagePresentationIntervalMilliseconds)) minRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMinimumRefreshInterval * 1_000)) maxRefreshMs=\(String(format: "%.2f", rendererScheduling.screenMaximumRefreshInterval * 1_000)) displayModeHz=\(String(format: "%.1f", rendererScheduling.displayModeRefreshRate))")
             NSLog("RENDER: drawsHz=\(String(format: "%.1f", drawRate)) drawableHz=\(String(format: "%.1f", drawableRate)) drawableFailures=\(rendererPerformance.drawableAcquisitionFailures) drawableWaitMs=\(String(format: "%.2f", rendererPerformance.averageDrawableAcquisitionMilliseconds)) encodeMs=\(String(format: "%.2f", rendererPerformance.averageCPUEncodeMilliseconds)) gpuMs=\(String(format: "%.2f", rendererPerformance.averageGPUMilliseconds)) gpuFrames=\(rendererPerformance.completedGPUFrames) presented=\(rendererPerformance.presentedFrames) presentationDrops=\(rendererPerformance.droppedPresentations) drawable=\(Int(drawableSize.width))x\(Int(drawableSize.height)) requestHz=\(rendererScheduling.preferredFramesPerSecond) screenMaxHz=\(rendererScheduling.screenMaximumFramesPerSecond) transaction=\(rendererScheduling.presentsWithTransaction) vsync=\(rendererScheduling.displaySyncEnabled) encodes=\(rendererPerformance.encodedFrames)")
             #endif

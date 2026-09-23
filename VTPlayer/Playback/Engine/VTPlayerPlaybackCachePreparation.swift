@@ -17,6 +17,7 @@ extension VTPlayerViewModel {
         enhancedCachePreparationGeneration &+= 1
         enhancedCachePreparationTask?.cancel()
         enhancedCachePreparationTask = nil
+        enhancedPresentationMonitorGeneration &+= 1
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = nil
         enhancedCachePreparationState = .idle
@@ -151,6 +152,18 @@ extension VTPlayerViewModel {
                 }
             } else if !wasPlaying {
                 transitionPlayback(to: candidateWouldBePipelineActive ? .paused : .readyPaused)
+            }
+            if wasPlaying, candidateWouldBePipelineActive {
+                liveFallbackPreviousConfiguration = previousConfiguration
+                liveFallbackCandidateConfiguration = candidate
+                liveFallbackWasPlaying = true
+                if enhancedPresentationMonitorTask == nil, let url = videoURL {
+                    startEnhancedPresentationGateMonitor(
+                        url: url,
+                        candidate: candidate,
+                        preparationGeneration: enhancedCachePreparationGeneration
+                    )
+                }
             }
             saveVideoSettings()
             return
@@ -305,6 +318,10 @@ extension VTPlayerViewModel {
                 self.persistedHDRColorfulness = candidateHDRColorfulness
                 self.enhancedCachePreparationState = .ready
                 self.nativeFallbackActive = false
+                self.liveFallbackPreviousConfiguration = previousConfiguration
+                self.liveFallbackCandidateConfiguration = candidate
+                self.liveFallbackWasPlaying = wasPlaying
+                self.livePresentationGateValidated = false
                 NSLog(
                     "CACHE: prepared mode=%@ groups=%d bytes=%lld",
                     result.mode.rawValue,
@@ -312,6 +329,13 @@ extension VTPlayerViewModel {
                     result.status.byteCount
                 )
                 self.resumeAfterApplyingEnhancements(wasPlaying: wasPlaying)
+                if wasPlaying {
+                    self.startEnhancedPresentationGateMonitor(
+                        url: url,
+                        candidate: candidate,
+                        preparationGeneration: preparationGeneration
+                    )
+                }
             } catch is CancellationError {
                 if self.enhancedCachePreparationGeneration == preparationGeneration {
                     self.enhancedCachePreparationState = .idle
@@ -390,58 +414,72 @@ extension VTPlayerViewModel {
         candidate: AppliedPipelineConfiguration,
         preparationGeneration: UInt64
     ) {
+        enhancedPresentationMonitorGeneration &+= 1
+        let monitorGeneration = enhancedPresentationMonitorGeneration
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let startupDeadline = DispatchTime.now().uptimeNanoseconds + 2_000_000_000
             while !Task.isCancelled,
+                  self.enhancedPresentationMonitorGeneration == monitorGeneration,
                   self.enhancedCachePreparationGeneration == preparationGeneration,
                   !self.pipelinePresentationReady,
                   DispatchTime.now().uptimeNanoseconds < startupDeadline {
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
-            if !self.pipelinePresentationReady {
-                self.enhancedPresentationMonitorTask = nil
-                self.fallbackToFullCacheAfterPresentationFailure()
-                return
-            }
             guard !Task.isCancelled,
+                  self.enhancedPresentationMonitorGeneration == monitorGeneration,
+                  self.enhancedCachePreparationGeneration == preparationGeneration,
                   self.videoURL == url,
                   self.appliedPipelineConfiguration == candidate,
                   self.isPlaying,
-                  !self.isPaused else {
+                  !self.isPaused else { return }
+            if !self.pipelinePresentationReady {
                 self.enhancedPresentationMonitorTask = nil
+                self.handleEnhancedPresentationFailure(
+                    url: url,
+                    candidate: candidate,
+                    measuredRate: 0,
+                    requestedRate: self.sourceFrameRate *
+                        (candidate.frameInterpolationLevel > 0 ? Double(candidate.frameInterpolationLevel) : 1) *
+                        self.playbackSpeed,
+                    reason: "No enhanced frame reached the display within 2 seconds."
+                )
                 return
             }
-
-            let monitoringStart = DispatchTime.now().uptimeNanoseconds
+            var presentationWindowStart = DispatchTime.now()
+            var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                guard self.videoURL == url,
+                guard !Task.isCancelled,
+                      self.enhancedPresentationMonitorGeneration == monitorGeneration,
+                      self.enhancedCachePreparationGeneration == preparationGeneration,
+                      self.videoURL == url,
                       self.appliedPipelineConfiguration == candidate,
                       self.isPlaying,
                       !self.isPaused else {
-                    self.enhancedPresentationMonitorTask = nil
+                    if self.enhancedPresentationMonitorGeneration == monitorGeneration {
+                        self.enhancedPresentationMonitorTask = nil
+                    }
                     return
                 }
-                let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds &- monitoringStart
-                guard elapsedNanoseconds >= 5_000_000_000 else { continue }
-                let elapsed = Double(elapsedNanoseconds) / 1_000_000_000
+                let now = DispatchTime.now()
+                let elapsed = self.elapsedUptimeSeconds(since: presentationWindowStart, until: now)
+                guard elapsed >= 5 else { continue }
 
                 let requestedRate = self.sourceFrameRate *
-                    (candidate.frameInterpolationLevel > 0 ? Double(candidate.frameInterpolationLevel) : 1)
+                    (candidate.frameInterpolationLevel > 0 ? Double(candidate.frameInterpolationLevel) : 1) *
+                    self.playbackSpeed
                 let physicalRate = Double(self.renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
                 // `fps` counts submitted frames. The acceptance gate must use
                 // drawable presentation handlers instead, because a drawable
                 // with presentedTime == 0 was dropped before reaching the
-                // screen.
-                let rendererPerformance = self.renderer.consumePerformanceSnapshot()
-                let measuredRate = Double(rendererPerformance.presentedFrames) / elapsed
+                // screen. Use a lifetime count so other metrics readers cannot
+                // consume the gate's frames first.
+                let totalPresentedFrames = self.renderer.totalPresentedFrameCount()
+                let presentedFrames = max(0, totalPresentedFrames - presentationFrameBaseline)
+                let measuredRate = Double(presentedFrames) / elapsed
                 self.actualPresentedFrameRate = measuredRate
-                self.actualPresentedRateSamples.append(measuredRate)
-                if self.actualPresentedRateSamples.count > 5 {
-                    self.actualPresentedRateSamples.removeFirst(self.actualPresentedRateSamples.count - 5)
-                }
                 self.actualPresented1PercentLow = self.actualPresentedRateSamples.min() ?? measuredRate
                 let passes = EnhancedPresentationGate.passes(
                     measuredFramesPerSecond: measuredRate,
@@ -457,17 +495,65 @@ extension VTPlayerViewModel {
                     self.renderedTimelineRatio,
                     passes.description
                 )
-                self.enhancedPresentationMonitorTask = nil
                 if passes {
                     self.livePresentationGateValidated = true
                     self.enhancedCachePreparationState = .ready
-                    self.transitionPlayback(to: .playingEnhanced)
+                    if self.playbackPhase == .monitoringEnhanced ||
+                        self.playbackPhase == .prerollingEnhanced {
+                        self.transitionPlayback(to: .playingEnhanced)
+                    }
                 } else {
-                    self.fallbackToFullCacheAfterPresentationFailure()
+                    self.enhancedPresentationMonitorTask = nil
+                    self.handleEnhancedPresentationFailure(
+                        url: url,
+                        candidate: candidate,
+                        measuredRate: measuredRate,
+                        requestedRate: requestedRate,
+                        reason: "Enhanced playback did not meet its measured presentation target."
+                    )
+                    return
                 }
-                return
+                presentationFrameBaseline = totalPresentedFrames
+                presentationWindowStart = now
             }
         }
+    }
+
+    private func handleEnhancedPresentationFailure(
+        url: URL,
+        candidate: AppliedPipelineConfiguration,
+        measuredRate: Double,
+        requestedRate: Double,
+        reason: String
+    ) {
+        guard videoURL == url,
+              isPlaying,
+              !isPaused,
+              candidate == appliedPipelineConfiguration else { return }
+
+        guard preparedEnhancedFrameCacheMode == .full else {
+            fallbackToFullCacheAfterPresentationFailure()
+            return
+        }
+
+        let physicalRate = Double(renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
+        let targetRate = physicalRate > 0 ? min(requestedRate, physicalRate) : requestedRate
+        player?.pause()
+        enhancedAudioPlayer?.pause()
+        isPlaying = false
+        isPaused = true
+        liveFallbackWasPlaying = false
+        stopPlaybackLoopOnly()
+        isPlaying = false
+        isPaused = true
+        actualPresentedFrameRate = measuredRate
+        actualPresented1PercentLow = actualPresentedRateSamples.min() ?? measuredRate
+        reportPlaybackIssue(
+            stage: .pipeline,
+            message: "Enhanced playback was paused because the full-cache presentation path also missed its target.\n\n" +
+                "\(reason) Presented \(String(format: "%.1f", measuredRate)) Hz; target \(String(format: "%.1f", targetRate)) Hz. " +
+                "The full cache is already active, so preparing more cached frames cannot fix this. Retry Enhanced or continue with native playback."
+        )
     }
 
     private func fallbackToFullCacheAfterPresentationFailure() {
