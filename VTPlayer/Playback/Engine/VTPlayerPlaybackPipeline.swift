@@ -79,6 +79,14 @@ extension VTPlayerViewModel {
         let configuration = appliedPipelineConfiguration
         let preparedFrameCacheKey = preparedEnhancedFrameCacheKey
         let preparedFrameCacheMode = preparedEnhancedFrameCacheMode
+        #if os(macOS)
+        let usesPreparedEncodedCache = EnhancedFrameCachePlaybackPolicy.usesPrecomputedVideo(
+            cacheMode: preparedFrameCacheMode,
+            cacheFormatVersion: preparedFrameCacheKey?.cacheFormatVersion
+        )
+        #else
+        let usesPreparedEncodedCache = false
+        #endif
         let diskCache = enhancedFrameDiskCache
         let targetFrameRate = sourceFrameRate * (configuration.frameInterpolationLevel > 0 ? Double(configuration.frameInterpolationLevel) : 1.0)
         #if os(macOS)
@@ -248,7 +256,7 @@ extension VTPlayerViewModel {
                 self.superResolutionLevel = effectiveSRLevel
             }
 
-            if qualitySR > 0 {
+            if qualitySR > 0 && !usesPreparedEncodedCache {
                 var qlConfig: VTSuperResolutionScalerConfiguration? = nil
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
                    VTSuperResolutionScalerConfiguration.isSupported {
@@ -299,7 +307,7 @@ extension VTPlayerViewModel {
             }
 
             #if os(macOS)
-            if effectiveSRLevel > 0 {
+            if effectiveSRLevel > 0 && !usesPreparedEncodedCache {
                 let canStartPipeline = await VTFrameProcessorCoordinator
                     .canStartLowLatencyPipeline(width: pipelineWidth, height: pipelineHeight, scale: effectiveSRLevel)
                 guard isCurrentPipeline() else { return }
@@ -323,54 +331,66 @@ extension VTPlayerViewModel {
                 qualityPrioritization: qualPrior
             )
             guard isCurrentPipeline() else { return }
-            self.activeCoordinator = coordinator
+            if !usesPreparedEncodedCache {
+                self.activeCoordinator = coordinator
 
-            do {
-                if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
-                   self.srInitializationError == nil {
-                    self.srInitializationError = nil
-                }
-                try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
-            } catch {
-                guard isCurrentPipeline() else {
+                do {
+                    if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
+                       self.srInitializationError == nil {
+                        self.srInitializationError = nil
+                    }
+                    try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
+                } catch {
+                    guard isCurrentPipeline() else {
+                        await coordinator.endSession()
+                        return
+                    }
                     await coordinator.endSession()
-                    return
-                }
-                await coordinator.endSession()
 
-                // The combined processor is capability- and
-                // resolution-dependent. Keep SR enabled when it rejects the
-                // exact pixel-buffer requirements by retrying the established
-                // sequential temporal-first LL SR path.
-                if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !sequentialSRFIFallback {
-                    let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using sequential SR + FI."
-                    self.srInitializationError = message
-                    print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying sequential SR + FI.")
-                    self.useSequentialSRFIFallback = true
+                    // The combined processor is capability- and
+                    // resolution-dependent. Keep SR enabled when it rejects the
+                    // exact pixel-buffer requirements by retrying the established
+                    // sequential temporal-first LL SR path.
+                    if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !sequentialSRFIFallback {
+                        let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using sequential SR + FI."
+                        self.srInitializationError = message
+                        print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying sequential SR + FI.")
+                        self.useSequentialSRFIFallback = true
 
-                    coordinator = VTFrameProcessorCoordinator(
-                        superResolutionLevel: effectiveSRLevel,
-                        frameInterpolationLevel: fiLevel,
-                        useHighQualityDownsampling: highQuality,
-                        useRealTimePriority: realTime,
-                        preferSequentialSRFI: true,
-                        qualitySuperResolutionScaleFactor: effectiveQualitySR,
-                        motionBlurStrength: mbStrength,
-                        denoiseStrength: dnStrength,
-                        qualityPrioritization: qualPrior
-                    )
-                    self.activeCoordinator = coordinator
-                    do {
-                        try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
-                    } catch {
-                        guard isCurrentPipeline() else {
+                        coordinator = VTFrameProcessorCoordinator(
+                            superResolutionLevel: effectiveSRLevel,
+                            frameInterpolationLevel: fiLevel,
+                            useHighQualityDownsampling: highQuality,
+                            useRealTimePriority: realTime,
+                            preferSequentialSRFI: true,
+                            qualitySuperResolutionScaleFactor: effectiveQualitySR,
+                            motionBlurStrength: mbStrength,
+                            denoiseStrength: dnStrength,
+                            qualityPrioritization: qualPrior
+                        )
+                        self.activeCoordinator = coordinator
+                        do {
+                            try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
+                        } catch {
+                            guard isCurrentPipeline() else {
+                                await coordinator.endSession()
+                                return
+                            }
+                            self.srInitializationError = "Sequential SR + FI fallback unavailable: \(error.localizedDescription)"
+                            print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
+                            self.activeCoordinator = nil
                             await coordinator.endSession()
+                            #if os(macOS)
+                            self.restoreNativePresentationAfterPipelineFailure()
+                            #else
+                            self.stop()
+                            #endif
                             return
                         }
-                        self.srInitializationError = "Sequential SR + FI fallback unavailable: \(error.localizedDescription)"
-                        print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
+                    } else {
+                        self.srInitializationError = error.localizedDescription
+                        print("Failed to initialize coordinator session: \(error.localizedDescription)")
                         self.activeCoordinator = nil
-                        await coordinator.endSession()
                         #if os(macOS)
                         self.restoreNativePresentationAfterPipelineFailure()
                         #else
@@ -378,16 +398,6 @@ extension VTPlayerViewModel {
                         #endif
                         return
                     }
-                } else {
-                    self.srInitializationError = error.localizedDescription
-                    print("Failed to initialize coordinator session: \(error.localizedDescription)")
-                    self.activeCoordinator = nil
-                    #if os(macOS)
-                    self.restoreNativePresentationAfterPipelineFailure()
-                    #else
-                    self.stop()
-                    #endif
-                    return
                 }
             }
 
@@ -454,7 +464,12 @@ extension VTPlayerViewModel {
 
             // Create VTFrameSequence to decode frames faster-than-real-time
             var iteratorStartTime = self.lastPulledTime
-            let sourcePadding = await coordinator.sourceFramePadding()
+            let sourcePadding: (right: Int, bottom: Int)
+            if usesPreparedEncodedCache {
+                sourcePadding = (0, 0)
+            } else {
+                sourcePadding = await coordinator.sourceFramePadding()
+            }
             guard isCurrentPipeline() else {
                 await coordinator.endSession()
                 return
@@ -579,6 +594,154 @@ extension VTPlayerViewModel {
                 }
                 return !Task.isCancelled && gen == self.playbackGeneration
             }
+
+            #if os(macOS)
+            if let preparedFrameCacheKey,
+               preparedFrameCacheMode == .full,
+               preparedFrameCacheKey.cacheFormatVersion >= 2 {
+                let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+                let presentationReserveTarget = max(60, screenMaximumFrameRate)
+                let maximumPresentationReserveFrames = max(
+                    initialPrerollFrameCount * 4,
+                    presentationReserveTarget
+                )
+                let readerControl = EnhancedPresentationReaderControl(
+                    startTime: self.lastPulledTime,
+                    generation: 1
+                )
+                let presentationQueue = EnhancedPresentationFrameQueue(
+                    capacityBytes: frameCacheMemoryBudget,
+                    capacityFrames: maximumPresentationReserveFrames,
+                    generation: 1
+                )
+                self.fullCacheReaderControl = readerControl
+                self.fullCachePresentationQueue = presentationQueue
+                let prerollFrameCount = initialPrerollFrameCount
+                NSLog(
+                    "CACHE: playback mode=hevc-chunks targetDisplayHz=%d queueReserve=%d",
+                    screenMaximumFrameRate,
+                    maximumPresentationReserveFrames
+                )
+
+                let readerTask = Task.detached(priority: .userInitiated) {
+                    var handledGeneration: UInt64 = 0
+                    var notifiedPrerollGeneration: UInt64?
+
+                    while !Task.isCancelled {
+                        let request = readerControl.request()
+                        guard request.generation != handledGeneration else {
+                            try? await Task.sleep(nanoseconds: 8_000_000)
+                            continue
+                        }
+                        handledGeneration = request.generation
+                        notifiedPrerollGeneration = nil
+                        presentationQueue.reset(generation: handledGeneration)
+                        let startTime = CMTime(seconds: request.seconds, preferredTimescale: 60_000)
+                        guard let chunkIndices = try? await diskCache.encodedChunkIndices(for: preparedFrameCacheKey),
+                              !chunkIndices.isEmpty,
+                              let firstChunkIndex = try? await diskCache.encodedChunkIndex(
+                                atOrAfter: startTime,
+                                for: preparedFrameCacheKey
+                              ),
+                              let firstOffset = chunkIndices.firstIndex(of: firstChunkIndex) else {
+                            try? await diskCache.invalidateCache(for: preparedFrameCacheKey)
+                            await MainActor.run { [weak self] in
+                                guard let self, self.playbackGeneration == gen else { return }
+                                self.srInitializationError = "The enhanced video cache has no readable chunks."
+                                self.preparedEnhancedFrameCacheKey = nil
+                                self.preparedEnhancedFrameCacheMode = nil
+                                self.enhancedCacheCoveragePercent = 0
+                                self.restoreNativePresentationAfterPipelineFailure(stage: .preparation)
+                            }
+                            return
+                        }
+                        var chunkOffset = firstOffset
+                        var decodeFailed = false
+                        while !Task.isCancelled {
+                            guard readerControl.request().generation == handledGeneration else { break }
+                            guard chunkIndices.indices.contains(chunkOffset) else { break }
+
+                            let chunkIndex = chunkIndices[chunkOffset]
+                            let signpost = MacPresentationSignposts.begin("FullCacheAdmission")
+                            let chunkGeneration = handledGeneration
+                            let sourceGroupCount: Int?
+                            do {
+                                sourceGroupCount = try await diskCache.readEncodedChunkStreaming(
+                                    chunkIndex,
+                                    for: preparedFrameCacheKey
+                                ) { frame in
+                                    while !Task.isCancelled {
+                                        guard readerControl.request().generation == chunkGeneration else {
+                                            throw CancellationError()
+                                        }
+                                        switch presentationQueue.enqueue(frame, generation: chunkGeneration) {
+                                        case .enqueued:
+                                            return
+                                        case .capacityExceeded:
+                                            try await Task.sleep(nanoseconds: 2_000_000)
+                                        case .rejected:
+                                            throw CancellationError()
+                                        }
+                                    }
+                                    throw CancellationError()
+                                }
+                            } catch is CancellationError {
+                                MacPresentationSignposts.end("FullCacheAdmission", identifier: signpost)
+                                break
+                            } catch {
+                                sourceGroupCount = nil
+                            }
+                            MacPresentationSignposts.end("FullCacheAdmission", identifier: signpost)
+                            guard !Task.isCancelled,
+                                  readerControl.request().generation == handledGeneration else { break }
+                            guard let sourceGroupCount else {
+                                decodeFailed = true
+                                break
+                            }
+                            presentationQueue.recordCacheHitGroups(
+                                sourceGroupCount,
+                                generation: handledGeneration
+                            )
+                            if notifiedPrerollGeneration != handledGeneration,
+                               presentationQueue.snapshot().frameCount >= prerollFrameCount {
+                                notifiedPrerollGeneration = handledGeneration
+                                Task { @MainActor in
+                                    guard self.playbackGeneration == gen,
+                                          self.fullCacheReaderControl === readerControl else { return }
+                                    resumeAfterFramePrerollIfReady()
+                                }
+                            }
+                            chunkOffset += 1
+                        }
+                        if decodeFailed,
+                           readerControl.request().generation == handledGeneration,
+                           !Task.isCancelled {
+                            await MainActor.run { [weak self] in
+                                guard let self, self.playbackGeneration == gen else { return }
+                                self.srInitializationError = "An enhanced cache chunk failed integrity or decode validation."
+                                self.preparedEnhancedFrameCacheKey = nil
+                                self.preparedEnhancedFrameCacheMode = nil
+                                self.enhancedCacheCoveragePercent = 0
+                                self.restoreNativePresentationAfterPipelineFailure(stage: .preparation)
+                            }
+                            return
+                        }
+                    }
+                }
+                await withTaskCancellationHandler {
+                    await readerTask.value
+                } onCancel: {
+                    readerTask.cancel()
+                }
+                if self.fullCacheReaderControl === readerControl {
+                    self.fullCacheReaderControl = nil
+                    self.fullCachePresentationQueue = nil
+                }
+                resumeAfterFramePrerollIfReady(force: true)
+                await coordinator.endSession()
+                return
+            }
+            #endif
 
             if let preparedFrameCacheKey, preparedFrameCacheMode == .full {
                 #if os(macOS)
@@ -717,9 +880,8 @@ extension VTPlayerViewModel {
                             if notifiedPrerollGeneration != handledGeneration,
                                presentationQueue.snapshot().frameCount >= prerollFrameCount {
                                 notifiedPrerollGeneration = handledGeneration
-                                Task { @MainActor [weak self] in
-                                    guard let self,
-                                          self.playbackGeneration == gen,
+                                Task { @MainActor in
+                                    guard self.playbackGeneration == gen,
                                           self.fullCacheReaderControl === readerControl else {
                                         return
                                     }

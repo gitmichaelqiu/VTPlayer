@@ -40,7 +40,12 @@ extension VTPlayerViewModel {
             previousConfiguration.denoiseStrength > 0 ||
             previousConfiguration.motionBlurStrength > 0 ||
             previousHDRStrength > 0
-        if wasPlaying {
+        if enhancementTransactionReachedEnd {
+            isPlaying = false
+            isPaused = true
+            transitionPlayback(to: .ended)
+            enhancementTransactionReachedEnd = false
+        } else if wasPlaying {
             isPlaying = true
             isPaused = false
             if !previousPipelineWasActive {
@@ -55,7 +60,7 @@ extension VTPlayerViewModel {
         } else {
             isPlaying = false
             isPaused = true
-            transitionPlayback(to: enhancementTransactionPreviousPhase)
+            transitionPlayback(to: previousPipelineWasActive ? .paused : .readyPaused)
         }
     }
 
@@ -74,9 +79,29 @@ extension VTPlayerViewModel {
         applyPipelineEnhancements(fullCacheConfiguration: nil, rendererSettings: nil)
     }
 
+    func retryEnhancedPreparation(configuration: AppliedPipelineConfiguration) {
+        let benchmark: EnhancedPipelineBenchmark?
+        if liveFallbackBenchmarkURL == videoURL,
+           liveFallbackBenchmarkConfiguration == configuration {
+            benchmark = liveFallbackBenchmark
+        } else {
+            benchmark = nil
+        }
+        applyPipelineEnhancements(
+            fullCacheConfiguration: configuration,
+            rendererSettings: (
+                sharpness: appliedSharpness,
+                hdrStrength: appliedHDRStrength,
+                hdrColorfulness: appliedHDRColorfulness
+            ),
+            benchmarkOverride: benchmark
+        )
+    }
+
     private func applyPipelineEnhancements(
         fullCacheConfiguration: AppliedPipelineConfiguration?,
-        rendererSettings: (sharpness: Double, hdrStrength: Double, hdrColorfulness: Double)?
+        rendererSettings: (sharpness: Double, hdrStrength: Double, hdrColorfulness: Double)?,
+        benchmarkOverride: EnhancedPipelineBenchmark? = nil
     ) {
         validateEnhancementSelections()
         #if os(macOS)
@@ -114,6 +139,7 @@ extension VTPlayerViewModel {
 
         let wasPlaying = isPlaying && !isPaused
         enhancementTransactionWasPlaying = wasPlaying
+        enhancementTransactionReachedEnd = false
         enhancementTransactionPreviousPhase = playbackPhase
         enhancementTransactionPreviousConfiguration = previousConfiguration
         enhancementTransactionPreviousSharpness = previousSharpness
@@ -169,10 +195,53 @@ extension VTPlayerViewModel {
             return
         }
 
+        if !candidateWouldBePipelineActive {
+            forceFullCachePreparation = false
+            preparedEnhancedFrameCacheKey = nil
+            preparedEnhancedFrameCacheMode = nil
+            enhancedCacheCoveragePercent = 0
+            stopPlaybackLoopOnly()
+            appliedPipelineConfiguration = candidate
+            appliedSharpness = candidateSharpness
+            appliedHDRStrength = candidateHDRStrength
+            appliedHDRColorfulness = candidateHDRColorfulness
+            persistedPipelineConfiguration = candidate
+            persistedSharpness = candidateSharpness
+            persistedHDRStrength = candidateHDRStrength
+            persistedHDRColorfulness = candidateHDRColorfulness
+            applyActiveRendererSettings()
+            nativeFallbackActive = false
+            setNativeVideoEnabled(true)
+            enhancedCachePreparationState = .ready
+            if wasPlaying {
+                isPlaying = true
+                isPaused = false
+                transitionPlayback(to: .playingNative)
+                player?.play()
+                player?.rate = Float(playbackSpeed)
+            } else {
+                isPlaying = false
+                isPaused = true
+                transitionPlayback(to: .readyPaused)
+            }
+            saveVideoSettings()
+            return
+        }
+
         forceFullCachePreparation = false
         player?.pause()
-        isPaused = true
         stopPlaybackLoopOnly()
+        setNativeVideoEnabled(true)
+        nativeFallbackActive = true
+        if wasPlaying {
+            player?.play()
+            player?.rate = Float(playbackSpeed)
+            isPlaying = true
+            isPaused = false
+        } else {
+            isPlaying = false
+            isPaused = true
+        }
         enhancedCachePreparationState = .benchmarking
         transitionPlayback(to: .benchmarking)
 
@@ -201,15 +270,21 @@ extension VTPlayerViewModel {
             let sourceRate = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30
             let preparer = EnhancedFrameCachePreparer(diskCache: self.enhancedFrameDiskCache)
             do {
-                let benchmark = try await preparer.benchmark(
-                    url: url,
-                    width: self.videoWidth,
-                    height: self.videoHeight,
-                    sourceFramesPerSecond: sourceRate,
-                    configuration: candidate,
-                    qualityPrioritization: self.qualityPrioritization,
-                    preferSequentialSRFI: self.useSequentialSRFIFallback
-                )
+                let benchmark: EnhancedPipelineBenchmark
+                if let benchmarkOverride {
+                    benchmark = benchmarkOverride
+                    NSLog("CACHE: reusing processing benchmark for fallback cache preparation")
+                } else {
+                    benchmark = try await preparer.benchmark(
+                        url: url,
+                        width: self.videoWidth,
+                        height: self.videoHeight,
+                        sourceFramesPerSecond: sourceRate,
+                        configuration: candidate,
+                        qualityPrioritization: self.qualityPrioritization,
+                        preferSequentialSRFI: self.useSequentialSRFIFallback
+                    )
+                }
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
                       self.videoURL == url,
                       preservesDraft || (
@@ -219,14 +294,36 @@ extension VTPlayerViewModel {
                         abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
                       ) else { return }
 
+                self.liveFallbackBenchmark = benchmark
+                self.liveFallbackBenchmarkURL = url
+                self.liveFallbackBenchmarkConfiguration = candidate
+
                 let asset = AVURLAsset(url: url)
                 let duration = try await asset.load(.duration)
                 let groupCount = max(1, Int((CMTimeGetSeconds(duration) * sourceRate).rounded(.up)) + 8)
+                #if os(macOS)
+                let physicalDisplayRate = self.renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+                let displayTargetFrameRate = min(120, max(1, physicalDisplayRate > 0 ? physicalDisplayRate : 120))
+                #else
+                let displayTargetFrameRate = 60
+                #endif
                 let benchmarkPlan = SparseCachePlanner.makePlan(
                     benchmark: benchmark,
                     configuration: candidate,
                     totalGroupCount: groupCount
                 )
+                #if os(macOS)
+                // All non-live macOS preparation uses the bounded encoded
+                // chunk format; full coverage avoids mixing encoded segments
+                // with real-time processing during seeks.
+                let plan = benchmarkPlan.mode == .realTime && !forceFullCache
+                    ? benchmarkPlan
+                    : SparseCachePlan(
+                        mode: .full,
+                        coveragePercent: 100,
+                        coverageBitmap: Array(repeating: true, count: groupCount)
+                    )
+                #else
                 let plan = forceFullCache
                     ? SparseCachePlan(
                         mode: .full,
@@ -234,6 +331,7 @@ extension VTPlayerViewModel {
                         coverageBitmap: Array(repeating: true, count: groupCount)
                     )
                     : benchmarkPlan
+                #endif
                 NSLog(
                     "CACHE: benchmark p50Ms=%.2f p95Ms=%.2f sourceFPS=%.3f mode=%@ coverage=%d%% groups=%d",
                     benchmark.p50GroupSeconds * 1_000,
@@ -260,9 +358,18 @@ extension VTPlayerViewModel {
                     self.persistedHDRColorfulness = candidateHDRColorfulness
                     self.liveFallbackPreviousConfiguration = previousConfiguration
                     self.liveFallbackCandidateConfiguration = candidate
-                    self.liveFallbackWasPlaying = wasPlaying
-                    self.resumeAfterApplyingEnhancements(wasPlaying: wasPlaying)
-                    if wasPlaying {
+                    let shouldResume = self.enhancementTransactionWasPlaying
+                    self.liveFallbackWasPlaying = shouldResume
+                    self.nativeFallbackActive = false
+                    if self.enhancementTransactionReachedEnd {
+                        self.isPlaying = false
+                        self.isPaused = true
+                        self.transitionPlayback(to: .ended)
+                        self.enhancementTransactionReachedEnd = false
+                    } else {
+                        self.resumeAfterApplyingEnhancements(wasPlaying: shouldResume)
+                    }
+                    if shouldResume {
                         self.startEnhancedPresentationGateMonitor(
                             url: url,
                             candidate: candidate,
@@ -274,19 +381,43 @@ extension VTPlayerViewModel {
 
                 self.enhancedCachePreparationState = .preparing(progress: 0, bytesWritten: 0)
                 self.transitionPlayback(to: .preparingCache)
+                let requestedOutputFrameRate = sourceRate * Double(max(1, candidate.frameInterpolationLevel))
+                let selectedOutputFrameRate = min(Double(displayTargetFrameRate), requestedOutputFrameRate)
+                let scaleFactor = candidate.qualitySuperResolutionScaleFactor > 0
+                    ? Double(candidate.qualitySuperResolutionScaleFactor)
+                    : max(1, Double(candidate.superResolutionLevel))
+                let estimatedOutputWidth = max(1, Int((Double(self.videoWidth) * scaleFactor).rounded(.up)))
+                let estimatedOutputHeight = max(1, Int((Double(self.videoHeight) * scaleFactor).rounded(.up)))
+                let durationSeconds = max(0, CMTimeGetSeconds(duration))
+                #if os(macOS)
+                let estimatedRequiredBytes = EnhancedFrameCacheSizing.estimatedBytes(
+                    width: estimatedOutputWidth,
+                    height: estimatedOutputHeight,
+                    frameRate: selectedOutputFrameRate,
+                    durationSeconds: durationSeconds
+                )
+                #else
                 let estimatedBytesPerGroup = max(1, benchmark.averageOutputBytesPerGroup)
+                let groupMultiplier = plan.mode == .sparse
+                    ? Double(plan.cachedGroupCount) / Double(max(1, plan.coverageBitmap.count))
+                    : 1
+                let estimatedRequiredBytes = Int64(
+                    Double(estimatedBytesPerGroup * Int64(groupCount)) * 1.2 * groupMultiplier
+                )
+                #endif
                 let result = try await preparer.prepareCache(
                     url: url,
                     width: self.videoWidth,
                     height: self.videoHeight,
                     sourceFramesPerSecond: sourceRate,
+                    displayTargetFrameRate: displayTargetFrameRate,
                     estimatedGroupCount: groupCount,
                     plan: plan,
                     configuration: candidate,
                     qualityPrioritization: self.qualityPrioritization,
                     preferSequentialSRFI: self.useSequentialSRFIFallback,
                     diskBudgetBytes: self.enhancedFrameDiskCacheBudget,
-                    estimatedRequiredBytes: Int64(Double(estimatedBytesPerGroup * Int64(groupCount)) * 1.2),
+                    estimatedRequiredBytes: estimatedRequiredBytes,
                     benchmark: benchmark
                 ) { [weak self] progress, bytesWritten in
                     self?.enhancedCachePreparationState = .preparing(
@@ -320,7 +451,8 @@ extension VTPlayerViewModel {
                 self.nativeFallbackActive = false
                 self.liveFallbackPreviousConfiguration = previousConfiguration
                 self.liveFallbackCandidateConfiguration = candidate
-                self.liveFallbackWasPlaying = wasPlaying
+                let shouldResume = self.enhancementTransactionWasPlaying
+                self.liveFallbackWasPlaying = shouldResume
                 self.livePresentationGateValidated = false
                 NSLog(
                     "CACHE: prepared mode=%@ groups=%d bytes=%lld",
@@ -328,8 +460,15 @@ extension VTPlayerViewModel {
                     result.totalGroupCount,
                     result.status.byteCount
                 )
-                self.resumeAfterApplyingEnhancements(wasPlaying: wasPlaying)
-                if wasPlaying {
+                if self.enhancementTransactionReachedEnd {
+                    self.isPlaying = false
+                    self.isPaused = true
+                    self.transitionPlayback(to: .ended)
+                    self.enhancementTransactionReachedEnd = false
+                } else {
+                    self.resumeAfterApplyingEnhancements(wasPlaying: shouldResume)
+                }
+                if shouldResume {
                     self.startEnhancedPresentationGateMonitor(
                         url: url,
                         candidate: candidate,
@@ -345,7 +484,13 @@ extension VTPlayerViewModel {
                     self.appliedHDRColorfulness = previousHDRColorfulness
                     self.applyActiveRendererSettings()
                     self.nativeFallbackActive = false
-                    if wasPlaying {
+                    let shouldResume = self.enhancementTransactionWasPlaying
+                    if self.enhancementTransactionReachedEnd {
+                        self.isPlaying = false
+                        self.isPaused = true
+                        self.transitionPlayback(to: .ended)
+                        self.enhancementTransactionReachedEnd = false
+                    } else if shouldResume {
                         self.isPlaying = true
                         self.isPaused = false
                         if !wasPipelineActive {
@@ -360,7 +505,13 @@ extension VTPlayerViewModel {
                     } else {
                         self.isPlaying = false
                         self.isPaused = true
-                        self.transitionPlayback(to: self.enhancementTransactionPreviousPhase)
+                        let previousPipelineWasActive = previousConfiguration.superResolutionLevel > 0 ||
+                            previousConfiguration.qualitySuperResolutionScaleFactor > 0 ||
+                            previousConfiguration.frameInterpolationLevel > 0 ||
+                            previousConfiguration.denoiseStrength > 0 ||
+                            previousConfiguration.motionBlurStrength > 0 ||
+                            previousHDRStrength > 0
+                        self.transitionPlayback(to: previousPipelineWasActive ? .paused : .readyPaused)
                     }
                 }
             } catch {
@@ -368,6 +519,8 @@ extension VTPlayerViewModel {
                     NSLog("CACHE: preparation failed: %@", error.localizedDescription)
                     self.enhancedCachePreparationState = .failed(error.localizedDescription)
                     self.srInitializationError = error.localizedDescription
+                    self.player?.pause()
+                    self.enhancedAudioPlayer?.pause()
                     self.setNativeVideoEnabled(true)
                     self.appliedPipelineConfiguration = previousConfiguration
                     self.appliedSharpness = previousSharpness
@@ -566,6 +719,13 @@ extension VTPlayerViewModel {
             hdrStrength: appliedHDRStrength,
             hdrColorfulness: appliedHDRColorfulness
         )
+        let benchmark: EnhancedPipelineBenchmark?
+        if liveFallbackBenchmarkURL == videoURL,
+           liveFallbackBenchmarkConfiguration == candidate {
+            benchmark = liveFallbackBenchmark
+        } else {
+            benchmark = nil
+        }
         appliedPipelineConfiguration = liveFallbackPreviousConfiguration
         appliedSharpness = enhancementTransactionPreviousSharpness
         appliedHDRStrength = enhancementTransactionPreviousHDRStrength
@@ -581,7 +741,8 @@ extension VTPlayerViewModel {
         // cache for the configuration that actually failed the live gate.
         applyPipelineEnhancements(
             fullCacheConfiguration: candidate,
-            rendererSettings: rendererSettings
+            rendererSettings: rendererSettings,
+            benchmarkOverride: benchmark
         )
     }
     #endif

@@ -148,6 +148,129 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         XCTAssertLessThanOrEqual((gaps.max() ?? 0) - (gaps.min() ?? 0), 1)
     }
 
+    func testTimestampCadenceSelectionCapsFourTimesInterpolationAt120Hz() {
+        let sourceRate = CMTime(value: 1_001, timescale: 60_000)
+        let quarterFrame = CMTimeMultiplyByFloat64(sourceRate, multiplier: 0.25)
+        let frames = (0..<16).map { index in
+            makeCadenceFrame(
+                time: CMTimeMultiply(quarterFrame, multiplier: Int32(index)),
+                interpolated: index.isMultiple(of: 4) == false
+            )
+        }
+        var selector = EnhancedFrameDisplayCadenceSelector(displayFrameRate: 120)
+
+        let selected = selector.select(frames)
+
+        XCTAssertEqual(selected.count, 8)
+        XCTAssertTrue(zip(selected, selected.dropFirst()).allSatisfy { pair in
+            CMTimeCompare(pair.0.presentationTimeStamp, pair.1.presentationTimeStamp) < 0
+        })
+        XCTAssertEqual(
+            CMTimeGetSeconds(CMTimeSubtract(selected[1].presentationTimeStamp, selected[0].presentationTimeStamp)),
+            1.0 / 120.0,
+            accuracy: 0.00001
+        )
+    }
+
+    func testCacheEstimateScalesWithEncodedDisplayRateInsteadOfRawPixelCount() {
+        let estimate = EnhancedFrameCacheSizing.estimatedBytes(
+            width: 1_920,
+            height: 1_080,
+            frameRate: 120,
+            durationSeconds: 90 * 60
+        )
+
+        XCTAssertGreaterThan(estimate, 0)
+        XCTAssertLessThan(estimate, 20 * 1_024 * 1_024 * 1_024)
+        XCTAssertEqual(EnhancedFrameCacheSizing.chunkIndex(for: CMTime(value: 150, timescale: 30)), 1)
+    }
+
+    func testCacheEstimateSaturatesInsteadOfTrappingOnExtremeInputs() {
+        XCTAssertEqual(
+            EnhancedFrameCacheSizing.targetBitRate(
+                width: Int.max,
+                height: Int.max,
+                frameRate: .greatestFiniteMagnitude
+            ),
+            Int.max
+        )
+        XCTAssertEqual(
+            EnhancedFrameCacheSizing.estimatedBytes(
+                width: Int.max,
+                height: Int.max,
+                frameRate: .greatestFiniteMagnitude,
+                durationSeconds: 100
+            ),
+            Int64.max
+        )
+    }
+
+    func testRequestedEnhancementScenariosFitConfiguredCacheBudgetEstimate() {
+        let displayTarget = 120.0
+        let duration = 162 * 60.0
+        let sourceWidth = 1_280
+        let sourceHeight = 720
+        let twentyFiveFPS = EnhancedFrameCacheSizing.estimatedBytes(
+            width: sourceWidth * 2,
+            height: sourceHeight * 2,
+            frameRate: min(displayTarget, 25 * 4),
+            durationSeconds: duration
+        )
+        let fiftyNineNinetyFourFPS = EnhancedFrameCacheSizing.estimatedBytes(
+            width: sourceWidth * 3 / 2,
+            height: sourceHeight * 3 / 2,
+            frameRate: min(displayTarget, 59.94 * 4),
+            durationSeconds: duration
+        )
+        let fourK120 = EnhancedFrameCacheSizing.estimatedBytes(
+            width: 3_840,
+            height: 2_160,
+            frameRate: min(displayTarget, 59.94 * 4),
+            durationSeconds: duration
+        )
+
+        XCTAssertLessThan(twentyFiveFPS, 20 * 1_024 * 1_024 * 1_024)
+        XCTAssertLessThan(fiftyNineNinetyFourFPS, 20 * 1_024 * 1_024 * 1_024)
+        XCTAssertGreaterThan(fourK120, 20 * 1_024 * 1_024 * 1_024)
+    }
+
+    func testFullEncodedCacheUsesPrecomputedFramesWithoutProcessorSession() {
+        XCTAssertTrue(EnhancedFrameCachePlaybackPolicy.usesPrecomputedVideo(
+            cacheMode: .full,
+            cacheFormatVersion: 2
+        ))
+        XCTAssertFalse(EnhancedFrameCachePlaybackPolicy.usesPrecomputedVideo(
+            cacheMode: .full,
+            cacheFormatVersion: 1
+        ))
+        XCTAssertFalse(EnhancedFrameCachePlaybackPolicy.usesPrecomputedVideo(
+            cacheMode: .realTime,
+            cacheFormatVersion: 2
+        ))
+    }
+
+    private func makeCadenceFrame(time: CMTime, interpolated: Bool) -> VTFrame {
+        var buffer: CVPixelBuffer?
+        let attributes: [CFString: Any] = [
+            kCVPixelBufferMetalCompatibilityKey: true,
+            kCVPixelBufferIOSurfacePropertiesKey: [:]
+        ]
+        CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            2,
+            2,
+            kCVPixelFormatType_32BGRA,
+            attributes as CFDictionary,
+            &buffer
+        )
+        guard let buffer else { fatalError("Unable to allocate cadence-test frame") }
+        return VTFrame(
+            buffer: buffer,
+            presentationTimeStamp: time,
+            isInterpolated: interpolated
+        )
+    }
+
     func testUnsupportedTemporalConfigurationUsesFullCache() {
         let benchmark = EnhancedPipelineBenchmark(
             p50GroupSeconds: 0.025,
@@ -273,7 +396,7 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         #if os(macOS)
         XCTAssertEqual(PlaybackPhase.readyPaused.label, "Ready · Paused")
         XCTAssertEqual(PlaybackPhase.ended.label, "Ended")
-        XCTAssertEqual(PlaybackPhase.monitoringEnhanced.label, "Checking presentation")
+        XCTAssertEqual(PlaybackPhase.monitoringEnhanced.label, "Playing · Checking smoothness")
         #endif
     }
 }

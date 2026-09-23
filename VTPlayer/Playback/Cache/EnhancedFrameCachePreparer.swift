@@ -56,7 +56,7 @@ actor EnhancedFrameCachePreparer {
                 EnhancedPipelineBenchmarkOutputCollector()
             }
             let padding = await coordinator.sourceFramePadding()
-            var iterator = VTFrameSequence(
+            let iterator = await VTFrameSequence(
                 url: url,
                 startTime: .zero,
                 extendedPixelsRight: padding.right,
@@ -118,6 +118,7 @@ actor EnhancedFrameCachePreparer {
         width: Int,
         height: Int,
         sourceFramesPerSecond: Double,
+        displayTargetFrameRate: Int,
         estimatedGroupCount: Int,
         plan: SparseCachePlan,
         configuration: AppliedPipelineConfiguration,
@@ -129,7 +130,24 @@ actor EnhancedFrameCachePreparer {
         progress: @MainActor @Sendable (Double, Int64) -> Void
     ) async throws -> EnhancedFrameCachePreparationResult {
         let fingerprint = try EnhancedFrameDiskCache.sourceFingerprint(for: url)
-        let key = EnhancedFrameCacheKey(sourceFingerprint: fingerprint, configuration: configuration)
+        #if os(macOS)
+        let usesEncodedChunks = plan.mode == .full
+        #else
+        let usesEncodedChunks = false
+        #endif
+        let outputRate = min(
+            Double(max(1, displayTargetFrameRate)),
+            sourceFramesPerSecond * Double(max(1, configuration.frameInterpolationLevel))
+        )
+        let key = EnhancedFrameCacheKey(
+            sourceFingerprint: fingerprint,
+            configuration: configuration,
+            cacheFormatVersion: usesEncodedChunks ? EnhancedFrameCacheKey.currentHEVCChunkFormatVersion : 1,
+            displayTargetFrameRate: usesEncodedChunks ? Int(outputRate.rounded()) : 0,
+            processingPipelineVersion: EnhancedFrameCacheKey.currentProcessingPipelineVersion,
+            frameSelectionPolicyVersion: EnhancedFrameCacheKey.currentFrameSelectionPolicyVersion,
+            codecSettingsVersion: EnhancedFrameCacheKey.currentCodecSettingsVersion
+        )
         let preparationIdentifier = UUID()
         let coverage = plan.coverageBitmap
         let priorCacheStatus = try await diskCache.cachedStatus(for: key)
@@ -169,7 +187,7 @@ actor EnhancedFrameCachePreparer {
         do {
             try await coordinator.startSession(width: width, height: height)
             let padding = await coordinator.sourceFramePadding()
-            var iterator = VTFrameSequence(
+            let iterator = await VTFrameSequence(
                 url: url,
                 startTime: .zero,
                 extendedPixelsRight: padding.right,
@@ -177,28 +195,94 @@ actor EnhancedFrameCachePreparer {
             ).makeAsyncIterator()
             var groupIndex = 0
             var writtenBytes = existing.byteCount
+            var previousEncodedSourceTime: CMTime?
+            let selectedOutputRate = outputRate
+            let encodedFrameRate = max(1, Int(selectedOutputRate.rounded()))
+            let progressIntervalGroupCount = max(4, Int((sourceFramesPerSecond * 0.2).rounded()))
+            var displayCadenceSelector = EnhancedFrameDisplayCadenceSelector(
+                displayFrameRate: selectedOutputRate
+            )
             while let frame = try await iterator.next() {
                 try Task.checkCancellation()
-                try await diskCache.recordSourceGroup(
-                    groupIndex,
-                    presentationTime: frame.presentationTimeStamp,
-                    preparationIdentifier: preparationIdentifier
-                )
-                let shouldCacheGroup = coverage.indices.contains(groupIndex) && coverage[groupIndex]
+                if usesEncodedChunks {
+                    let sourceTime = frame.presentationTimeStamp
+                    guard sourceTime.isValid, sourceTime.isNumeric else {
+                        throw EnhancedFrameDiskCacheError.unsupportedTimeline
+                    }
+                    if let previousEncodedSourceTime,
+                       (sourceTime.epoch != previousEncodedSourceTime.epoch ||
+                        CMTimeCompare(sourceTime, previousEncodedSourceTime) <= 0) {
+                        throw EnhancedFrameDiskCacheError.unsupportedTimeline
+                    }
+                    previousEncodedSourceTime = sourceTime
+                }
+                let shouldCacheGroup = usesEncodedChunks ||
+                    (coverage.indices.contains(groupIndex) && coverage[groupIndex])
                 if shouldCacheGroup && !existing.availableGroupIndices.contains(groupIndex) {
                     let output = try await coordinator.processFrame(frame)
-                    try await diskCache.writeGroup(
-                        output,
-                        for: groupIndex,
-                        sourcePresentationTime: frame.presentationTimeStamp,
-                        preparationIdentifier: preparationIdentifier
-                    )
-                    writtenBytes += Int64(output.reduce(0) { $0 + CVPixelBufferGetDataSize($1.buffer) })
+                    if usesEncodedChunks {
+                        let groupChunkIndex = EnhancedFrameCacheSizing.chunkIndex(for: frame.presentationTimeStamp)
+                        try await diskCache.recordEncodedSourceGroup(
+                            groupIndex,
+                            presentationTime: frame.presentationTimeStamp,
+                            chunkIndex: groupChunkIndex,
+                            preparationIdentifier: preparationIdentifier
+                        )
+                        let selectedFrames = displayCadenceSelector.select(output)
+                        for selectedFrame in selectedFrames {
+                            let frameChunkIndex = EnhancedFrameCacheSizing.chunkIndex(
+                                for: selectedFrame.presentationTimeStamp
+                            )
+                            let bitRate = EnhancedFrameCacheSizing.targetBitRate(
+                                width: CVPixelBufferGetWidth(selectedFrame.buffer),
+                                height: CVPixelBufferGetHeight(selectedFrame.buffer),
+                                frameRate: selectedOutputRate
+                            )
+                            try await diskCache.appendEncodedFrame(
+                                selectedFrame,
+                                groupIndex: groupIndex,
+                                chunkIndex: frameChunkIndex,
+                                averageBitRate: bitRate,
+                                expectedFrameRate: encodedFrameRate,
+                                preparationIdentifier: preparationIdentifier
+                            )
+                        }
+                    } else {
+                        try await diskCache.recordSourceGroup(
+                            groupIndex,
+                            presentationTime: frame.presentationTimeStamp,
+                            preparationIdentifier: preparationIdentifier
+                        )
+                        try await diskCache.writeGroup(
+                            output,
+                            for: groupIndex,
+                            sourcePresentationTime: frame.presentationTimeStamp,
+                            preparationIdentifier: preparationIdentifier
+                        )
+                        writtenBytes += Int64(output.reduce(0) { $0 + CVPixelBufferGetDataSize($1.buffer) })
+                    }
                 } else if !(await coordinator.advanceSourceHistory(forCachedGroup: frame)) {
                     throw EnhancedFrameDiskCacheError.invalidFrameData
+                } else if shouldCacheGroup && usesEncodedChunks {
+                    try await diskCache.recordEncodedSourceGroup(
+                        groupIndex,
+                        presentationTime: frame.presentationTimeStamp,
+                        chunkIndex: EnhancedFrameCacheSizing.chunkIndex(for: frame.presentationTimeStamp),
+                        preparationIdentifier: preparationIdentifier
+                    )
+                } else if !usesEncodedChunks {
+                    try await diskCache.recordSourceGroup(
+                        groupIndex,
+                        presentationTime: frame.presentationTimeStamp,
+                        preparationIdentifier: preparationIdentifier
+                    )
                 }
                 groupIndex += 1
-                if groupIndex.isMultiple(of: 4) || groupIndex == estimatedGroupCount {
+                if groupIndex.isMultiple(of: progressIntervalGroupCount) || groupIndex == estimatedGroupCount {
+                    writtenBytes = max(
+                        writtenBytes,
+                        await diskCache.preparationByteCount(preparationIdentifier: preparationIdentifier)
+                    )
                     await progress(
                         min(1, Double(groupIndex) / Double(max(1, estimatedGroupCount))),
                         writtenBytes

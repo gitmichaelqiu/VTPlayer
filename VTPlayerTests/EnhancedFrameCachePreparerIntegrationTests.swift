@@ -52,6 +52,7 @@ final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
             width: 1280,
             height: 720,
             sourceFramesPerSecond: sourceRate,
+            displayTargetFrameRate: 120,
             estimatedGroupCount: groupCount,
             plan: plan,
             configuration: configuration,

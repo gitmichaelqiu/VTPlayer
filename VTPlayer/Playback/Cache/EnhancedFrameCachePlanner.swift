@@ -1,4 +1,5 @@
 import Foundation
+import CoreMedia
 
 /// The persisted portion of a processing configuration. Renderer-only
 /// controls deliberately do not participate in this value.
@@ -148,5 +149,97 @@ nonisolated enum SparseCachePlanner {
         return (0..<totalGroupCount).map { index in
             ((index + 1) * cachedGroupCount / totalGroupCount) > (index * cachedGroupCount / totalGroupCount)
         }
+    }
+}
+
+nonisolated struct EnhancedFrameDisplayCadenceSelector: Sendable {
+    private let displayInterval: CMTime
+    private var nextPresentationTime: CMTime?
+    private var lastSelectedTime: CMTime?
+
+    init(displayFrameRate: Double) {
+        let safeRate = displayFrameRate.isFinite ? max(1, displayFrameRate) : 60
+        displayInterval = CMTime(seconds: 1 / safeRate, preferredTimescale: 60_000)
+    }
+
+    mutating func select(_ frames: [VTFrame]) -> [VTFrame] {
+        guard !frames.isEmpty else { return [] }
+        let ordered = frames.sorted {
+            CMTimeCompare($0.presentationTimeStamp, $1.presentationTimeStamp) < 0
+        }
+        var selected: [VTFrame] = []
+        selected.reserveCapacity(ordered.count)
+
+        for frame in ordered {
+            let time = frame.presentationTimeStamp
+            guard time.isValid, time.isNumeric else { continue }
+            if nextPresentationTime == nil {
+                selected.append(frame)
+                lastSelectedTime = time
+                nextPresentationTime = CMTimeAdd(time, displayInterval)
+                continue
+            }
+            if let lastSelectedTime, CMTimeCompare(time, lastSelectedTime) <= 0 {
+                continue
+            }
+            guard let nextPresentationTime,
+                  CMTimeCompare(time, nextPresentationTime) >= 0 else {
+                continue
+            }
+
+            selected.append(frame)
+            lastSelectedTime = time
+            let lateness = CMTimeGetSeconds(CMTimeSubtract(time, nextPresentationTime))
+            let intervalSeconds = CMTimeGetSeconds(displayInterval)
+            let slotsToAdvance = max(1, Int((lateness / intervalSeconds).rounded(.down)) + 1)
+            self.nextPresentationTime = CMTimeAdd(
+                nextPresentationTime,
+                CMTimeMultiply(displayInterval, multiplier: Int32(min(slotsToAdvance, Int(Int32.max))))
+            )
+        }
+        return selected
+    }
+}
+
+nonisolated enum EnhancedFrameCacheSizing {
+    static let chunkDuration = CMTime(value: 5, timescale: 1)
+    static let bitsPerPixelPerFrame = 0.022
+    static let preflightSafetyFactor = 1.25
+
+    static func chunkIndex(for presentationTime: CMTime) -> Int {
+        let seconds = CMTimeGetSeconds(presentationTime)
+        guard seconds.isFinite else { return 0 }
+        return max(0, Int(floor(seconds / CMTimeGetSeconds(chunkDuration))))
+    }
+
+    static func targetBitRate(width: Int, height: Int, frameRate: Double) -> Int {
+        guard width > 0, height > 0, frameRate.isFinite, frameRate > 0 else {
+            return 2_000_000
+        }
+        let estimate = Double(width) * Double(height) * frameRate * bitsPerPixelPerFrame
+        guard estimate.isFinite, estimate < Double(Int.max) else { return Int.max }
+        return Int(max(2_000_000, estimate).rounded())
+    }
+
+    static func estimatedBytes(
+        width: Int,
+        height: Int,
+        frameRate: Double,
+        durationSeconds: Double
+    ) -> Int64 {
+        guard durationSeconds.isFinite, durationSeconds > 0 else { return 0 }
+        let bitRate = Double(targetBitRate(width: width, height: height, frameRate: frameRate))
+        let estimate = (bitRate / 8) * durationSeconds * preflightSafetyFactor
+        guard estimate.isFinite, estimate < Double(Int64.max) else { return Int64.max }
+        return Int64(max(0, estimate).rounded(.up))
+    }
+}
+
+nonisolated enum EnhancedFrameCachePlaybackPolicy {
+    static func usesPrecomputedVideo(
+        cacheMode: EnhancedCachePlaybackMode?,
+        cacheFormatVersion: Int?
+    ) -> Bool {
+        cacheMode == .full && (cacheFormatVersion ?? 0) >= 2
     }
 }
