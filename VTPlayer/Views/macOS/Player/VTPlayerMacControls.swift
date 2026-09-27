@@ -331,6 +331,7 @@ extension VTPlayerView {
                     }
                     .frame(minWidth: proxy.size.width, alignment: .leading)
                 }
+                .disabled(viewModel.isPreparingEnhancedCache)
             }
             .frame(height: 30)
         }

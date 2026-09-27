@@ -177,15 +177,8 @@ struct VTPlayerView: View {
             #endif
         }
         #if os(macOS)
-        .overlay {
-            if viewModel.isPreparingEnhancedCache &&
-                (!viewModel.isPlaying || viewModel.isPaused) {
-                enhancedCachePreparationOverlay
-            }
-        }
         .overlay(alignment: .topTrailing) {
-            if viewModel.isPreparingEnhancedCache &&
-                viewModel.isPlaying && !viewModel.isPaused {
+            if viewModel.isPreparingEnhancedCache {
                 enhancedCachePreparationIndicator
             } else if viewModel.enhancedCachePreparationState == .monitoring {
                 livePresentationMonitoringIndicator

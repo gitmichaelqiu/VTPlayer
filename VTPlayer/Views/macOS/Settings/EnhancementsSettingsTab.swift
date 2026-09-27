@@ -34,19 +34,19 @@ struct EnhancementsSettingsTab: View {
                             )
                             .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
 
-                            LabeledContent("Selected", value: viewModel.draftEnhancementSummary)
+                            LabeledContent("Selected settings", value: viewModel.draftEnhancementSummary)
                                 .font(.caption)
                             if viewModel.hasUnappliedPipelineChanges {
-                                LabeledContent("Applied", value: viewModel.appliedEnhancementSummary)
+                                LabeledContent("Currently in use", value: viewModel.appliedEnhancementSummary)
                                     .font(.caption)
                                 Text(viewModel.draftPipelineConfiguration == viewModel.appliedPipelineConfiguration &&
                                      !viewModel.forceFullCachePreparation
-                                    ? "Only image adjustments are pending. Use Apply Adjustments in the player bar; this does not rebuild the frame cache."
-                                    : "Processing settings are pending. Use Prepare Enhanced Playback in the player bar to measure them and build a cache only if needed.")
+                                    ? "Apply Settings in the player bar to use these image adjustments. They do not rebuild the frame cache."
+                                    : "Apply Settings once. VTPlayer checks processing speed and prepares a cache if needed; Play then verifies on-screen playback.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("Play starts with these applied settings. VTPlayer checks live presentation and may prepare a cache if needed.")
+                                Text("These settings are in use. Press Play to start enhanced playback. VTPlayer verifies on-screen playback and prepares a cache automatically only if live presentation misses the target.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
