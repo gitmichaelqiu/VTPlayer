@@ -26,41 +26,26 @@ struct EnhancementsSettingsTab: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Label(
                                 viewModel.hasUnappliedPipelineChanges
-                                    ? "Selected enhancements are not active"
-                                    : "Active enhancements",
+                                    ? "Enhancement changes are not applied"
+                                    : "Applied settings for this video",
                                 systemImage: viewModel.hasUnappliedPipelineChanges
                                     ? "circle.dotted"
                                     : "checkmark.circle"
                             )
                             .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
 
-                            LabeledContent("Active now", value: viewModel.appliedEnhancementSummary)
+                            LabeledContent("Selected", value: viewModel.draftEnhancementSummary)
                                 .font(.caption)
                             if viewModel.hasUnappliedPipelineChanges {
-                                LabeledContent("Selected", value: viewModel.draftEnhancementSummary)
+                                LabeledContent("Applied", value: viewModel.appliedEnhancementSummary)
                                     .font(.caption)
-                                    .foregroundStyle(.orange)
-                                Text("Selected values are pending. Apply & Prepare makes them active and may build a cache; Discard Selection keeps Active now.")
+                                Text("These edits are not active yet. Use Prepare Enhanced Playback in the player bar to commit and prepare them.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("Changes become active after Apply & Prepare completes.")
+                                Text("Play starts with these applied settings. VTPlayer checks live presentation and may prepare a cache if needed.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            }
-
-                            HStack {
-                                Button("Apply & Prepare") {
-                                    viewModel.applyPipelineEnhancements()
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(!viewModel.hasUnappliedPipelineChanges || viewModel.isPreparingEnhancedCache)
-
-                                Button("Discard Selection") {
-                                    viewModel.dismissPendingEnhancementChanges()
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(!viewModel.hasUnappliedPipelineChanges)
                             }
                         }
                     }

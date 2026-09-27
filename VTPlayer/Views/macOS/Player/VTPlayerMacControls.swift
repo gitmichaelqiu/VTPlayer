@@ -84,15 +84,25 @@ extension VTPlayerView {
             }
             .padding(.horizontal, 12)
 
-            // Bottom control actions
-            // Keep every enhancement control available at narrow widths.
-            // The bar scrolls horizontally instead of silently removing the
-            // controls that are useful while tuning playback.
-            GeometryReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                // Play/Pause button
+            // Keep core transport and playback state pinned. Enhancement
+            // controls use their own scroll region so they cannot push Play,
+            // volume, speed, or fullscreen out of view.
+            HStack(spacing: 10) {
                 playPauseButton
+                playbackStatusLabel
+                Spacer(minLength: 10)
+                volumeControl
+                playbackSpeedControl
+                Divider()
+                    .frame(height: 16)
+                fullscreenButton
+            }
+            .frame(height: 30)
+
+            // Enhancement controls remain reachable at narrow widths.
+            GeometryReader { proxy in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 8) {
                 pendingEnhancementControls
 
                 // Super Resolution Popover
@@ -317,16 +327,7 @@ extension VTPlayerView {
                     .frame(width: 220)
                 }
 
-                Spacer()
-
-                volumeControl
-
-                playbackSpeedControl
-
-                Divider()
-                    .frame(height: 16)
-
-                        fullscreenButton
+                        Spacer()
                     }
                     .frame(minWidth: proxy.size.width, alignment: .leading)
                 }

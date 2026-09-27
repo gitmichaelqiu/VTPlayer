@@ -27,7 +27,79 @@ extension VTPlayerView {
         .buttonStyle(.glass)
         .keyboardShortcut(.space, modifiers: [])
         .disabled(viewModel.playbackPhase == .loading || viewModel.enhancedCachePreparationState == .prerolling)
-        .help(viewModel.isPipelineActive ? "Play video with active enhancements" : "Play video")
+        .help(playPauseButtonHelp)
+    }
+
+    private var playPauseButtonHelp: String {
+        if viewModel.isPlaying && !viewModel.isPaused {
+            return "Pause playback"
+        }
+        if viewModel.isPreparingEnhancedCache && viewModel.enhancedCachePreparationState != .prerolling {
+            return "Resume native playback while enhancement preparation continues"
+        }
+        if viewModel.hasUnappliedPipelineChanges {
+            return "Play using the applied settings. Prepare pending changes first to use them."
+        }
+        return viewModel.isPipelineActive
+            ? "Start enhanced playback using the applied settings. VTPlayer may preroll frames or switch to a cache if live playback misses the display target."
+            : "Play video with native presentation"
+    }
+
+    @ViewBuilder
+    var playbackStatusLabel: some View {
+        let status = playbackStatusText
+        Text(status)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
+            .lineLimit(1)
+            .fixedSize()
+            .accessibilityLabel("Playback status: \(status)")
+            .help(status)
+    }
+
+    private var playbackStatusText: String {
+        let isPlaying = viewModel.isPlaying && !viewModel.isPaused
+        if viewModel.hasUnappliedPipelineChanges {
+            let currentPlayback: String
+            if isPlaying {
+                currentPlayback = viewModel.isPipelineActive ? "Playing · Enhanced" : "Playing · Native"
+            } else if viewModel.isPlaying {
+                currentPlayback = viewModel.isPipelineActive ? "Paused · Enhanced" : "Paused · Native"
+            } else {
+                currentPlayback = viewModel.isPipelineActive ? "Enhanced selected" : "Ready · paused"
+            }
+            return "\(currentPlayback) · edits pending"
+        }
+
+        switch viewModel.playbackPhase {
+        case .empty:
+            return "No video"
+        case .loading:
+            return "Loading video…"
+        case .readyPaused:
+            return viewModel.isPipelineActive ? "Enhanced selected · press Play" : "Ready · paused"
+        case .playingNative:
+            return "Playing · Native"
+        case .benchmarking:
+            return isPlaying ? "Measuring · native playback continues" : "Measuring · playback paused"
+        case .prerollingEnhanced:
+            return "Starting enhanced playback…"
+        case .monitoringEnhanced:
+            return "Playing · Enhanced · checking smoothness"
+        case .preparingCache:
+            return isPlaying ? "Preparing cache · native playback continues" : "Preparing cache · playback paused"
+        case .playingEnhanced:
+            return "Playing · Enhanced"
+        case .paused:
+            if viewModel.isPipelineActive {
+                return viewModel.isPlaying ? "Paused · Enhanced" : "Enhanced selected · press Play"
+            }
+            return viewModel.isPlaying ? "Paused · Native" : "Ready · paused"
+        case .ended:
+            return "Ended · press Play to replay"
+        case .failed:
+            return "Playback issue · see details"
+        }
     }
 
     @ViewBuilder
@@ -37,14 +109,10 @@ extension VTPlayerView {
                 ProgressView()
                     .controlSize(.small)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Preparing enhancement")
+                    Text(preparationProgressTitle)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.primary)
-                    Text(viewModel.enhancedCachePreparationState == .prerolling
-                        ? "Loading prepared frames"
-                        : (viewModel.isPlaying && !viewModel.isPaused
-                            ? "Native playback continues"
-                            : "Playback is paused"))
+                    Text(preparationProgressDescription)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -62,22 +130,22 @@ extension VTPlayerView {
         } else if viewModel.hasUnappliedPipelineChanges {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Label("Pending — not active", systemImage: "circle.dotted")
+                    Label("Changes pending", systemImage: "circle.dotted")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
-                    Text("Active now: \(viewModel.appliedEnhancementSummary)")
+                    Text("Applied settings: \(viewModel.appliedEnhancementSummary)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
 
-                Button("Apply & Prepare") {
+                Button("Prepare Enhanced Playback") {
                     viewModel.applyPipelineEnhancements()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help("Measure the selected settings and prepare an enhanced cache if needed")
+                .help("Commit these settings and measure processing speed once. VTPlayer builds a cache only if needed. Play then starts enhanced output and checks display smoothness.")
 
-                Button("Discard Selection") {
+                Button("Discard Changes") {
                     viewModel.dismissPendingEnhancementChanges()
                 }
                 .buttonStyle(.bordered)
@@ -85,6 +153,36 @@ extension VTPlayerView {
                 .help("Discard the pending settings and keep the active settings")
             }
             .padding(.horizontal, 6)
+        }
+    }
+
+    private var preparationProgressTitle: String {
+        switch viewModel.enhancedCachePreparationState {
+        case .benchmarking:
+            "Measuring processing speed"
+        case .prerolling:
+            "Starting enhanced playback"
+        case .preparing:
+            "Preparing enhanced cache"
+        case .idle, .monitoring, .ready, .failed:
+            "Preparing enhancement"
+        }
+    }
+
+    private var preparationProgressDescription: String {
+        switch viewModel.enhancedCachePreparationState {
+        case .benchmarking:
+            viewModel.isPlaying && !viewModel.isPaused
+                ? "Native playback continues during measurement"
+                : "Playback is paused during measurement"
+        case .prerolling:
+            "Waiting for the first enhanced frame"
+        case .preparing:
+            viewModel.isPlaying && !viewModel.isPaused
+                ? "Native playback continues while cache is prepared"
+                : "Playback is paused while cache is prepared"
+        case .idle, .monitoring, .ready, .failed:
+            "Preparing enhanced playback"
         }
     }
 
