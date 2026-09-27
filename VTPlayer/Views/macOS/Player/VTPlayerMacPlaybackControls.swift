@@ -77,7 +77,7 @@ extension VTPlayerView {
         case .loading:
             return "Loading video…"
         case .readyPaused:
-            return viewModel.isPipelineActive ? "Enhanced selected · press Play" : "Ready · paused"
+            return viewModel.isPipelineActive ? "Applied · press Play for enhanced playback" : "Ready · paused"
         case .playingNative:
             return "Playing · Native"
         case .benchmarking:
@@ -92,7 +92,7 @@ extension VTPlayerView {
             return "Playing · Enhanced"
         case .paused:
             if viewModel.isPipelineActive {
-                return viewModel.isPlaying ? "Paused · Enhanced" : "Enhanced selected · press Play"
+                return viewModel.isPlaying ? "Paused · Enhanced" : "Applied · press Play for enhanced playback"
             }
             return viewModel.isPlaying ? "Paused · Native" : "Ready · paused"
         case .ended:
@@ -138,12 +138,14 @@ extension VTPlayerView {
                         .foregroundStyle(.secondary)
                 }
 
-                Button("Prepare Enhanced Playback") {
+                Button(pendingChangesAreRendererOnly ? "Apply Adjustments" : "Prepare Enhanced Playback") {
                     viewModel.applyPipelineEnhancements()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help("Commit these settings and measure processing speed once. VTPlayer builds a cache only if needed. Play then starts enhanced output and checks display smoothness.")
+                .help(pendingChangesAreRendererOnly
+                    ? "Apply the image adjustments now. They do not rerun the processing benchmark or rebuild the frame cache."
+                    : "Commit these processing settings and measure processing speed once. VTPlayer builds a cache only if needed. Play then starts enhanced output and checks display smoothness.")
 
                 Button("Discard Changes") {
                     viewModel.dismissPendingEnhancementChanges()
@@ -154,6 +156,11 @@ extension VTPlayerView {
             }
             .padding(.horizontal, 6)
         }
+    }
+
+    private var pendingChangesAreRendererOnly: Bool {
+        viewModel.draftPipelineConfiguration == viewModel.appliedPipelineConfiguration &&
+            !viewModel.forceFullCachePreparation
     }
 
     private var preparationProgressTitle: String {

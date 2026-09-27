@@ -39,7 +39,10 @@ struct EnhancementsSettingsTab: View {
                             if viewModel.hasUnappliedPipelineChanges {
                                 LabeledContent("Applied", value: viewModel.appliedEnhancementSummary)
                                     .font(.caption)
-                                Text("These edits are not active yet. Use Prepare Enhanced Playback in the player bar to commit and prepare them.")
+                                Text(viewModel.draftPipelineConfiguration == viewModel.appliedPipelineConfiguration &&
+                                     !viewModel.forceFullCachePreparation
+                                    ? "Only image adjustments are pending. Use Apply Adjustments in the player bar; this does not rebuild the frame cache."
+                                    : "Processing settings are pending. Use Prepare Enhanced Playback in the player bar to measure them and build a cache only if needed.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
