@@ -52,7 +52,9 @@ extension VTPlayerView {
         case .benchmarking:
             return "Checking processing speed"
         case .prerolling:
-            return "Starting enhanced playback"
+            return viewModel.isPlaying && !viewModel.isPaused
+                ? "Starting enhanced playback"
+                : "Preparing enhanced playback"
         case .monitoring:
             return "Checking playback smoothness"
         case .preparing:
@@ -73,9 +75,14 @@ extension VTPlayerView {
                 ? "Preparing enhanced frames · video continues"
                 : "Preparing enhanced frames · press Play to watch the original"
         case .prerolling:
+            if viewModel.isPlaying && !viewModel.isPaused {
+                return viewModel.preparedEnhancedFrameCacheMode == nil
+                    ? "Starting the enhanced video pipeline"
+                    : "Loading prepared enhanced frames"
+            }
             return viewModel.preparedEnhancedFrameCacheMode == nil
-                ? "Preparing the first enhanced frames"
-                : "Loading prepared enhanced frames"
+                ? "Preparing the first enhanced frames · video stays paused"
+                : "Loading cached frames · video stays paused"
         case .monitoring:
             return "Enhanced video is playing · checking smoothness"
         case .idle, .ready, .failed:

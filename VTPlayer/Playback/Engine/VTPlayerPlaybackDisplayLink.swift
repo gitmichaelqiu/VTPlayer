@@ -81,6 +81,12 @@ struct MacDedicatedPresentationPolicy {
 }
 
 struct EnhancedPresentationGate {
+    /// The display rate is an upper bound, not a requirement that every
+    /// refresh interval present a unique video frame. Keep modest scheduling
+    /// jitter from interrupting playback; substantially under-rate output
+    /// still triggers the cache fallback or a user-visible recovery.
+    nonisolated static let minimumAcceptedTargetRatio = 0.90
+
     nonisolated static func passes(
         measuredFramesPerSecond: Double,
         physicalFramesPerSecond: Double,
@@ -93,7 +99,7 @@ struct EnhancedPresentationGate {
             ? physicalFramesPerSecond
             : requestedFramesPerSecond
         let target = min(requestedFramesPerSecond, physicalCeiling)
-        guard measuredFramesPerSecond >= target * 0.97 else { return false }
+        guard measuredFramesPerSecond >= target * minimumAcceptedTargetRatio else { return false }
         return renderedTimelineRatio == 0 || (0.99...1.01).contains(renderedTimelineRatio)
     }
 }

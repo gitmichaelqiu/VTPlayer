@@ -176,6 +176,10 @@ extension VTPlayerViewModel {
                     player?.play()
                     player?.rate = Float(playbackSpeed)
                 }
+            } else if !wasPlaying,
+                      candidateWouldBePipelineActive,
+                      candidateWouldBePipelineActive != wasPipelineActive {
+                prepareEnhancedPlaybackWhilePaused()
             } else if !wasPlaying {
                 transitionPlayback(to: candidateWouldBePipelineActive ? .paused : .readyPaused)
             }
@@ -366,8 +370,10 @@ extension VTPlayerViewModel {
                         self.isPaused = true
                         self.transitionPlayback(to: .ended)
                         self.enhancementTransactionReachedEnd = false
+                    } else if shouldResume {
+                        self.resumeAfterApplyingEnhancements(wasPlaying: true)
                     } else {
-                        self.resumeAfterApplyingEnhancements(wasPlaying: shouldResume)
+                        self.prepareEnhancedPlaybackWhilePaused()
                     }
                     if shouldResume {
                         self.startEnhancedPresentationGateMonitor(
@@ -465,8 +471,10 @@ extension VTPlayerViewModel {
                     self.isPaused = true
                     self.transitionPlayback(to: .ended)
                     self.enhancementTransactionReachedEnd = false
+                } else if shouldResume {
+                    self.resumeAfterApplyingEnhancements(wasPlaying: true)
                 } else {
-                    self.resumeAfterApplyingEnhancements(wasPlaying: shouldResume)
+                    self.prepareEnhancedPlaybackWhilePaused()
                 }
                 if shouldResume {
                     self.startEnhancedPresentationGateMonitor(
@@ -559,6 +567,21 @@ extension VTPlayerViewModel {
             transitionPlayback(to: isPipelineActive ? .paused : .readyPaused)
             #endif
         }
+    }
+
+    private func prepareEnhancedPlaybackWhilePaused() {
+        guard isPipelineActive else {
+            isPlaying = false
+            isPaused = true
+            transitionPlayback(to: .readyPaused)
+            return
+        }
+
+        isPlaying = false
+        isPaused = true
+        enhancedCachePreparationState = .prerolling
+        transitionPlayback(to: .prerollingEnhanced)
+        startPlaybackLoop()
     }
 
     #if os(macOS)
@@ -704,7 +727,7 @@ extension VTPlayerViewModel {
         }
         let diagnostics = "queueFrames=\(queue?.frameCount ?? 0), nextPTS=\(nextPresentationTime), actualPresentations=\(presentedSincePipelineStart), \(driverDetails)"
         NSLog("RENDER: full-cache first-frame startup timed out after %.0f seconds: %@", allowedSeconds, diagnostics)
-        return "No enhanced frame reached the display within \(String(format: "%.0f", allowedSeconds)) seconds. Diagnostics: \(diagnostics)."
+        return "No enhanced frame appeared within \(String(format: "%.0f", allowedSeconds)) seconds."
     }
 
     private func handleEnhancedPresentationFailure(
@@ -736,11 +759,16 @@ extension VTPlayerViewModel {
         isPaused = true
         actualPresentedFrameRate = measuredRate
         actualPresented1PercentLow = actualPresentedRateSamples.min() ?? measuredRate
+        let performanceDetail: String
+        if measuredRate > 0 {
+            performanceDetail = "It reached \(String(format: "%.1f", measuredRate)) frames per second on a \(String(format: "%.0f", targetRate))-Hz display. "
+        } else {
+            performanceDetail = "\(reason) "
+        }
         reportPlaybackIssue(
             stage: .pipeline,
-            message: "Enhanced playback was paused because the prepared cache could not be presented.\n\n" +
-                "\(reason) Presented \(String(format: "%.1f", measuredRate)) Hz; target \(String(format: "%.1f", targetRate)) Hz. " +
-                "The prepared cache is retained. Retry Enhanced or continue with native playback."
+            message: "Enhanced playback stopped because it could not keep up. \(performanceDetail)" +
+                "Your original video and prepared cache are safe. Try enhanced playback again, or continue with the original video."
         )
     }
 

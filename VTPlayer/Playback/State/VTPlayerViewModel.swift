@@ -349,6 +349,21 @@ final class VTPlayerViewModel {
     #if os(macOS)
     var hasPlaybackIssue: Bool { playbackIssue != nil }
 
+    var playbackIssueAlertTitle: String {
+        switch playbackIssue?.stage {
+        case .loading, .permissions:
+            "Couldn’t Open Video"
+        case .capabilities:
+            "Enhancement Unavailable"
+        case .preparation:
+            "Couldn’t Prepare Enhancements"
+        case .pipeline:
+            "Enhanced Playback Paused"
+        case nil:
+            "Playback Paused"
+        }
+    }
+
     func transitionPlayback(to phase: PlaybackPhase) {
         playbackPhase = phase
     }

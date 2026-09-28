@@ -419,6 +419,9 @@ extension VTPlayerViewModel {
         nativeFallbackActive = true
         isPlaying = false
         isPaused = true
+        enhancedCachePreparationState = .failed(
+            srInitializationError ?? "Enhanced playback could not be started."
+        )
         reportPlaybackIssue(
             stage: stage,
             message: srInitializationError ?? "Enhanced playback could not be started."

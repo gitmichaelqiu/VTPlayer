@@ -456,6 +456,18 @@ extension VTPlayerViewModel {
                         }
                         self.renderer.render(pixelBuffer: firstFrame.buffer)
                     }
+                    let audioPlayer = EnhancedAudioPlayer()
+                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                        guard isCurrentPipeline() else {
+                            audioPlayer.stop()
+                            await coordinator.endSession()
+                            return
+                        }
+                        audioPlayer.setVolume(Float(self.volume))
+                        audioPlayer.pause()
+                        self.enhancedAudioPlayer = audioPlayer
+                        self.setPrimaryAudioMuted(true)
+                    }
                 }
             } else {
                 self.isInitializingPipeline = false
@@ -485,11 +497,12 @@ extension VTPlayerViewModel {
             var prefetchedFrameTask: Task<VTFrame?, Error>?
             var sourceFrameOrdinal = 0
             var combinedProcessFallbackAttempted = false
+            var pausedPreparationFramesRemaining = shouldResumePlayback ? 0 : self.initialPrerollFrameCount
             defer { prefetchedFrameTask?.cancel() }
 
             @MainActor
             func resumeAfterFramePrerollIfReady(force: Bool = false) {
-                guard waitingForFramePreroll, let player = self.player else { return }
+                guard let player = self.player else { return }
                 #if os(macOS)
                 let cachedFrameCount = self.fullCachePresentationQueue?.snapshot().frameCount ??
                     self.lockCache {
@@ -503,6 +516,13 @@ extension VTPlayerViewModel {
                 guard cachedFrameCount >= self.initialPrerollFrameCount || (force && cachedFrameCount > 0) else {
                     return
                 }
+                if !shouldResumePlayback {
+                    self.isBuffering = false
+                    self.enhancedCachePreparationState = .ready
+                    self.transitionPlayback(to: .paused)
+                    return
+                }
+                guard waitingForFramePreroll else { return }
                 waitingForFramePreroll = false
                 self.isBuffering = false
                 self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
@@ -558,6 +578,9 @@ extension VTPlayerViewModel {
                                 cacheAdmissionMilliseconds: admissionMilliseconds
                             )
                             self.producedFramesCount += 1
+                            if pausedPreparationFramesRemaining > 0 {
+                                pausedPreparationFramesRemaining -= 1
+                            }
                             resumeAfterFramePrerollIfReady()
                             return true
                         case .capacityExceeded:
@@ -590,6 +613,9 @@ extension VTPlayerViewModel {
                 )
                 if inserted {
                     self.producedFramesCount += 1
+                    if pausedPreparationFramesRemaining > 0 {
+                        pausedPreparationFramesRemaining -= 1
+                    }
                     resumeAfterFramePrerollIfReady()
                 }
                 return !Task.isCancelled && gen == self.playbackGeneration
@@ -934,7 +960,7 @@ extension VTPlayerViewModel {
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
 
-                if self.isPaused && !self.isBuffering {
+                if self.isPaused && !self.isBuffering && pausedPreparationFramesRemaining == 0 {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }

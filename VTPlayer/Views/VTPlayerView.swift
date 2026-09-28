@@ -206,15 +206,18 @@ struct VTPlayerView: View {
         } message: {
             Text("This will clear your recent playback history. Your video files will remain safe.")
         }
-        .alert("Playback Issue", isPresented: $showPlaybackIssueAlert) {
-            Button("Retry Enhanced") {
-                viewModel.retryEnhancedPlayback()
-            }
-            Button("Continue Native") {
-                viewModel.continueNativePlayback()
-            }
-            Button("Dismiss", role: .cancel) {
-                viewModel.clearPlaybackIssue()
+        .alert(viewModel.playbackIssueAlertTitle, isPresented: $showPlaybackIssueAlert) {
+            if viewModel.playbackIssue?.stage == .pipeline || viewModel.playbackIssue?.stage == .preparation {
+                Button("Try Enhanced Again") {
+                    viewModel.retryEnhancedPlayback()
+                }
+                Button("Watch Original Video", role: .cancel) {
+                    viewModel.continueNativePlayback()
+                }
+            } else {
+                Button("OK", role: .cancel) {
+                    viewModel.clearPlaybackIssue()
+                }
             }
         } message: {
             Text(viewModel.playbackIssue?.message ?? "Playback could not continue.")

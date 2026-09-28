@@ -77,7 +77,7 @@ extension VTPlayerView {
         case .loading:
             return "Loading video…"
         case .readyPaused:
-            return viewModel.isPipelineActive ? "Settings applied · press Play" : "Ready · paused"
+            return viewModel.isPipelineActive ? "Enhanced playback ready · press Play" : "Ready · paused"
         case .playingNative:
             return "Playing · Native"
         case .benchmarking:
@@ -92,7 +92,7 @@ extension VTPlayerView {
             return "Playing · Enhanced"
         case .paused:
             if viewModel.isPipelineActive {
-                return viewModel.isPlaying ? "Paused · Enhanced" : "Settings applied · press Play"
+                return viewModel.isPlaying ? "Paused · Enhanced" : "Enhanced playback ready · press Play"
             }
             return viewModel.isPlaying ? "Paused · Native" : "Ready · paused"
         case .ended:
@@ -116,12 +116,12 @@ extension VTPlayerView {
                         .lineLimit(1)
                 }
 
-                Button("Apply Settings") {
+                Button("Apply & Prepare") {
                     viewModel.applyPipelineEnhancements()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help("Use these settings for this video. Any speed or cache setup happens automatically only if needed; Play verifies on-screen playback.")
+                .help("Apply these settings and prepare enhanced playback. The video stays paused; press Play when it is ready.")
 
                 Button("Revert") {
                     viewModel.dismissPendingEnhancementChanges()
