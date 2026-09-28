@@ -132,7 +132,10 @@ final class VTPlayerViewModel {
     /// remain for the rendering hot path and are kept in sync at transitions.
     var playbackPhase: PlaybackPhase = .empty
     var playbackIssue: PlaybackIssue?
+    var playbackNotice: String?
     var nativeFallbackActive = false
+    @ObservationIgnored var playbackNoticeTask: Task<Void, Never>?
+    @ObservationIgnored var suppressNativeTimeObserverDuringSeek = false
     @ObservationIgnored var scrubPreviewTask: Task<Void, Never>?
     @ObservationIgnored var wasPlayingBeforeScrub = false
     @ObservationIgnored var suppressRateObserver = false
@@ -285,6 +288,22 @@ final class VTPlayerViewModel {
         return true
         #endif
     }
+
+    #if os(macOS)
+    /// While enhanced frames are being presented, their media timeline is the
+    /// user-visible clock. The underlying AVPlayer clock is a separate source
+    /// and can lag or jump during cache-backed playback.
+    var enhancedPresentationOwnsTimeline: Bool {
+        guard isPlaying, !isPaused, isPipelineActive, !nativeFallbackActive else { return false }
+        switch playbackPhase {
+        case .prerollingEnhanced, .monitoringEnhanced, .playingEnhanced:
+            return true
+        default:
+            return false
+        }
+    }
+    #endif
+
     var currentTime: Double = 0.0
     var duration: Double = 0.0
     var playbackSpeed: Double = 1.0 {
@@ -369,6 +388,7 @@ final class VTPlayerViewModel {
     }
 
     func reportPlaybackIssue(stage: PlaybackIssueStage, message: String) {
+        dismissPlaybackNotice()
         playbackIssue = PlaybackIssue(stage: stage, message: message)
         playbackPhase = .failed
         isBuffering = false
@@ -377,6 +397,22 @@ final class VTPlayerViewModel {
 
     func clearPlaybackIssue() {
         playbackIssue = nil
+    }
+
+    func showPlaybackNotice(_ message: String) {
+        playbackNoticeTask?.cancel()
+        playbackNotice = message
+        playbackNoticeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.dismissPlaybackNotice()
+        }
+    }
+
+    func dismissPlaybackNotice() {
+        playbackNoticeTask?.cancel()
+        playbackNoticeTask = nil
+        playbackNotice = nil
     }
 
     func dismissPendingEnhancementChanges() {
@@ -408,12 +444,14 @@ final class VTPlayerViewModel {
     func retryEnhancedPlayback() {
         guard videoURL != nil,
               isPipelineActive || hasUnappliedPipelineChanges ||
-                playbackIssue?.stage == .pipeline || playbackIssue?.stage == .preparation else { return }
+                playbackIssue?.stage == .pipeline || playbackIssue?.stage == .preparation ||
+                nativeFallbackActive else { return }
         let shouldReprepareInvalidatedCache = playbackIssue?.stage == .preparation &&
             !hasUnappliedPipelineChanges &&
             isPipelineActive &&
             preparedEnhancedFrameCacheKey == nil
         clearPlaybackIssue()
+        dismissPlaybackNotice()
         nativeFallbackActive = false
         isPlaying = true
         isPaused = false
@@ -444,6 +482,7 @@ final class VTPlayerViewModel {
     func continueNativePlayback() {
         guard player != nil else { return }
         clearPlaybackIssue()
+        dismissPlaybackNotice()
         nativeFallbackActive = true
         stopEnhancedAudioPlayback()
         stopDisplayLinkIfNeeded()
@@ -767,12 +806,19 @@ final class VTPlayerViewModel {
 
     func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
         guard seconds.isFinite else { return }
-        guard immediately || abs(seconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
-        lastPublishedCurrentTime = seconds
-        currentTime = seconds
+        #if os(macOS)
+        let publishedSeconds = enhancedPresentationOwnsTimeline
+            ? max(seconds, lastPublishedCurrentTime)
+            : seconds
+        #else
+        let publishedSeconds = seconds
+        #endif
+        guard immediately || abs(publishedSeconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
+        lastPublishedCurrentTime = publishedSeconds
+        currentTime = publishedSeconds
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = seconds
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = publishedSeconds
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPaused ? 0.0 : playbackSpeed
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         #endif
@@ -1597,11 +1643,20 @@ final class VTPlayerViewModel {
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         let targetRate = Float(self.playbackSpeed)
         let shouldPlay = self.isPlaying && !self.isPaused
+        #if os(macOS)
+        suppressNativeTimeObserverDuringSeek = true
+        suppressRateObserver = true
+        #endif
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
-            guard completed, let self = self else { return }
+            guard let self = self else { return }
             Task { @MainActor in
                 guard requestGeneration == self.seekGeneration,
                       self.player === player else { return }
+#if os(macOS)
+                self.suppressNativeTimeObserverDuringSeek = false
+                self.suppressRateObserver = false
+#endif
+                guard completed else { return }
 
                 // Re-assert player rate — AVPlayer can transiently drop
                 // rate to 0 during seek, causing arrow-key seeks to
@@ -1753,13 +1808,22 @@ final class VTPlayerViewModel {
             await self.activeCoordinator?.clearHistory()
         }
         guard let player = player else { return }
+#if os(macOS)
+        suppressNativeTimeObserverDuringSeek = true
+        suppressRateObserver = true
+#endif
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
-            guard completed, let self = self else { return }
+            guard let self = self else { return }
             Task { @MainActor in
                 guard requestGeneration == self.seekGeneration,
                       self.player === player,
                       let url = self.videoURL else { return }
+#if os(macOS)
+                self.suppressNativeTimeObserverDuringSeek = false
+                self.suppressRateObserver = false
+#endif
+                guard completed else { return }
 
                 // Read a single frame via AVAssetReader (video track is
                 // disabled on AVPlayer, so copyPixelBuffer won't work).

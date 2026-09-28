@@ -749,27 +749,75 @@ extension VTPlayerViewModel {
 
         let physicalRate = Double(renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
         let targetRate = physicalRate > 0 ? min(requestedRate, physicalRate) : requestedRate
+        let renderedSeconds = CMTimeGetSeconds(lastRenderedPTS)
+        let playerSeconds = player.map { CMTimeGetSeconds($0.currentTime()) } ?? currentTime
+        let fallbackSeconds = min(
+            duration,
+            max(0, pipelinePresentationReady && renderedSeconds.isFinite ? renderedSeconds : playerSeconds)
+        )
+        suppressRateObserver = true
         player?.pause()
         enhancedAudioPlayer?.pause()
-        isPlaying = false
-        isPaused = true
-        liveFallbackWasPlaying = false
         stopPlaybackLoopOnly()
-        isPlaying = false
-        isPaused = true
+        nativeFallbackActive = true
+        livePresentationGateValidated = false
+        enhancedCachePreparationState = .ready
+        liveFallbackWasPlaying = false
         actualPresentedFrameRate = measuredRate
         actualPresented1PercentLow = actualPresentedRateSamples.min() ?? measuredRate
         let performanceDetail: String
         if measuredRate > 0 {
-            performanceDetail = "It reached \(String(format: "%.1f", measuredRate)) frames per second on a \(String(format: "%.0f", targetRate))-Hz display. "
+            performanceDetail = "Enhanced playback reached \(String(format: "%.1f", measuredRate)) fps on a \(String(format: "%.0f", targetRate))-Hz display. "
         } else {
             performanceDetail = "\(reason) "
         }
-        reportPlaybackIssue(
-            stage: .pipeline,
-            message: "Enhanced playback stopped because it could not keep up. \(performanceDetail)" +
-                "Your original video and prepared cache are safe. Try enhanced playback again, or continue with the original video."
-        )
+        let notice = performanceDetail + "Continuing with the original video; your prepared cache is kept."
+        clearPlaybackIssue()
+        showPlaybackNotice(notice)
+
+        guard let player else {
+            isPlaying = false
+            isPaused = true
+            transitionPlayback(to: .paused)
+            return
+        }
+
+        seekGeneration &+= 1
+        let fallbackSeekGeneration = seekGeneration
+        let fallbackTime = CMTime(seconds: fallbackSeconds, preferredTimescale: 600)
+        lastPublishedCurrentTime = fallbackSeconds
+        currentTime = fallbackSeconds
+        resetPresentationClock(at: fallbackSeconds)
+        pendingExplicitSeekPTS = fallbackTime
+        suppressNativeTimeObserverDuringSeek = true
+        suppressRateObserver = true
+        isPlaying = true
+        isPaused = false
+        transitionPlayback(to: .playingNative)
+        let fallbackPlaybackGeneration = playbackGeneration
+        player.seek(to: fallbackTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak player] completed in
+            Task { @MainActor [weak self, weak player] in
+                guard let self, let player,
+                      self.videoURL == url,
+                      self.playbackGeneration == fallbackPlaybackGeneration,
+                      self.seekGeneration == fallbackSeekGeneration,
+                      self.nativeFallbackActive else { return }
+                self.suppressNativeTimeObserverDuringSeek = false
+                self.suppressRateObserver = false
+                self.pendingExplicitSeekPTS = nil
+                guard self.playbackPhase == .playingNative,
+                      self.isPlaying,
+                      !self.isPaused else { return }
+                if completed {
+                    player.play()
+                    player.rate = Float(self.playbackSpeed)
+                } else {
+                    self.publishCurrentTime(CMTimeGetSeconds(player.currentTime()), immediately: true)
+                    player.play()
+                    player.rate = Float(self.playbackSpeed)
+                }
+            }
+        }
     }
 
     private func fallbackToFullCacheAfterPresentationFailure() {

@@ -450,6 +450,15 @@ struct VTPlayerView: View {
             }
             #endif
         }
+#if os(macOS)
+        .overlay(alignment: .top) {
+            playbackFallbackNotice
+                .padding(.top, 14)
+                .padding(.horizontal, 18)
+                .animation(.snappy(duration: 0.22), value: viewModel.playbackNotice)
+                .zIndex(2)
+        }
+#endif
         .onContinuousHover { phase in
             switch phase {
             case .active(_):

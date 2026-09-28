@@ -67,6 +67,35 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testMacOSEnhancedPresentationOwnsMonotonicProgressClock() {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        viewModel.appliedPipelineConfiguration = AppliedPipelineConfiguration(
+            superResolutionLevel: 1.5,
+            qualitySuperResolutionScaleFactor: 0,
+            frameInterpolationLevel: 4,
+            denoiseStrength: 0,
+            motionBlurStrength: 0
+        )
+        viewModel.isPlaying = true
+        viewModel.isPaused = false
+        viewModel.playbackPhase = .playingEnhanced
+        viewModel.lastPublishedCurrentTime = 12
+        viewModel.currentTime = 12
+
+        XCTAssertTrue(viewModel.enhancedPresentationOwnsTimeline)
+        viewModel.publishCurrentTime(11, immediately: true)
+        XCTAssertEqual(viewModel.currentTime, 12)
+
+        viewModel.nativeFallbackActive = true
+        viewModel.playbackPhase = .playingNative
+        XCTAssertFalse(viewModel.enhancedPresentationOwnsTimeline)
+        viewModel.publishCurrentTime(11, immediately: true)
+        XCTAssertEqual(viewModel.currentTime, 11)
+        #endif
+    }
+
+    @MainActor
     func testMacOSRendererEnhancementsAreStagedUntilApplyOrRevert() {
         #if os(macOS)
         let viewModel = VTPlayerViewModel()

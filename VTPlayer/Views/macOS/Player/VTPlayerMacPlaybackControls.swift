@@ -57,6 +57,45 @@ extension VTPlayerView {
             .help(status)
     }
 
+    @ViewBuilder
+    var playbackFallbackNotice: some View {
+        if let message = viewModel.playbackNotice {
+            HStack(spacing: 10) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+                Text(message)
+                    .font(.callout)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Try Enhanced Again") {
+                    viewModel.retryEnhancedPlayback()
+                }
+                .controlSize(.small)
+                .help("Retry enhanced playback with the prepared cache")
+                Button {
+                    viewModel.dismissPlaybackNotice()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss message")
+                .accessibilityLabel("Dismiss message")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 760)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12))
+            }
+            .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     private var playbackStatusText: String {
         let isPlaying = viewModel.isPlaying && !viewModel.isPaused
         if viewModel.hasUnappliedPipelineChanges {

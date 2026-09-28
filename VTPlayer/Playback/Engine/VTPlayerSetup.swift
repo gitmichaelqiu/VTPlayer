@@ -225,11 +225,16 @@ extension VTPlayerViewModel {
                         guard seconds.isFinite else { return }
                         Task { @MainActor [weak self] in
                             guard let self,
-                                  self.videoURL == url else { return }
+                                  self.videoURL == url,
+                                  self.player === newPlayer else { return }
                             if let pendingResumePTS = self.pendingResumePTS,
                                abs(seconds - CMTimeGetSeconds(pendingResumePTS)) < 0.25 {
                                 self.pendingResumePTS = nil
                             }
+#if os(macOS)
+                            guard !self.enhancedPresentationOwnsTimeline,
+                                  !self.suppressNativeTimeObserverDuringSeek else { return }
+#endif
                             self.publishCurrentTime(seconds)
                         }
                     }

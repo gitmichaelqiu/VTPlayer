@@ -23,6 +23,9 @@ extension VTPlayerViewModel {
         nativeFallbackActive = false
         livePresentationGateValidated = false
         playbackIssue = nil
+        dismissPlaybackNotice()
+        suppressNativeTimeObserverDuringSeek = false
+        suppressRateObserver = false
         transitionPlayback(to: .empty)
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
