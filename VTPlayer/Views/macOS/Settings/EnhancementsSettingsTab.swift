@@ -41,12 +41,12 @@ struct EnhancementsSettingsTab: View {
                                     .font(.caption)
                                 Text(viewModel.draftPipelineConfiguration == viewModel.appliedPipelineConfiguration &&
                                      !viewModel.forceFullCachePreparation
-                                     ? "Press Play to apply these image adjustments. The frame cache is unchanged."
-                                     : "Choose Apply & Play in the player bar, or press Play to start with the selected settings. The original video stays available while VTPlayer prepares enhanced playback.")
+                                     ? "Apply these image adjustments in the player, then press Play separately. The frame cache is unchanged."
+                                     : "Apply these settings in the player, then press Play separately. The original video stays available while VTPlayer prepares enhanced playback.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("Settings are ready. Press Play to start. VTPlayer checks smoothness and handles cache fallback automatically if needed.")
+                                Text("Settings are ready. Press Play to start. VTPlayer checks smoothness and prepares a cache automatically if needed.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

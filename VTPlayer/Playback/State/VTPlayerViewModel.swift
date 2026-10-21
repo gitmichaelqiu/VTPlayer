@@ -621,7 +621,6 @@ final class VTPlayerViewModel {
     var showControls = true
     var isHoveringControlBar = false
     var isHoveringVideo = false
-    var showAdjustmentsPopover = false
     var isConfigurationPopoverPresented = false
     
     var currentBackgroundColor: Color {

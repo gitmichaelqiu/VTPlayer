@@ -127,10 +127,6 @@ extension VTPlayerViewModel {
             player.rate = Float(playbackSpeed)
             return
         }
-        if hasUnappliedPipelineChanges {
-            applyPipelineEnhancementsAndPlay()
-            return
-        }
         clearPlaybackIssue()
         nativeFallbackActive = false
         #endif

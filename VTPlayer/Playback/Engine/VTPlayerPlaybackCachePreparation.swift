@@ -79,14 +79,6 @@ extension VTPlayerViewModel {
         applyPipelineEnhancements(fullCacheConfiguration: nil, rendererSettings: nil)
     }
 
-    func applyPipelineEnhancementsAndPlay() {
-        applyPipelineEnhancements(
-            fullCacheConfiguration: nil,
-            rendererSettings: nil,
-            startPlaybackAfterPreparation: true
-        )
-    }
-
     func retryEnhancedPreparation(configuration: AppliedPipelineConfiguration) {
         let benchmark: EnhancedPipelineBenchmark?
         if liveFallbackBenchmarkURL == videoURL,
@@ -109,8 +101,7 @@ extension VTPlayerViewModel {
     private func applyPipelineEnhancements(
         fullCacheConfiguration: AppliedPipelineConfiguration?,
         rendererSettings: (sharpness: Double, hdrStrength: Double, hdrColorfulness: Double)?,
-        benchmarkOverride: EnhancedPipelineBenchmark? = nil,
-        startPlaybackAfterPreparation: Bool = false
+        benchmarkOverride: EnhancedPipelineBenchmark? = nil
     ) {
         validateEnhancementSelections()
         #if os(macOS)
@@ -146,7 +137,7 @@ extension VTPlayerViewModel {
             return
         }
 
-        let wasPlaying = (isPlaying && !isPaused) || startPlaybackAfterPreparation
+        let wasPlaying = isPlaying && !isPaused
         enhancementTransactionWasPlaying = wasPlaying
         enhancementTransactionReachedEnd = false
         enhancementTransactionPreviousPhase = playbackPhase
@@ -191,8 +182,6 @@ extension VTPlayerViewModel {
                 prepareEnhancedPlaybackWhilePaused()
             } else if !wasPlaying {
                 transitionPlayback(to: candidateWouldBePipelineActive ? .paused : .readyPaused)
-            } else if startPlaybackAfterPreparation {
-                play()
             }
             if wasPlaying, candidateWouldBePipelineActive {
                 liveFallbackPreviousConfiguration = previousConfiguration

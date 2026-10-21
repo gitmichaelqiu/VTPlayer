@@ -35,9 +35,7 @@ extension VTPlayerView {
         if viewModel.isPlaying && !viewModel.isPaused {
             return "Pause video"
         }
-        return viewModel.hasUnappliedPipelineChanges
-            ? "Apply selected settings and play"
-            : "Play video"
+        return "Play video"
     }
 
     private var playPauseButtonHelp: String {
@@ -48,7 +46,7 @@ extension VTPlayerView {
             return "Watch the original video during setup; VTPlayer switches to enhanced playback when ready"
         }
         if viewModel.hasUnappliedPipelineChanges {
-            return "Apply the selected settings and start playback. VTPlayer keeps the original video available while preparing enhanced playback."
+            return "Start playback with the applied settings. Apply pending changes in Enhancements first to use them."
         }
         return viewModel.isPipelineActive
             ? "Start enhanced playback. VTPlayer verifies on-screen playback and prepares a cache automatically only if live presentation misses the target."
@@ -117,7 +115,7 @@ extension VTPlayerView {
             } else {
                 currentPlayback = viewModel.isPipelineActive ? "Enhanced selected" : "Ready · paused"
             }
-            return "\(currentPlayback) · edits pending"
+            return "\(currentPlayback) · settings not applied"
         }
 
         switch viewModel.playbackPhase {
@@ -148,38 +146,6 @@ extension VTPlayerView {
             return "Ended · press Play to replay"
         case .failed:
             return "Playback issue · see details"
-        }
-    }
-
-    @ViewBuilder
-    var pendingEnhancementControls: some View {
-        if !viewModel.isPreparingEnhancedCache && viewModel.hasUnappliedPipelineChanges {
-            HStack(spacing: 6) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Label("Settings not applied", systemImage: "circle.dotted")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
-                    Text("In use: \(viewModel.appliedEnhancementSummary)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Button("Apply & Play") {
-                    viewModel.applyPipelineEnhancementsAndPlay()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .help("Use the selected settings and start playback. The original video stays available while VTPlayer prepares enhanced playback.")
-
-                Button("Revert") {
-                    viewModel.dismissPendingEnhancementChanges()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Restore the settings currently in use for this video")
-            }
-            .padding(.horizontal, 6)
         }
     }
 
@@ -274,9 +240,13 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    func enhancementControlLabel(_ title: String, isActive: Bool) -> some View {
+    func enhancementControlLabel(_ title: String, isActive: Bool, systemImage: String? = nil) -> some View {
         let isPending = viewModel.hasUnappliedPipelineChanges
         HStack(spacing: 4) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .accessibilityHidden(true)
+            }
             Text(title)
             if isPending {
                 Image(systemName: "circle.dotted")

@@ -84,9 +84,8 @@ extension VTPlayerView {
             }
             .padding(.horizontal, 12)
 
-            // Keep core transport and playback state pinned. Enhancement
-            // controls use their own scroll region so they cannot push Play,
-            // volume, speed, or fullscreen out of view.
+            // Keep transport controls visible and group enhancement choices
+            // behind one compact control.
             HStack(spacing: 10) {
                 playPauseButton
                 playbackStatusLabel
@@ -99,243 +98,12 @@ extension VTPlayerView {
             }
             .frame(height: 30)
 
-            // Enhancement controls remain reachable at narrow widths.
-            GeometryReader { proxy in
-                ScrollView(.horizontal, showsIndicators: true) {
-                    HStack(spacing: 8) {
-                pendingEnhancementControls
-
-                // Super Resolution Popover
-                Button {
-                    showSuperResolutionPopover.toggle()
-                } label: {
-                    let isQL = viewModel.qualitySuperResolutionScaleFactor > 0
-                    let scale = max(viewModel.superResolutionLevel, Float(viewModel.qualitySuperResolutionScaleFactor))
-                    let scaleLabel = scale.rounded() == scale ? String(Int(scale)) : String(format: "%.1f", scale)
-                    let isActive = scale > 0
-                    enhancementControlLabel(
-                        isActive
-                            ? String(format: String(localized: isQL ? "Quality player scale %@" : "Low Latency player scale %@"), "\(scaleLabel)x")
-                            : "\(String(localized: "Super Res")): \(String(localized: "Off"))",
-                        isActive: isActive
-                    )
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-                .help("Super Resolution — increases spatial resolution using neural upscaling")
-                .popover(isPresented: $showSuperResolutionPopover, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Super Resolution")
-                            .font(.headline)
-                        Picker("", selection: Binding(
-                            get: {
-                                viewModel.qualitySuperResolutionScaleFactor > 0
-                                    ? Float(10 + viewModel.qualitySuperResolutionScaleFactor)
-                                    : viewModel.superResolutionLevel
-                            },
-                            set: { selection in
-                                switch selection {
-                                case 1.5, 2, 4: viewModel.superResolutionLevel = selection; viewModel.qualitySuperResolutionScaleFactor = 0
-                                case 12: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 2
-                                case 14: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 4
-                                default: viewModel.superResolutionLevel = 0; viewModel.qualitySuperResolutionScaleFactor = 0
-                                }
-                                viewModel.updateEnhancements()
-                            }
-                        )) {
-                            Text("Off").tag(Float(0))
-                            ForEach(viewModel.availableSuperResolutionScales.sorted(), id: \.self) { scale in
-                            let label = scale.rounded() == scale ? String(Int(scale)) : String(format: "%.1f", scale)
-                            Text(String(format: String(localized: "Low Latency %@"), "\(label)x")).tag(scale)
-                            }
-                            if viewModel.availableQualitySuperResolutionScales.contains(2) {
-                                Text(String(format: String(localized: "Quality %@"), "2x")).tag(Float(12))
-                            }
-                            if viewModel.availableQualitySuperResolutionScales.contains(4) {
-                                Text(String(format: String(localized: "Quality %@"), "4x")).tag(Float(14))
-                            }
-                        }
-                        .pickerStyle(.inline)
-                        .accessibilityLabel("Super Resolution")
-                    }
-                    .padding(12)
-
-                // Frame Interpolation Popover
-                }
-                Button {
-                    showFrameInterpolationPopover.toggle()
-                } label: {
-                    let isActive = viewModel.frameInterpolationLevel > 0
-                    enhancementControlLabel(
-                        "\(String(localized: "Frame Interp")): \(isActive ? "\(viewModel.frameInterpolationLevel)x" : String(localized: "Off"))",
-                        isActive: isActive
-                    )
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-                .help("Frame Interpolation — increases video frame rate for fluid movement")
-                .popover(isPresented: $showFrameInterpolationPopover, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Frame Interpolation")
-                            .font(.headline)
-                        Picker("", selection: Binding(
-                            get: { viewModel.frameInterpolationLevel },
-                            set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
-                        )) {
-                            Text("Off").tag(0)
-                            if viewModel.frameInterpolationIsAvailable {
-                                Text("2x").tag(2)
-                                Text("4x").tag(4)
-                            }
-                        }
-                        .pickerStyle(.inline)
-                        .accessibilityLabel("Frame Interpolation")
-                    }
-                    .padding(12)
-                }
-
-                // Motion Blur Popover
-                Button {
-                    showMotionBlurPopover.toggle()
-                } label: {
-                    let isActive = viewModel.motionBlurStrength > 0
-                    enhancementControlLabel(
-                        "\(String(localized: "Motion Blur")): \(isActive ? "\(viewModel.motionBlurStrength)" : String(localized: "Off"))",
-                        isActive: isActive
-                    )
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-                .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
-                .popover(isPresented: $showMotionBlurPopover, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : String(localized: "Off"))")
-                            .font(.headline)
-                            .contentTransition(.numericText())
-                            .animation(.snappy(duration: 0.18), value: viewModel.motionBlurStrength)
-                        Slider(
-                            value: Binding(
-                                get: { Double(viewModel.motionBlurStrength) },
-                                set: { newValue in
-                                    withAnimation(.snappy(duration: 0.18)) { viewModel.motionBlurStrength = Int(newValue) }
-                                }
-                            ),
-                            in: 0...100,
-                            step: 5,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    viewModel.updateEnhancements()
-                                }
-                            }
-                        )
-                    }
-                    .padding(16)
-                    .frame(width: 220)
-                }
-
-                // Denoise Popover
-                Button {
-                    showDenoisePopover.toggle()
-                } label: {
-                    let isActive = viewModel.denoiseStrength > 0
-                    enhancementControlLabel(
-                        "\(String(localized: "Denoise")): \(isActive ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))",
-                        isActive: isActive
-                    )
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-                .help("Denoise — filters compression noise and high-frequency grain")
-                .popover(isPresented: $showDenoisePopover, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))")
-                            .font(.headline)
-                            .contentTransition(.numericText())
-                            .animation(.snappy(duration: 0.18), value: viewModel.denoiseStrength)
-                        Slider(
-                            value: Binding(
-                                get: { viewModel.denoiseStrength },
-                                set: { newValue in
-                                    withAnimation(.snappy(duration: 0.18)) { viewModel.denoiseStrength = newValue }
-                                }
-                            ),
-                            in: 0...1,
-                            step: 0.05,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    viewModel.updateEnhancements()
-                                }
-                            }
-                        )
-                    }
-                    .padding(16)
-                    .frame(width: 220)
-                }
-
-                // Image Adjustments Popover Button
-                Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
-                    enhancementControlLabel(
-                        String(localized: "Adjustments"),
-                        isActive: viewModel.sharpness > 0 || viewModel.hdrStrength > 0
-                    )
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-                .popover(isPresented: Binding(
-                    get: { viewModel.showAdjustmentsPopover },
-                    set: { viewModel.showAdjustmentsPopover = $0 }
-                ), arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Image Adjustments")
-                            .font(.headline)
-
-                        Divider()
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Sharpness: \(viewModel.sharpness > 0 ? String(format: "%.2f", viewModel.sharpness) : String(localized: "Off"))")
-                                .font(.caption)
-                                .contentTransition(.numericText())
-                                .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
-                            Slider(value: Binding(
-                                get: { viewModel.sharpness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue } }
-                            ), in: 0...2, step: 0.05)
-                        }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("HDR Boost: \(viewModel.hdrStrength > 0 ? String(format: "%.2f", viewModel.hdrStrength) : String(localized: "Off"))")
-                                .font(.caption)
-                                .contentTransition(.numericText())
-                                .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
-                            Slider(value: Binding(
-                                get: { viewModel.hdrStrength },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue } }
-                            ), in: 0...2, step: 0.05)
-                        }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("HDR Colorfulness: \(String(format: "%.2f", viewModel.hdrColorfulness))")
-                                .font(.caption)
-                                .contentTransition(.numericText())
-                                .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
-                            Slider(value: Binding(
-                                get: { viewModel.hdrColorfulness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue } }
-                            ), in: 0...1, step: 0.05)
-                                .disabled(viewModel.hdrStrength <= 0)
-                        }
-                    }
-                    .padding(16)
-                    .frame(width: 220)
-                }
-
-                        Spacer()
-                    }
-                    .frame(minWidth: proxy.size.width, alignment: .leading)
-                }
-                .disabled(viewModel.isPreparingEnhancedCache)
+            HStack(spacing: 8) {
+                enhancementsControl
+                Spacer(minLength: 0)
             }
             .frame(height: 30)
+            .disabled(viewModel.isPreparingEnhancedCache)
         }
         .macOnHover { viewModel.isHoveringControlBar = $0 }
         .padding(.horizontal, 20)
@@ -346,19 +114,212 @@ extension VTPlayerView {
         .opacity(viewModel.showControls ? 1.0 : 0.0)
         .offset(y: viewModel.showControls ? 0 : 50)
         .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
-        .onChange(of: showSuperResolutionPopover) { _, _ in syncConfigurationPopoverVisibility() }
-        .onChange(of: showFrameInterpolationPopover) { _, _ in syncConfigurationPopoverVisibility() }
-        .onChange(of: showMotionBlurPopover) { _, _ in syncConfigurationPopoverVisibility() }
-        .onChange(of: showDenoisePopover) { _, _ in syncConfigurationPopoverVisibility() }
+        .onChange(of: showEnhancementsPopover) { _, _ in syncConfigurationPopoverVisibility() }
         .onChange(of: showPlaybackSpeedPopover) { _, _ in syncConfigurationPopoverVisibility() }
         .onChange(of: showVolumePopover) { _, _ in syncConfigurationPopoverVisibility() }
-        .onChange(of: viewModel.showAdjustmentsPopover) { _, _ in syncConfigurationPopoverVisibility() }
+    }
+
+    private var enhancementsControl: some View {
+        Button {
+            showEnhancementsPopover.toggle()
+        } label: {
+            enhancementControlLabel(
+                "Enhancements",
+                isActive: viewModel.isPipelineActive,
+                systemImage: "slider.horizontal.3"
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Choose enhancement settings. Apply them, then press Play separately.")
+        .popover(isPresented: $showEnhancementsPopover, arrowEdge: .top) {
+            enhancementsPopoverContent
+        }
+    }
+
+    private var enhancementsPopoverContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Enhancements")
+                            .font(.headline)
+                        Text(viewModel.hasUnappliedPipelineChanges
+                            ? "Apply these settings, then press Play separately."
+                            : "Settings are applied. Press Play when you are ready.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Picker("Upscale", selection: Binding(
+                        get: {
+                            viewModel.qualitySuperResolutionScaleFactor > 0
+                                ? Float(10 + viewModel.qualitySuperResolutionScaleFactor)
+                                : viewModel.superResolutionLevel
+                        },
+                        set: { selection in
+                            switch selection {
+                            case 1.5, 2, 4:
+                                viewModel.superResolutionLevel = selection
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            case 12:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 2
+                            case 14:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 4
+                            default:
+                                viewModel.superResolutionLevel = 0
+                                viewModel.qualitySuperResolutionScaleFactor = 0
+                            }
+                            viewModel.updateEnhancements()
+                        }
+                    )) {
+                        Text("Off").tag(Float(0))
+                        ForEach(viewModel.availableSuperResolutionScales.sorted(), id: \.self) { scale in
+                            let label = scale.rounded() == scale ? String(Int(scale)) : String(format: "%.1f", scale)
+                            Text(String(format: String(localized: "Low Latency %@"), "\(label)x")).tag(scale)
+                        }
+                        if viewModel.availableQualitySuperResolutionScales.contains(2) {
+                            Text(String(format: String(localized: "Quality %@"), "2x")).tag(Float(12))
+                        }
+                        if viewModel.availableQualitySuperResolutionScales.contains(4) {
+                            Text(String(format: String(localized: "Quality %@"), "4x")).tag(Float(14))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Upscale")
+
+                    Picker("Smooth motion", selection: Binding(
+                        get: { viewModel.frameInterpolationLevel },
+                        set: { viewModel.frameInterpolationLevel = $0; viewModel.updateEnhancements() }
+                    )) {
+                        Text("Off").tag(0)
+                        if viewModel.frameInterpolationIsAvailable {
+                            Text("2x").tag(2)
+                            Text("4x").tag(4)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Smooth motion")
+
+                    DisclosureGroup("Fine tuning", isExpanded: $showAdvancedEnhancements) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            enhancementSlider(
+                                "Motion blur",
+                                value: Binding(
+                                    get: { Double(viewModel.motionBlurStrength) },
+                                    set: { viewModel.motionBlurStrength = Int($0.rounded()) }
+                                ),
+                                range: 0...100,
+                                step: 5,
+                                valueLabel: { $0 > 0 ? String(format: "%.0f", $0) : String(localized: "Off") }
+                            )
+                            enhancementSlider(
+                                "Noise reduction",
+                                value: Binding(
+                                    get: { viewModel.denoiseStrength },
+                                    set: { viewModel.denoiseStrength = $0 }
+                                ),
+                                range: 0...1,
+                                step: 0.05,
+                                valueLabel: { $0 > 0 ? String(format: "%.2f", $0) : String(localized: "Off") }
+                            )
+                            Divider()
+                            enhancementSlider(
+                                "Sharpness",
+                                value: Binding(
+                                    get: { viewModel.sharpness },
+                                    set: { viewModel.sharpness = $0 }
+                                ),
+                                range: 0...2,
+                                step: 0.05,
+                                valueLabel: { $0 > 0 ? String(format: "%.2f", $0) : String(localized: "Off") }
+                            )
+                            enhancementSlider(
+                                "HDR boost",
+                                value: Binding(
+                                    get: { viewModel.hdrStrength },
+                                    set: { viewModel.hdrStrength = $0 }
+                                ),
+                                range: 0...2,
+                                step: 0.05,
+                                valueLabel: { $0 > 0 ? String(format: "%.2f", $0) : String(localized: "Off") }
+                            )
+                            enhancementSlider(
+                                "HDR colorfulness",
+                                value: Binding(
+                                    get: { viewModel.hdrColorfulness },
+                                    set: { viewModel.hdrColorfulness = $0 }
+                                ),
+                                range: 0...1,
+                                step: 0.05,
+                                valueLabel: { String(format: "%.2f", $0) },
+                                isDisabled: viewModel.hdrStrength <= 0
+                            )
+                        }
+                        .padding(.top, 8)
+                    }
+                    .font(.subheadline.weight(.medium))
+                }
+                .padding(.trailing, 4)
+            }
+            .frame(maxHeight: viewModel.hasUnappliedPipelineChanges ? 365 : 405)
+
+            if viewModel.hasUnappliedPipelineChanges {
+                Divider()
+                HStack {
+                    Button("Revert") {
+                        viewModel.dismissPendingEnhancementChanges()
+                        showEnhancementsPopover = false
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Restore the enhancement settings currently in use")
+
+                    Spacer()
+
+                    Button("Apply") {
+                        viewModel.applyPipelineEnhancements()
+                        showEnhancementsPopover = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help("Apply these settings. Press Play separately when you are ready to start.")
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 320)
+        .frame(maxHeight: 460)
+    }
+
+    private func enhancementSlider(
+        _ title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        valueLabel: (Double) -> String,
+        isDisabled: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                Spacer(minLength: 8)
+                Text(valueLabel(value.wrappedValue))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: range, step: step, onEditingChanged: { editing in
+                if !editing {
+                    viewModel.updateEnhancements()
+                }
+            })
+        }
+        .disabled(isDisabled)
     }
 
     private func syncConfigurationPopoverVisibility() {
-        let isPresented = showSuperResolutionPopover || showFrameInterpolationPopover ||
-            showMotionBlurPopover || showDenoisePopover || showPlaybackSpeedPopover ||
-            showVolumePopover || viewModel.showAdjustmentsPopover
+        let isPresented = showEnhancementsPopover || showPlaybackSpeedPopover || showVolumePopover
         viewModel.isConfigurationPopoverPresented = isPresented
         if isPresented {
             viewModel.showControls = true
