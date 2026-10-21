@@ -27,7 +27,7 @@ enum EnhancedCachePreparationState: Equatable {
     case benchmarking
     case prerolling
     case monitoring
-    case preparing(progress: Double, bytesWritten: Int64)
+    case preparing(progress: Double, bytesWritten: Int64, estimatedTotalBytes: Int64)
     case ready
     case failed(String)
 }

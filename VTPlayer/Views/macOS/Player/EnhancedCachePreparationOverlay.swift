@@ -16,12 +16,15 @@ extension VTPlayerView {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if case let .preparing(progress, bytesWritten) = viewModel.enhancedCachePreparationState {
+                if case let .preparing(progress, bytesWritten, estimatedTotalBytes) = viewModel.enhancedCachePreparationState {
                     ProgressView(value: progress)
                         .frame(maxWidth: 220)
-                    Text("\(Int((progress * 100).rounded()))% · \(ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file))")
+                    let writtenSize = ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
+                    let estimatedSize = ByteCountFormatter.string(fromByteCount: estimatedTotalBytes, countStyle: .file)
+                    Text("\(Int((progress * 100).rounded()))% · \(writtenSize) of ~\(estimatedSize)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
+                        .accessibilityLabel("\(Int((progress * 100).rounded())) percent complete, \(writtenSize) written of an estimated \(estimatedSize)")
                 }
             }
 

@@ -396,8 +396,6 @@ extension VTPlayerViewModel {
                     return
                 }
 
-                self.enhancedCachePreparationState = .preparing(progress: 0, bytesWritten: 0)
-                self.transitionPlayback(to: .preparingCache)
                 let requestedOutputFrameRate = sourceRate * Double(max(1, candidate.frameInterpolationLevel))
                 let selectedOutputFrameRate = min(Double(displayTargetFrameRate), requestedOutputFrameRate)
                 let scaleFactor = candidate.qualitySuperResolutionScaleFactor > 0
@@ -422,6 +420,12 @@ extension VTPlayerViewModel {
                     Double(estimatedBytesPerGroup * Int64(groupCount)) * 1.2 * groupMultiplier
                 )
                 #endif
+                self.enhancedCachePreparationState = .preparing(
+                    progress: 0,
+                    bytesWritten: 0,
+                    estimatedTotalBytes: estimatedRequiredBytes
+                )
+                self.transitionPlayback(to: .preparingCache)
                 let result = try await preparer.prepareCache(
                     url: url,
                     width: self.videoWidth,
@@ -439,7 +443,8 @@ extension VTPlayerViewModel {
                 ) { [weak self] progress, bytesWritten in
                     self?.enhancedCachePreparationState = .preparing(
                         progress: progress,
-                        bytesWritten: bytesWritten
+                        bytesWritten: bytesWritten,
+                        estimatedTotalBytes: estimatedRequiredBytes
                     )
                 }
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
