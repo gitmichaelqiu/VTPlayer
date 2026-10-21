@@ -114,8 +114,10 @@ struct VTPlayerView: View {
     #if os(macOS)
     @State var showPlaybackIssueAlert = false
     #endif
-    @State var showEnhancementsPopover = false
-    @State var showAdvancedEnhancements = false
+    @State var showDenoisePopover = false
+    @State var showMotionBlurPopover = false
+    @State var showSuperResolutionPopover = false
+    @State var showFrameInterpolationPopover = false
     @State var showPlaybackSpeedPopover = false
     @State var showVolumePopover = false
     #if os(macOS)

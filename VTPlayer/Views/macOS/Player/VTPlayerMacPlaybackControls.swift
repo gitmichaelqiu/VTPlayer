@@ -150,6 +150,38 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
+    var pendingEnhancementControls: some View {
+        if !viewModel.isPreparingEnhancedCache && viewModel.hasUnappliedPipelineChanges {
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Label("Settings not applied", systemImage: "circle.dotted")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text("In use: \(viewModel.appliedEnhancementSummary)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Button("Apply") {
+                    viewModel.applyPipelineEnhancements()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .help("Apply the selected settings. Press Play separately to start or resume playback.")
+
+                Button("Revert") {
+                    viewModel.dismissPendingEnhancementChanges()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Restore the settings currently in use for this video")
+            }
+            .padding(.horizontal, 6)
+        }
+    }
+
+    @ViewBuilder
     var playbackSpeedControl: some View {
         Button(action: { showPlaybackSpeedPopover.toggle() }) {
             compactPlaybackControlLabel(
@@ -240,13 +272,9 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    func enhancementControlLabel(_ title: String, isActive: Bool, systemImage: String? = nil) -> some View {
+    func enhancementControlLabel(_ title: String, isActive: Bool) -> some View {
         let isPending = viewModel.hasUnappliedPipelineChanges
         HStack(spacing: 4) {
-            if let systemImage {
-                Image(systemName: systemImage)
-                    .accessibilityHidden(true)
-            }
             Text(title)
             if isPending {
                 Image(systemName: "circle.dotted")
