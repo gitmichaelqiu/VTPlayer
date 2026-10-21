@@ -48,7 +48,7 @@ nonisolated struct EnhancedPipelineBenchmark: Equatable, Sendable {
     var p95GroupSeconds: Double
     var sourceFramesPerSecond: Double
     var requestedOutputFramesPerSecond: Double
-    var measuredDisplayFramesPerSecond: Double
+    var measuredDisplayFramesPerSecond: Double?
     var outputFramesPerGroup: Double
     var averageOutputBytesPerGroup: Int64
     var diskWriteBytesPerSecond: Double
@@ -59,7 +59,8 @@ nonisolated struct EnhancedPipelineBenchmark: Equatable, Sendable {
     }
 
     var meetsRealTimeDisplayBudget: Bool {
-        guard requestedOutputFramesPerSecond > 0 else { return false }
+        guard let measuredDisplayFramesPerSecond,
+              requestedOutputFramesPerSecond > 0 else { return false }
         return measuredDisplayFramesPerSecond >= requestedOutputFramesPerSecond * 0.95
     }
 }
@@ -93,7 +94,9 @@ nonisolated enum SparseCachePlanner {
             return SparseCachePlan(mode: .realTime, coveragePercent: 0, coverageBitmap: [])
         }
 
-        guard !benchmark.meetsRealTimeProcessingBudget || !benchmark.meetsRealTimeDisplayBudget else {
+        // The background benchmark measures processing throughput only. The
+        // renderer's actual display cadence is checked after playback starts.
+        if benchmark.meetsRealTimeProcessingBudget {
             return SparseCachePlan(
                 mode: .realTime,
                 coveragePercent: 0,

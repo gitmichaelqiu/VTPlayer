@@ -100,9 +100,8 @@ actor EnhancedFrameCachePreparer {
                 p95GroupSeconds: percentile(0.95),
                 sourceFramesPerSecond: sourceFramesPerSecond,
                 requestedOutputFramesPerSecond: requestedOutputRate,
-                // Presentation is rechecked from live renderer diagnostics. This
-                // benchmark establishes the processing-side admission decision.
-                measuredDisplayFramesPerSecond: requestedOutputRate,
+                // Presentation is measured by the live renderer after playback starts.
+                measuredDisplayFramesPerSecond: nil,
                 outputFramesPerGroup: Double(outputCount) / Double(samples.count),
                 averageOutputBytesPerGroup: outputBytes / Int64(samples.count),
                 diskWriteBytesPerSecond: 0
