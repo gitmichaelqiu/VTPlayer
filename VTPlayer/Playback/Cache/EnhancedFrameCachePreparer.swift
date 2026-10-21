@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreMedia
 import Foundation
+import Synchronization
 
 nonisolated struct EnhancedFrameCachePreparationResult: Sendable {
     var key: EnhancedFrameCacheKey
@@ -10,19 +11,30 @@ nonisolated struct EnhancedFrameCachePreparationResult: Sendable {
     var mode: EnhancedCachePlaybackMode
 }
 
-@MainActor
-private final class EnhancedPipelineBenchmarkOutputCollector {
-    private(set) var count = 0
-    private(set) var byteCount: Int64 = 0
+nonisolated private struct EnhancedPipelineBenchmarkOutputState: Sendable {
+    var count = 0
+    var byteCount: Int64 = 0
+}
+
+nonisolated private final class EnhancedPipelineBenchmarkOutputCollector: Sendable {
+    private let state = Mutex(EnhancedPipelineBenchmarkOutputState())
 
     func reset() {
-        count = 0
-        byteCount = 0
+        state.withLock {
+            $0 = EnhancedPipelineBenchmarkOutputState()
+        }
     }
 
     func record(_ frame: VTFrame) {
-        count += 1
-        byteCount += Int64(CVPixelBufferGetDataSize(frame.buffer))
+        let byteCount = Int64(CVPixelBufferGetDataSize(frame.buffer))
+        state.withLock {
+            $0.count += 1
+            $0.byteCount += byteCount
+        }
+    }
+
+    var snapshot: (count: Int, byteCount: Int64) {
+        state.withLock { ($0.count, $0.byteCount) }
     }
 }
 
@@ -52,9 +64,7 @@ actor EnhancedFrameCachePreparer {
         )
         try await coordinator.startSession(width: width, height: height)
         do {
-            let streamedOutputCollector = await MainActor.run {
-                EnhancedPipelineBenchmarkOutputCollector()
-            }
+            let streamedOutputCollector = EnhancedPipelineBenchmarkOutputCollector()
             let padding = await coordinator.sourceFramePadding()
             let iterator = await VTFrameSequence(
                 url: url,
@@ -69,22 +79,21 @@ actor EnhancedFrameCachePreparer {
 
             while samples.count < sampleCount, let frame = try await iterator.next() {
                 try Task.checkCancellation()
-                await streamedOutputCollector.reset()
+                streamedOutputCollector.reset()
                 let start = DispatchTime.now()
                 let output = try await coordinator.processFrame(frame) { streamedFrame in
                     streamedOutputCollector.record(streamedFrame)
                     return true
                 }
                 let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
-                let streamedOutputCount = await streamedOutputCollector.count
-                let streamedOutputBytes = await streamedOutputCollector.byteCount
+                let streamedOutput = streamedOutputCollector.snapshot
                 if warmupRemaining > 0 {
                     warmupRemaining -= 1
                     continue
                 }
                 samples.append(elapsed)
-                outputCount += output.count + streamedOutputCount
-                outputBytes += streamedOutputBytes + output.reduce(into: 0) { partialResult, frame in
+                outputCount += output.count + streamedOutput.count
+                outputBytes += streamedOutput.byteCount + output.reduce(into: 0) { partialResult, frame in
                     partialResult += Int64(CVPixelBufferGetDataSize(frame.buffer))
                 }
             }

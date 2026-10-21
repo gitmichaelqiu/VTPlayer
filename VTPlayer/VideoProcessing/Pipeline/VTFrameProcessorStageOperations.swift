@@ -47,7 +47,7 @@ extension VTFrameProcessorCoordinator {
         instance: StageInstance,
         inputFrames: [VTFrame],
         colorSource: CVPixelBuffer? = nil,
-        onOutput: (@MainActor @Sendable (VTFrame) async throws -> Void)? = nil
+        onOutput: (@Sendable (VTFrame) async throws -> Void)? = nil
     ) async throws -> [VTFrame] {
         guard let pool = instance.pixelBufferPool,
               let frame = inputFrames.first else { return inputFrames }
@@ -203,7 +203,7 @@ extension VTFrameProcessorCoordinator {
     func emitStreamedTemporalOutput(
         _ frame: VTFrame,
         colorSource: CVPixelBuffer,
-        onOutput: @MainActor @Sendable (VTFrame) async throws -> Void
+        onOutput: @Sendable (VTFrame) async throws -> Void
     ) async throws {
         var outputFrames = [frame]
         if let spatialInstance = stages[.spatial] {

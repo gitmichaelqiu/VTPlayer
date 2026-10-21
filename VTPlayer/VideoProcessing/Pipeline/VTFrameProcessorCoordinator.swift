@@ -288,7 +288,10 @@ public actor VTFrameProcessorCoordinator {
 
     public func startSession(width: Int, height: Int) async throws {}
 
-    public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
+    public func processFrame(
+        _ frame: VTFrame,
+        onOutput: (@Sendable (VTFrame) async -> Bool)? = nil
+    ) async throws -> [VTFrame] {
         return [frame]
     }
 

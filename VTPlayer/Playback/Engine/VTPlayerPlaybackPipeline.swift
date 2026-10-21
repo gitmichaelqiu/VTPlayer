@@ -3,6 +3,7 @@ import AVFoundation
 import VideoToolbox
 import CoreVideo
 import MetalKit
+import Synchronization
 #if os(iOS)
 import MediaPlayer
 #endif
@@ -554,8 +555,7 @@ extension VTPlayerViewModel {
                 return false
             }
 
-            @MainActor
-            func admitStreamedFrame(_ frame: VTFrame) async -> Bool {
+            let admitStreamedFrame: @MainActor @Sendable (VTFrame) async -> Bool = { frame in
                 let byteCount = CVPixelBufferGetDataSize(frame.buffer)
                 guard byteCount <= self.frameCacheMemoryBudget else {
                     self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
@@ -1066,12 +1066,15 @@ extension VTPlayerViewModel {
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()
                 do {
-                    var streamedFrameCount = 0
+                    let streamedFrameCount = Mutex(0)
                     let outputFrames = try await coordinator.processFrame(vtFrame) { frame in
-                        guard await admitStreamedFrame(frame) else { return false }
-                        streamedFrameCount += 1
-                        return true
+                        let admitted = await admitStreamedFrame(frame)
+                        if admitted {
+                            streamedFrameCount.withLock { $0 += 1 }
+                        }
+                        return admitted
                     }
+                    let admittedStreamedFrameCount = streamedFrameCount.withLock { $0 }
                     let processEnd = DispatchTime.now()
 
                     guard gen == self.playbackGeneration else { break }
@@ -1081,7 +1084,7 @@ extension VTPlayerViewModel {
                     )
                     let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
                     let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
-                    let outputFrameCount = streamedFrameCount + outputFrames.count
+                    let outputFrameCount = admittedStreamedFrameCount + outputFrames.count
                     self.recordFIProcessingTiming(
                         milliseconds: processingMilliseconds,
                         budgetMilliseconds: sourceFrameBudgetMilliseconds,
@@ -1089,7 +1092,7 @@ extension VTPlayerViewModel {
                         expectsInterpolation: sourceFrameOrdinal > 1
                     )
 
-                    if streamedFrameCount > 0 {
+                    if admittedStreamedFrameCount > 0 {
                         self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
                         continue
                     }

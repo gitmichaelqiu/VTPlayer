@@ -39,7 +39,7 @@ extension VTFrameProcessorCoordinator {
 
     public func processFrame(
         _ frame: VTFrame,
-        onOutput: (@MainActor @Sendable (VTFrame) async -> Bool)? = nil
+        onOutput: (@Sendable (VTFrame) async -> Bool)? = nil
     ) async throws -> [VTFrame] {
         guard beginProcessing() else { return [frame] }
         defer { finishProcessing() }
