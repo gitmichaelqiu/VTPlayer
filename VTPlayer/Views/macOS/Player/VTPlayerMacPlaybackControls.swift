@@ -27,7 +27,17 @@ extension VTPlayerView {
         .buttonStyle(.glass)
         .keyboardShortcut(.space, modifiers: [])
         .disabled(viewModel.playbackPhase == .loading || viewModel.enhancedCachePreparationState == .prerolling)
+        .accessibilityLabel(playPauseButtonLabel)
         .help(playPauseButtonHelp)
+    }
+
+    private var playPauseButtonLabel: String {
+        if viewModel.isPlaying && !viewModel.isPaused {
+            return "Pause video"
+        }
+        return viewModel.hasUnappliedPipelineChanges
+            ? "Apply selected settings and play"
+            : "Play video"
     }
 
     private var playPauseButtonHelp: String {
@@ -38,7 +48,7 @@ extension VTPlayerView {
             return "Watch the original video during setup; VTPlayer switches to enhanced playback when ready"
         }
         if viewModel.hasUnappliedPipelineChanges {
-            return "Play using the settings currently in use. Apply the selected settings first to use them."
+            return "Apply the selected settings and start playback. VTPlayer keeps the original video available while preparing enhanced playback."
         }
         return viewModel.isPipelineActive
             ? "Start enhanced playback. VTPlayer verifies on-screen playback and prepares a cache automatically only if live presentation misses the target."
@@ -52,7 +62,7 @@ extension VTPlayerView {
             .font(.caption.weight(.medium))
             .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
             .lineLimit(1)
-            .fixedSize()
+            .frame(maxWidth: 220, alignment: .leading)
             .accessibilityLabel("Playback status: \(status)")
             .help(status)
     }
@@ -155,12 +165,12 @@ extension VTPlayerView {
                         .lineLimit(1)
                 }
 
-                Button("Apply & Prepare") {
-                    viewModel.applyPipelineEnhancements()
+                Button("Apply & Play") {
+                    viewModel.applyPipelineEnhancementsAndPlay()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .help("Apply these settings and prepare enhanced playback. The video stays paused; press Play when it is ready.")
+                .help("Use the selected settings and start playback. The original video stays available while VTPlayer prepares enhanced playback.")
 
                 Button("Revert") {
                     viewModel.dismissPendingEnhancementChanges()

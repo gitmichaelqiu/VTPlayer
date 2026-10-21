@@ -252,13 +252,6 @@ final class VTPlayerViewModel {
         #endif
     }
 
-    var shouldShowTransportApplyAction: Bool {
-        #if os(macOS)
-        hasUnappliedPipelineChanges
-        #else
-        false
-        #endif
-    }
     var continueVideoPlaybackPreference: ContinueVideoPlaybackPreference = .default
     var showSidebar = false
     var showLeftSidebar = true

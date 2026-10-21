@@ -156,6 +156,7 @@ extension VTPlayerView {
                             }
                         }
                         .pickerStyle(.inline)
+                        .accessibilityLabel("Super Resolution")
                     }
                     .padding(12)
 
@@ -188,6 +189,7 @@ extension VTPlayerView {
                             }
                         }
                         .pickerStyle(.inline)
+                        .accessibilityLabel("Frame Interpolation")
                     }
                     .padding(12)
                 }

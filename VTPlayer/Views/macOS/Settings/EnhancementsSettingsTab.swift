@@ -41,8 +41,8 @@ struct EnhancementsSettingsTab: View {
                                     .font(.caption)
                                 Text(viewModel.draftPipelineConfiguration == viewModel.appliedPipelineConfiguration &&
                                      !viewModel.forceFullCachePreparation
-                                     ? "Use Apply & Prepare in the player bar to apply these image adjustments. The frame cache is unchanged."
-                                     : "Choose Apply & Prepare once. VTPlayer prepares the processor and builds a cache only if needed; then press Play.")
+                                     ? "Press Play to apply these image adjustments. The frame cache is unchanged."
+                                     : "Choose Apply & Play in the player bar, or press Play to start with the selected settings. The original video stays available while VTPlayer prepares enhanced playback.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
