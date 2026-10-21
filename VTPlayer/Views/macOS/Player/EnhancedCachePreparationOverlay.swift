@@ -16,7 +16,7 @@ extension VTPlayerView {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if case let .preparing(progress, bytesWritten, estimatedTotalBytes) = viewModel.enhancedCachePreparationState {
+                if case let .preparing(progress, bytesWritten, estimatedTotalBytes, estimatedRemainingSeconds) = viewModel.enhancedCachePreparationState {
                     ProgressView(value: progress)
                         .frame(maxWidth: 220)
                     let writtenSize = ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
@@ -24,7 +24,17 @@ extension VTPlayerView {
                     Text("\(Int((progress * 100).rounded()))% · \(writtenSize) of ~\(estimatedSize)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("\(Int((progress * 100).rounded())) percent complete, \(writtenSize) written of an estimated \(estimatedSize)")
+                        .accessibilityLabel(preparationProgressAccessibilityLabel(
+                            progress: progress,
+                            writtenSize: writtenSize,
+                            estimatedSize: estimatedSize,
+                            estimatedRemainingSeconds: estimatedRemainingSeconds
+                        ))
+                    if let estimatedRemainingSeconds {
+                        Text("About \(remainingTimeLabel(estimatedRemainingSeconds)) remaining")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -91,6 +101,33 @@ extension VTPlayerView {
         case .idle, .ready, .failed:
             return ""
         }
+    }
+
+    private func remainingTimeLabel(_ seconds: Double) -> String {
+        let totalSeconds = max(1, Int(seconds.rounded(.up)))
+        if totalSeconds < 60 {
+            return "\(totalSeconds)s"
+        }
+        let totalMinutes = totalSeconds / 60
+        if totalMinutes < 60 {
+            let remainingSeconds = totalSeconds % 60
+            return remainingSeconds == 0 ? "\(totalMinutes)m" : "\(totalMinutes)m \(remainingSeconds)s"
+        }
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        return minutes == 0 ? "\(hours)h" : "\(hours)h \(minutes)m"
+    }
+
+    private func preparationProgressAccessibilityLabel(
+        progress: Double,
+        writtenSize: String,
+        estimatedSize: String,
+        estimatedRemainingSeconds: Double?
+    ) -> String {
+        let percent = Int((progress * 100).rounded())
+        let size = "\(percent) percent complete, \(writtenSize) written of an estimated \(estimatedSize)"
+        guard let estimatedRemainingSeconds else { return size }
+        return "\(size), about \(remainingTimeLabel(estimatedRemainingSeconds)) remaining"
     }
 
     @ViewBuilder

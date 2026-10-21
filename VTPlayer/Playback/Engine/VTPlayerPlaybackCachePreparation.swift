@@ -412,9 +412,11 @@ extension VTPlayerViewModel {
                 self.enhancedCachePreparationState = .preparing(
                     progress: 0,
                     bytesWritten: 0,
-                    estimatedTotalBytes: estimatedRequiredBytes
+                    estimatedTotalBytes: estimatedRequiredBytes,
+                    estimatedRemainingSeconds: nil
                 )
                 self.transitionPlayback(to: .preparingCache)
+                let preparationStartedAt = ProcessInfo.processInfo.systemUptime
                 let result = try await preparer.prepareCache(
                     url: url,
                     width: self.videoWidth,
@@ -430,10 +432,16 @@ extension VTPlayerViewModel {
                     estimatedRequiredBytes: estimatedRequiredBytes,
                     benchmark: benchmark
                 ) { [weak self] progress, bytesWritten in
+                    let boundedProgress = min(1, max(0, progress))
+                    let elapsedSeconds = ProcessInfo.processInfo.systemUptime - preparationStartedAt
+                    let estimatedRemainingSeconds = boundedProgress >= 0.03 && boundedProgress < 1
+                        ? elapsedSeconds * (1 - boundedProgress) / boundedProgress
+                        : nil
                     self?.enhancedCachePreparationState = .preparing(
                         progress: progress,
                         bytesWritten: bytesWritten,
-                        estimatedTotalBytes: estimatedRequiredBytes
+                        estimatedTotalBytes: estimatedRequiredBytes,
+                        estimatedRemainingSeconds: estimatedRemainingSeconds
                     )
                 }
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
