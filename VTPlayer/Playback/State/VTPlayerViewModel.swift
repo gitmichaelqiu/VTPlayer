@@ -79,6 +79,7 @@ enum PlaybackIssueStage: String, Equatable {
     case permissions
     case capabilities
     case preparation
+    case qualitySRPreparation
     case pipeline
 }
 
@@ -372,6 +373,8 @@ final class VTPlayerViewModel {
             "Couldn’t Open Video"
         case .capabilities:
             "Enhancement Unavailable"
+        case .qualitySRPreparation:
+            "Quality Upscaling Couldn’t Start"
         case .preparation:
             "Couldn’t Prepare Enhancements"
         case .pipeline:
@@ -443,8 +446,10 @@ final class VTPlayerViewModel {
         guard videoURL != nil,
               isPipelineActive || hasUnappliedPipelineChanges ||
                 playbackIssue?.stage == .pipeline || playbackIssue?.stage == .preparation ||
+                playbackIssue?.stage == .qualitySRPreparation ||
                 nativeFallbackActive else { return }
-        let shouldReprepareInvalidatedCache = playbackIssue?.stage == .preparation &&
+        let shouldReprepareInvalidatedCache = (playbackIssue?.stage == .preparation ||
+            playbackIssue?.stage == .qualitySRPreparation) &&
             !hasUnappliedPipelineChanges &&
             isPipelineActive &&
             preparedEnhancedFrameCacheKey == nil

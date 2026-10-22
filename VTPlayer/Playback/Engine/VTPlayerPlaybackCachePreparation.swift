@@ -551,9 +551,12 @@ extension VTPlayerViewModel {
                     self.nativeFallbackActive = true
                     self.isPlaying = false
                     self.isPaused = true
+                    let isQualitySRFailure = candidate.qualitySuperResolutionScaleFactor > 0
                     self.reportPlaybackIssue(
-                        stage: .preparation,
-                        message: "Enhancement preparation failed: \(error.localizedDescription)"
+                        stage: isQualitySRFailure ? .qualitySRPreparation : .preparation,
+                        message: isQualitySRFailure
+                            ? "Quality Super Resolution couldn’t start with the selected level. Choose another upscale level to try again, or watch the original video."
+                            : "Enhancement setup couldn’t be completed. Try changing the settings or watch the original video."
                     )
                 }
             }

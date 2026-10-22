@@ -220,6 +220,9 @@ extension VTFrameProcessorCoordinator {
 
         // Process each frame through spatial upscaling
         var outputFrames: [VTFrame] = []
+        // In temporal-first mode, the shared rings contain source frames only.
+        var previousQualitySource = frameHistory.dropFirst().first
+        var previousQualityOutput = outputHistory.first
 
         for f in inputFrames {
             var currentBuffer = f.buffer
@@ -237,8 +240,12 @@ extension VTFrameProcessorCoordinator {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial frames"])
                 }
-                let prevFP = frameHistory.dropFirst().first
-                let prevOutFP = outputHistory.first
+                let sourcePixelFormat = CVPixelBufferGetPixelFormatType(currentBuffer)
+                let hasCompatibleQualityHistory =
+                    previousQualitySource.map { CVPixelBufferGetPixelFormatType($0.buffer) == sourcePixelFormat } == true &&
+                    previousQualityOutput.map { CVPixelBufferGetPixelFormatType($0.buffer) == sourcePixelFormat } == true
+                let prevFP = hasCompatibleQualityHistory ? previousQualitySource : nil
+                let prevOutFP = hasCompatibleQualityHistory ? previousQualityOutput : nil
                 guard let params = VTSuperResolutionScalerParameters(
                     sourceFrame: sourceFP,
                     previousFrame: prevFP,
@@ -251,6 +258,8 @@ extension VTFrameProcessorCoordinator {
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create Quality SR params"])
                 }
                 for try await _ in instance.processor.process(parameters: params) {}
+                previousQualitySource = sourceFP
+                previousQualityOutput = destFP
                 currentBuffer = outBuf1
             } else {
                 // In temporal-first mode, interpolated frames are synthetic

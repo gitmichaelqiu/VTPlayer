@@ -207,7 +207,15 @@ struct VTPlayerView: View {
             Text("This will clear your recent playback history. Your video files will remain safe.")
         }
         .alert(viewModel.playbackIssueAlertTitle, isPresented: $showPlaybackIssueAlert) {
-            if viewModel.playbackIssue?.stage == .pipeline || viewModel.playbackIssue?.stage == .preparation {
+            if viewModel.playbackIssue?.stage == .qualitySRPreparation {
+                Button("Change Upscale Settings") {
+                    viewModel.clearPlaybackIssue()
+                    showSuperResolutionPopover = true
+                }
+                Button("Watch Original Video", role: .cancel) {
+                    viewModel.continueNativePlayback()
+                }
+            } else if viewModel.playbackIssue?.stage == .pipeline || viewModel.playbackIssue?.stage == .preparation {
                 Button("Try Enhanced Again") {
                     viewModel.retryEnhancedPlayback()
                 }
