@@ -4,6 +4,35 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
+    func testQualitySuperResolutionProducesVisiblePixels() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(width: 1280, height: 720, scale: 4) else {
+            throw XCTSkip("Quality SR fixture or device support is unavailable.")
+        }
+        let coordinator = VTFrameProcessorCoordinator(qualitySuperResolutionScaleFactor: 4)
+        try await coordinator.startSession(width: 1280, height: 720)
+        let iterator = VTFrameSequence(url: url, startTime: CMTime(seconds: 2, preferredTimescale: 600)).makeAsyncIterator()
+        let next = try await iterator.next()
+        let source = try XCTUnwrap(next)
+        let output = try await coordinator.processFrame(source)
+        let frame = try XCTUnwrap(output.first)
+        XCTAssertEqual(CVPixelBufferGetWidth(frame.buffer), 5120)
+        XCTAssertEqual(CVPixelBufferGetHeight(frame.buffer), 2880)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(frame.buffer, .readOnly), kCVReturnSuccess)
+        defer { CVPixelBufferUnlockBaseAddress(frame.buffer, .readOnly) }
+        let base = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(frame.buffer, 0))
+        let rowBytes = CVPixelBufferGetBytesPerRowOfPlane(frame.buffer, 0)
+        let width = CVPixelBufferGetWidthOfPlane(frame.buffer, 0)
+        let height = CVPixelBufferGetHeightOfPlane(frame.buffer, 0)
+        let pixels = base.assumingMemoryBound(to: UInt8.self)
+        let samples = stride(from: 0, to: height, by: max(1, height / 16)).flatMap { y in
+            stride(from: 0, to: width, by: max(1, width / 16)).map { x in pixels[y * rowBytes + x] }
+        }
+        XCTAssertGreaterThan(samples.max() ?? 0, 32, "format=\(CVPixelBufferGetPixelFormatType(frame.buffer)) size=\(width)x\(height) samples=\(samples.count)")
+        await coordinator.endSession()
+    }
+
     func testCancelledFrameReaderThrowsCancellation() async {
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }

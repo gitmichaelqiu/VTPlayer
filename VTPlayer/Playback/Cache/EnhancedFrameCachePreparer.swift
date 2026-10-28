@@ -152,7 +152,9 @@ actor EnhancedFrameCachePreparer {
             configuration: configuration,
             cacheFormatVersion: usesEncodedChunks ? EnhancedFrameCacheKey.currentHEVCChunkFormatVersion : 1,
             displayTargetFrameRate: usesEncodedChunks ? Int(outputRate.rounded()) : 0,
-            processingPipelineVersion: EnhancedFrameCacheKey.currentProcessingPipelineVersion,
+            processingPipelineVersion: configuration.qualitySuperResolutionScaleFactor > 0
+                ? EnhancedFrameCacheKey.currentQualitySRProcessingPipelineVersion
+                : EnhancedFrameCacheKey.currentProcessingPipelineVersion,
             frameSelectionPolicyVersion: EnhancedFrameCacheKey.currentFrameSelectionPolicyVersion,
             codecSettingsVersion: EnhancedFrameCacheKey.currentCodecSettingsVersion
         )

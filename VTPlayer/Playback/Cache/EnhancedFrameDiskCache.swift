@@ -7,6 +7,7 @@ nonisolated struct EnhancedFrameCacheKey: Codable, Equatable, Hashable, Sendable
     static let schemaVersion = 7
     static let currentHEVCChunkFormatVersion = 6
     static let currentProcessingPipelineVersion = 2
+    static let currentQualitySRProcessingPipelineVersion = 3
     static let currentFrameSelectionPolicyVersion = 1
     static let currentCodecSettingsVersion = 1
 

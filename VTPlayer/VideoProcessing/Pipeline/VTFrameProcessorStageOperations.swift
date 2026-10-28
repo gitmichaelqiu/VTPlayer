@@ -257,7 +257,16 @@ extension VTFrameProcessorCoordinator {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create Quality SR params"])
                 }
-                for try await _ in instance.processor.process(parameters: params) {}
+                // Quality SR has one destination; wait for its completion before using it.
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    instance.processor.process(parameters: params) { _, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
+                    }
+                }
                 previousQualitySource = sourceFP
                 previousQualityOutput = destFP
                 currentBuffer = outBuf1
