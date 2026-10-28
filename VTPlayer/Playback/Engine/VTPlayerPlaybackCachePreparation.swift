@@ -630,6 +630,7 @@ extension VTPlayerViewModel {
             }
             var presentationWindowStart = DispatchTime.now()
             var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
+            var consecutiveFailedWindows = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 guard !Task.isCancelled,
@@ -677,6 +678,7 @@ extension VTPlayerViewModel {
                     passes.description
                 )
                 if passes {
+                    consecutiveFailedWindows = 0
                     self.livePresentationGateValidated = true
                     self.enhancedCachePreparationState = .ready
                     if self.playbackPhase == .monitoringEnhanced ||
@@ -684,6 +686,12 @@ extension VTPlayerViewModel {
                         self.transitionPlayback(to: .playingEnhanced)
                     }
                 } else {
+                    consecutiveFailedWindows += 1
+                    if consecutiveFailedWindows < 2 {
+                        presentationFrameBaseline = totalPresentedFrames
+                        presentationWindowStart = now
+                        continue
+                    }
                     self.enhancedPresentationMonitorTask = nil
                     self.handleEnhancedPresentationFailure(
                         url: url,
