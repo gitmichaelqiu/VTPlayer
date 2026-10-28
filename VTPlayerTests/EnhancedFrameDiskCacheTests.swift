@@ -58,6 +58,23 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertFalse(status.satisfies(coverage: [false, true]))
     }
 
+    func testFullCacheReuseRequiresCompleteTimeline() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("full-timeline")
+        _ = try await cache.prepare(key: key, coverageBitmap: [true, true], diskBudgetBytes: 1_000_000, requiredAdditionalBytes: 0)
+        for index in 0..<2 {
+            let frame = try makeFrame(value: 42, time: CMTime(seconds: Double(index) * 9.5, preferredTimescale: 600), interpolated: false)
+            try await cache.writeGroup([frame], for: index, sourcePresentationTime: frame.presentationTimeStamp)
+        }
+        _ = try await cache.finalizePreparation()
+        let complete = try await cache.completedFullCache(for: key, duration: 10)
+        let truncated = try await cache.completedFullCache(for: key, duration: 100)
+        XCTAssertNotNil(complete)
+        XCTAssertNil(truncated)
+    }
+
     func testRawFrameRoundTripPreservesPixelsTimingAndAttachments() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -255,6 +272,28 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
             for: key
         )
         XCTAssertEqual(nextGroup, 1)
+        let midpoint = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let midpointGroup = try await cache.groupIndex(closestTo: midpoint, for: key)
+        let beforeGroup = try await cache.groupIndex(closestTo: CMTime(seconds: -1, preferredTimescale: 600), for: key)
+        let afterGroup = try await cache.groupIndex(closestTo: CMTime(seconds: 2, preferredTimescale: 600), for: key)
+        XCTAssertEqual(midpointGroup, 0)
+        XCTAssertEqual(beforeGroup, 0)
+        XCTAssertEqual(afterGroup, 1)
+    }
+
+    func testLookupHandlesNonMonotonicSourceTimestamps() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("nonmonotonic-lookup")
+        _ = try await cache.prepare(key: key, coverageBitmap: [false, false, false],
+                                    diskBudgetBytes: 1_000_000, requiredAdditionalBytes: 0)
+        for (index, seconds) in [0.0, 2.0, 1.0].enumerated() {
+            try await cache.recordSourceGroup(index, presentationTime: CMTime(seconds: seconds, preferredTimescale: 600))
+        }
+        _ = try await cache.finalizePreparation()
+        let closest = try await cache.groupIndex(closestTo: CMTime(seconds: 1.1, preferredTimescale: 600), for: key)
+        XCTAssertEqual(closest, 2)
     }
 
     func testEncodedChunkRoundTripsExactTimestampsInterpolationAndColorAttachments() async throws {

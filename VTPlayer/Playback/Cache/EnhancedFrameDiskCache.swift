@@ -152,6 +152,7 @@ actor EnhancedFrameDiskCache {
     private var activePreparationInitialByteCount: Int64 = 0
     private var activeVolumeAvailableAtPreparation: Int64 = .max
     private var completedManifests: [String: Manifest] = [:]
+    private var orderedTimelineKeys: Set<String> = []
     private var activePlaybackCounts: [EnhancedFrameCacheKey: Int] = [:]
     private var invalidatedCacheDirectories: Set<String> = []
 
@@ -551,6 +552,7 @@ actor EnhancedFrameDiskCache {
         self.activePreparationInitialByteCount = 0
         self.activeVolumeAvailableAtPreparation = .max
         completedManifests[manifest.key.directoryName] = manifest
+        updateTimelineOrdering(for: manifest)
         return status(for: manifest)
     }
 
@@ -640,6 +642,18 @@ actor EnhancedFrameDiskCache {
     func encodedChunkIndices(for key: EnhancedFrameCacheKey) throws -> [Int] {
         guard let manifest = try completedManifest(for: key), manifest.key == key else { return [] }
         return manifest.chunks.map(\.chunkIndex)
+    }
+
+    func completedFullCache(for key: EnhancedFrameCacheKey, duration: Double) throws -> EnhancedFrameCacheStatus? {
+        guard duration.isFinite, duration > 0,
+              let manifest = try completedManifest(for: key), manifest.key == key,
+              let first = manifest.groups.first, let last = manifest.groups.last,
+              first.sourcePresentationSeconds <= 1,
+              last.sourcePresentationSeconds >= duration - 1 else { return nil }
+        let result = status(for: manifest)
+        guard !result.coverageBitmap.isEmpty, result.coverageBitmap.allSatisfy({ $0 }),
+              result.missingGroupIndices.isEmpty else { return nil }
+        return result
     }
 
     func readEncodedChunk(
@@ -836,19 +850,59 @@ actor EnhancedFrameDiskCache {
         guard presentationTime.isValid, presentationTime.isNumeric else {
             return manifest.groups.first?.groupIndex
         }
+        if orderedTimelineKeys.contains(key.directoryName) {
+            let index = lowerBound(for: presentationTime, in: manifest.groups)
+            return manifest.groups.indices.contains(index) ? manifest.groups[index].groupIndex : manifest.groups.last?.groupIndex
+        }
         return manifest.groups.first(where: {
             CMTimeCompare($0.sourcePresentationTime, presentationTime) >= 0
-        })?.groupIndex
-            ?? manifest.groups.last?.groupIndex
+        })?.groupIndex ?? manifest.groups.last?.groupIndex
     }
 
     func groupIndex(closestTo presentationTime: CMTime, for key: EnhancedFrameCacheKey) throws -> Int? {
         guard let manifest = try completedManifest(for: key), manifest.key == key else { return nil }
         guard presentationTime.isValid, presentationTime.isNumeric else { return nil }
+        if orderedTimelineKeys.contains(key.directoryName), !manifest.groups.isEmpty {
+            let index = lowerBound(for: presentationTime, in: manifest.groups)
+            if index == 0 { return manifest.groups[0].groupIndex }
+            if index == manifest.groups.count { return manifest.groups[index - 1].groupIndex }
+            let before = manifest.groups[index - 1]
+            let after = manifest.groups[index]
+            let beforeDistance = abs(CMTimeGetSeconds(CMTimeSubtract(before.sourcePresentationTime, presentationTime)))
+            let afterDistance = abs(CMTimeGetSeconds(CMTimeSubtract(after.sourcePresentationTime, presentationTime)))
+            return beforeDistance <= afterDistance ? before.groupIndex : after.groupIndex
+        }
         return manifest.groups.min {
             abs(CMTimeGetSeconds(CMTimeSubtract($0.sourcePresentationTime, presentationTime))) <
                 abs(CMTimeGetSeconds(CMTimeSubtract($1.sourcePresentationTime, presentationTime)))
         }?.groupIndex
+    }
+
+    private func updateTimelineOrdering(for manifest: Manifest) {
+        let groups = manifest.groups
+        let ordered = groups.allSatisfy { $0.sourcePresentationTime.isValid && $0.sourcePresentationTime.isNumeric } &&
+            zip(groups, groups.dropFirst()).allSatisfy {
+                CMTimeCompare($0.sourcePresentationTime, $1.sourcePresentationTime) < 0
+            }
+        if ordered {
+            orderedTimelineKeys.insert(manifest.key.directoryName)
+        } else {
+            orderedTimelineKeys.remove(manifest.key.directoryName)
+        }
+    }
+
+    private func lowerBound(for time: CMTime, in groups: [GroupEntry]) -> Int {
+        var low = 0
+        var high = groups.count
+        while low < high {
+            let middle = low + (high - low) / 2
+            if CMTimeCompare(groups[middle].sourcePresentationTime, time) < 0 {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        return low
     }
 
     private func directory(for key: EnhancedFrameCacheKey) -> URL {
@@ -888,6 +942,7 @@ actor EnhancedFrameDiskCache {
             return nil
         }
         completedManifests[directoryName] = manifest
+        updateTimelineOrdering(for: manifest)
         return manifest
     }
 

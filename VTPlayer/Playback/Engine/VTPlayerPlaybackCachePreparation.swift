@@ -269,6 +269,53 @@ extension VTPlayerViewModel {
             let sourceRate = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30
             let preparer = EnhancedFrameCachePreparer(diskCache: self.enhancedFrameDiskCache)
             do {
+                #if os(macOS)
+                let screenRate = self.renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+                let cacheDisplayRate = min(120, max(1, screenRate > 0 ? screenRate : 120))
+                if let cached = try await preparer.reusableFullCache(
+                    url: url, sourceFramesPerSecond: sourceRate, displayTargetFrameRate: cacheDisplayRate,
+                    configuration: candidate, duration: self.duration
+                ) {
+                    guard !Task.isCancelled,
+                          self.enhancedCachePreparationGeneration == preparationGeneration,
+                          self.videoURL == url,
+                          preservesDraft || self.draftPipelineConfiguration == candidate else { return }
+                    self.preparedEnhancedFrameCacheKey = cached.key
+                    self.preparedEnhancedFrameCacheMode = .full
+                    self.enhancedCacheCoveragePercent = 100
+                    self.appliedPipelineConfiguration = candidate
+                    self.appliedSharpness = self.sharpness
+                    self.appliedHDRStrength = self.hdrStrength
+                    self.appliedHDRColorfulness = self.hdrColorfulness
+                    self.applyActiveRendererSettings()
+                    self.persistedPipelineConfiguration = candidate
+                    self.persistedSharpness = self.sharpness
+                    self.persistedHDRStrength = self.hdrStrength
+                    self.persistedHDRColorfulness = self.hdrColorfulness
+                    self.enhancedCachePreparationState = .ready
+                    self.nativeFallbackActive = false
+                    self.liveFallbackPreviousConfiguration = previousConfiguration
+                    self.liveFallbackCandidateConfiguration = candidate
+                    let shouldResume = self.enhancementTransactionWasPlaying
+                    self.liveFallbackWasPlaying = shouldResume
+                    self.livePresentationGateValidated = false
+                    if self.enhancementTransactionReachedEnd {
+                        self.isPlaying = false
+                        self.isPaused = true
+                        self.transitionPlayback(to: .ended)
+                        self.enhancementTransactionReachedEnd = false
+                    } else if shouldResume {
+                        self.resumeAfterApplyingEnhancements(wasPlaying: true)
+                    } else {
+                        self.prepareEnhancedPlaybackWhilePaused()
+                    }
+                    if shouldResume {
+                        self.startEnhancedPresentationGateMonitor(url: url, candidate: candidate,
+                                                                  preparationGeneration: preparationGeneration)
+                    }
+                    return
+                }
+                #endif
                 let benchmark: EnhancedPipelineBenchmark
                 if let benchmarkOverride {
                     benchmark = benchmarkOverride

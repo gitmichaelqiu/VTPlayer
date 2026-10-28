@@ -53,6 +53,24 @@ actor EnhancedFrameCachePreparer {
         self.diskCache = diskCache
     }
 
+    func reusableFullCache(url: URL, sourceFramesPerSecond: Double, displayTargetFrameRate: Int,
+                           configuration: AppliedPipelineConfiguration, duration: Double) async throws -> EnhancedFrameCacheStatus? {
+        let fingerprint = try EnhancedFrameDiskCache.sourceFingerprint(for: url)
+        let outputRate = min(Double(max(1, displayTargetFrameRate)),
+                             sourceFramesPerSecond * Double(max(1, configuration.frameInterpolationLevel)))
+        let key = EnhancedFrameCacheKey(
+            sourceFingerprint: fingerprint, configuration: configuration,
+            cacheFormatVersion: EnhancedFrameCacheKey.currentHEVCChunkFormatVersion,
+            displayTargetFrameRate: Int(outputRate.rounded()),
+            processingPipelineVersion: configuration.qualitySuperResolutionScaleFactor > 0
+                ? EnhancedFrameCacheKey.currentQualitySRProcessingPipelineVersion
+                : EnhancedFrameCacheKey.currentProcessingPipelineVersion,
+            frameSelectionPolicyVersion: EnhancedFrameCacheKey.currentFrameSelectionPolicyVersion,
+            codecSettingsVersion: EnhancedFrameCacheKey.currentCodecSettingsVersion
+        )
+        return try await diskCache.completedFullCache(for: key, duration: duration)
+    }
+
     func benchmark(
         url: URL,
         width: Int,
@@ -172,7 +190,14 @@ actor EnhancedFrameCachePreparer {
         )
         let preparationIdentifier = UUID()
         let coverage = plan.coverageBitmap
-        let priorCacheStatus = try await diskCache.cachedStatus(for: key)
+        var priorCacheStatus = try await diskCache.cachedStatus(for: key)
+        if usesEncodedChunks, priorCacheStatus != nil {
+            let duration = try await AVURLAsset(url: url).load(.duration).seconds
+            if try await diskCache.completedFullCache(for: key, duration: duration) == nil {
+                try await diskCache.invalidateCache(for: key)
+                priorCacheStatus = nil
+            }
+        }
         if let cached = priorCacheStatus,
            cached.satisfies(coverage: coverage) {
             return EnhancedFrameCachePreparationResult(
