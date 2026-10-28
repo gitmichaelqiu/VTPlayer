@@ -81,6 +81,10 @@ struct MacDedicatedPresentationPolicy {
 }
 
 struct EnhancedPresentationGate {
+    nonisolated static func canUseProcessedFrameCache(for configuration: AppliedPipelineConfiguration) -> Bool {
+        configuration != .disabled
+    }
+
     /// The display rate is an upper bound, not a requirement that every
     /// refresh interval present a unique video frame. Keep modest scheduling
     /// jitter from interrupting playback; substantially under-rate output

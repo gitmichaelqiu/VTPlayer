@@ -686,6 +686,11 @@ extension VTPlayerViewModel {
                         self.transitionPlayback(to: .playingEnhanced)
                     }
                 } else {
+                    if !EnhancedPresentationGate.canUseProcessedFrameCache(for: candidate) {
+                        presentationFrameBaseline = totalPresentedFrames
+                        presentationWindowStart = now
+                        continue
+                    }
                     consecutiveFailedWindows += 1
                     if consecutiveFailedWindows < 2 {
                         presentationFrameBaseline = totalPresentedFrames
@@ -751,7 +756,8 @@ extension VTPlayerViewModel {
               !isPaused,
               candidate == appliedPipelineConfiguration else { return }
 
-        guard preparedEnhancedFrameCacheMode == .full else {
+        guard preparedEnhancedFrameCacheMode == .full ||
+                !EnhancedPresentationGate.canUseProcessedFrameCache(for: candidate) else {
             fallbackToFullCacheAfterPresentationFailure()
             return
         }
@@ -780,7 +786,9 @@ extension VTPlayerViewModel {
         } else {
             performanceDetail = "\(reason) "
         }
-        let notice = performanceDetail + "Continuing with the original video; your prepared cache is kept."
+        let notice = performanceDetail + (preparedEnhancedFrameCacheMode == .full
+            ? "Continuing with the original video; your prepared cache is kept."
+            : "Continuing with the original video.")
         clearPlaybackIssue()
         showPlaybackNotice(notice)
 

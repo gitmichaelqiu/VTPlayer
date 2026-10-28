@@ -474,6 +474,13 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         ))
     }
 
+    func testRendererOnlyPlaybackDoesNotUseProcessedFrameCache() {
+        XCTAssertFalse(EnhancedPresentationGate.canUseProcessedFrameCache(for: .disabled))
+        var denoise = AppliedPipelineConfiguration.disabled
+        denoise.denoiseStrength = 0.5
+        XCTAssertTrue(EnhancedPresentationGate.canUseProcessedFrameCache(for: denoise))
+    }
+
     @MainActor
     func testVideoIdentityKeysDoNotCollideForSameFilename() {
         let first = URL(fileURLWithPath: "/tmp/one/video.mp4")

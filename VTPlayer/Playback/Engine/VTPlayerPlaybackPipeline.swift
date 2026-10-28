@@ -78,6 +78,13 @@ extension VTPlayerViewModel {
         let pipelineWidth = videoWidth
         let pipelineHeight = videoHeight
         let configuration = appliedPipelineConfiguration
+        #if os(macOS)
+        if configuration == .disabled {
+            preparedEnhancedFrameCacheKey = nil
+            preparedEnhancedFrameCacheMode = nil
+            enhancedCacheCoveragePercent = 0
+        }
+        #endif
         let preparedFrameCacheKey = preparedEnhancedFrameCacheKey
         let preparedFrameCacheMode = preparedEnhancedFrameCacheMode
         #if os(macOS)
