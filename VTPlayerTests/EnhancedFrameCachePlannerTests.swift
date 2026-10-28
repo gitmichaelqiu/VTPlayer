@@ -4,7 +4,7 @@ import AVFoundation
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
     @MainActor
-    func testMacOSDraftDoesNotChangeAppliedPipelineUntilApply() {
+    func testMacOSPipelineSettingsApplyAfterDebounce() async throws {
         let viewModel = VTPlayerViewModel()
         let original = viewModel.appliedPipelineConfiguration
         viewModel.availableSuperResolutionScales = [1.5]
@@ -17,9 +17,11 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         #if os(macOS)
         XCTAssertTrue(viewModel.hasUnappliedPipelineChanges)
         XCTAssertEqual(viewModel.appliedPipelineConfiguration, original)
+        try await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
+        #else
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration, viewModel.draftPipelineConfiguration)
         #endif
-
-        viewModel.applyPipelineEnhancements()
 
         XCTAssertEqual(
             viewModel.appliedPipelineConfiguration,
@@ -31,24 +33,6 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
                 motionBlurStrength: 0
             )
         )
-    }
-
-    @MainActor
-    func testMacOSTransportApplyActionReplacesPlayForEveryTransportState() {
-        let viewModel = VTPlayerViewModel()
-        viewModel.availableSuperResolutionScales = [1.5]
-        viewModel.superResolutionLevel = 1.5
-
-        #if os(macOS)
-        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
-
-        viewModel.isPlaying = true
-        viewModel.isPaused = false
-        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
-
-        viewModel.isPaused = true
-        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
-        #endif
     }
 
     @MainActor
@@ -96,7 +80,7 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
     }
 
     @MainActor
-    func testMacOSRendererEnhancementsAreStagedUntilApplyOrRevert() {
+    func testMacOSRendererEnhancementsApplyImmediately() {
         #if os(macOS)
         let viewModel = VTPlayerViewModel()
         viewModel.sharpness = 0.8
@@ -104,35 +88,99 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         viewModel.hdrColorfulness = 0.2
         viewModel.updateEnhancements()
 
-        XCTAssertTrue(viewModel.hasUnappliedPipelineChanges)
-        XCTAssertEqual(viewModel.appliedSharpness, 0)
-        XCTAssertEqual(viewModel.appliedHDRStrength, 0)
-        XCTAssertEqual(viewModel.appliedHDRColorfulness, 0)
-
-        viewModel.dismissPendingEnhancementChanges()
-        XCTAssertEqual(viewModel.sharpness, 0)
-        XCTAssertEqual(viewModel.hdrStrength, 0)
-        XCTAssertEqual(viewModel.hdrColorfulness, 0)
-        XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
-
-        viewModel.sharpness = 0.6
-        viewModel.hdrStrength = 0.3
-        viewModel.hdrColorfulness = 0.1
-        viewModel.applyPipelineEnhancements()
-        XCTAssertEqual(viewModel.appliedSharpness, 0.6)
-        XCTAssertEqual(viewModel.appliedHDRStrength, 0.3)
-        XCTAssertEqual(viewModel.appliedHDRColorfulness, 0.1)
+        XCTAssertEqual(viewModel.appliedSharpness, 0.8)
+        XCTAssertEqual(viewModel.appliedHDRStrength, 0.4)
+        XCTAssertEqual(viewModel.appliedHDRColorfulness, 0.2)
         XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
         #endif
     }
 
     @MainActor
-    func testMacOSSavedPipelineSettingsRequireInitialApply() {
+    func testMacOSSharpnessAloneUsesEnhancedPresentation() {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        viewModel.sharpness = 0.5
+        viewModel.updateRendererEnhancements()
+        XCTAssertTrue(viewModel.isPipelineActive)
+        viewModel.sharpness = 0
+        viewModel.updateRendererEnhancements()
+        XCTAssertFalse(viewModel.isPipelineActive)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSRendererChangesPreserveCachePreparation() {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        let preparingState = EnhancedCachePreparationState.preparing(
+            progress: 0.5,
+            bytesWritten: 10,
+            estimatedTotalBytes: 20,
+            estimatedRemainingSeconds: 1
+        )
+        viewModel.enhancedCachePreparationState = preparingState
+        viewModel.enhancementTransactionPreviousSharpness = 0.1
+        viewModel.sharpness = 0.7
+        viewModel.hdrStrength = 0.4
+        viewModel.hdrColorfulness = 0.3
+
+        viewModel.updateRendererEnhancements()
+
+        XCTAssertEqual(viewModel.enhancedCachePreparationState, preparingState)
+        XCTAssertEqual(viewModel.appliedSharpness, 0.7)
+        XCTAssertEqual(viewModel.appliedHDRStrength, 0.4)
+        XCTAssertEqual(viewModel.appliedHDRColorfulness, 0.3)
+        XCTAssertEqual(viewModel.enhancementTransactionPreviousSharpness, 0.7)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSDebounceAppliesOnlyLatestPipelineSelection() async throws {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        viewModel.availableSuperResolutionScales = [1.5, 2]
+        viewModel.superResolutionLevel = 1.5
+        viewModel.updateEnhancements()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        viewModel.superResolutionLevel = 2
+        viewModel.updateEnhancements()
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration.superResolutionLevel, 2)
+        XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSStopCancelsPendingEnhancementApply() async throws {
+        #if os(macOS)
+        let viewModel = VTPlayerViewModel()
+        let url = URL(fileURLWithPath: "/tmp/VTPlayerPendingSettings.mov")
+        let key = VTPlayerViewModel.videoSettingsKey(for: url)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        viewModel.videoURL = url
+        viewModel.availableSuperResolutionScales = [1.5]
+        viewModel.superResolutionLevel = 1.5
+        viewModel.updateEnhancements()
+
+        viewModel.stop()
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration, .disabled)
+        XCTAssertEqual((UserDefaults.standard.dictionary(forKey: key)?["superResolutionLevel"] as? NSNumber)?.floatValue, 1.5)
+        #endif
+    }
+
+    @MainActor
+    func testMacOSSavedPipelineSettingsApplyAutomatically() async throws {
         #if os(macOS)
         let viewModel = VTPlayerViewModel()
         let url = URL(fileURLWithPath: "/tmp/VTPlayerSavedPipelineSettings.mov")
-        let key = VTPlayerViewModel.videoSettingsKey(for: url.lastPathComponent)
+        let key = VTPlayerViewModel.videoSettingsKey(for: url)
         defer { UserDefaults.standard.removeObject(forKey: key) }
+        viewModel.availableSuperResolutionScales = [1.5]
+        viewModel.frameInterpolationIsSupported = true
         UserDefaults.standard.set([
             "superResolutionLevel": 1.5,
             "frameInterpolationLevel": 2,
@@ -142,10 +190,12 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         ], forKey: key)
 
         viewModel.loadVideoSettings(for: url)
+        viewModel.updateEnhancements()
+        try await Task.sleep(nanoseconds: 400_000_000)
 
-        XCTAssertEqual(viewModel.appliedPipelineConfiguration, .disabled)
-        XCTAssertTrue(viewModel.hasUnappliedPipelineChanges)
-        XCTAssertTrue(viewModel.shouldShowTransportApplyAction)
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration.superResolutionLevel, 1.5)
+        XCTAssertEqual(viewModel.appliedPipelineConfiguration.frameInterpolationLevel, 2)
+        XCTAssertFalse(viewModel.hasUnappliedPipelineChanges)
         #endif
     }
 

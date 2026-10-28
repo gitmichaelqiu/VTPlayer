@@ -180,8 +180,6 @@ struct VTPlayerView: View {
         .overlay(alignment: .topTrailing) {
             if viewModel.isPreparingEnhancedCache {
                 enhancedCachePreparationIndicator
-            } else if viewModel.enhancedCachePreparationState == .monitoring {
-                livePresentationMonitoringIndicator
             }
         }
         #endif

@@ -308,13 +308,13 @@ extension VTPlayerViewModel {
                         }
                     }
                     
-                    // Restore per-video enhancement settings. On macOS these
-                    // values are intentionally a draft until the user presses
-                    // the explicit Apply action.
+                    // Restore and automatically apply per-video enhancement
+                    // settings after the new player item is ready.
                     self.loadVideoSettings(for: url)
                     self.validateEnhancementSelections()
                     #if os(macOS)
                     self.setNativeVideoEnabled(!self.isPipelineActive)
+                    self.updateEnhancements()
                     #endif
 
                     let savedProgress = self.savedProgress(for: url) ?? 0

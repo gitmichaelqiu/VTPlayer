@@ -9,6 +9,16 @@ import MediaPlayer
 
 extension VTPlayerViewModel {
     func stop() {
+        #if os(macOS)
+        if enhancementApplyTask != nil {
+            persistedPipelineConfiguration = draftPipelineConfiguration
+            persistedSharpness = sharpness
+            persistedHDRStrength = hdrStrength
+            persistedHDRColorfulness = hdrColorfulness
+        }
+        enhancementApplyTask?.cancel()
+        enhancementApplyTask = nil
+        #endif
         cancelEnhancedCachePreparation(restorePreviousPlayback: false)
         stopEnhancedAudioPlayback()
         inactivityTask?.cancel()

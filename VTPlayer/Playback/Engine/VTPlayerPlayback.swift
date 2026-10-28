@@ -20,19 +20,58 @@ extension VTPlayerViewModel {
     func updateEnhancements() {
         validateEnhancementSelections()
         #if os(macOS)
-        // Live-presentation monitoring measures the active configuration, not
-        // the independently editable draft. Let that short gate finish while
-        // the user chooses a possible next configuration.
-        if enhancedPresentationMonitorTask != nil {
+        // Renderer adjustments have no setup cost, so reflect them as soon as
+        // the control changes. Pipeline settings wait briefly for slider edits
+        // to settle, then apply only the latest selection.
+        if draftPipelineConfiguration == appliedPipelineConfiguration {
+            enhancementApplyTask?.cancel()
+            enhancementApplyTask = nil
+            cancelEnhancedCachePreparation()
+            applyPipelineEnhancements()
             return
         }
+
+        // A preparation belongs to the previous selection. Cancel it now so
+        // users can keep editing and no stale cache can become active.
         cancelEnhancedCachePreparation()
+        updateRendererEnhancements()
+        enhancementApplyTask?.cancel()
+        enhancementApplyTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.enhancementApplyTask = nil
+            self.applyPipelineEnhancements()
+        }
         return
         #else
         appliedPipelineConfiguration = draftPipelineConfiguration
         restartAppliedEnhancements()
         #endif
     }
+
+    #if os(macOS)
+    func updateRendererEnhancements() {
+        let wasPipelineActive = isPipelineActive
+        appliedSharpness = sharpness
+        appliedHDRStrength = hdrStrength
+        appliedHDRColorfulness = hdrColorfulness
+        persistedSharpness = sharpness
+        persistedHDRStrength = hdrStrength
+        persistedHDRColorfulness = hdrColorfulness
+        enhancementTransactionPreviousSharpness = sharpness
+        enhancementTransactionPreviousHDRStrength = hdrStrength
+        enhancementTransactionPreviousHDRColorfulness = hdrColorfulness
+        applyActiveRendererSettings()
+
+        guard wasPipelineActive != isPipelineActive else { return }
+        restartAppliedEnhancements()
+        saveVideoSettings()
+    }
+    #endif
 
     /// Updates the active processor configuration without changing playback state.
     func restartAppliedEnhancements() {

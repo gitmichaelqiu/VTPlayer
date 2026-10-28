@@ -39,7 +39,7 @@ extension VTPlayerViewModel {
             previousConfiguration.frameInterpolationLevel > 0 ||
             previousConfiguration.denoiseStrength > 0 ||
             previousConfiguration.motionBlurStrength > 0 ||
-            previousHDRStrength > 0
+            previousHDRStrength > 0 || previousSharpness > 0
         if enhancementTransactionReachedEnd {
             isPlaying = false
             isPaused = true
@@ -122,7 +122,7 @@ extension VTPlayerViewModel {
             candidate.frameInterpolationLevel > 0 ||
             candidate.denoiseStrength > 0 ||
             candidate.motionBlurStrength > 0 ||
-            candidateHDRStrength > 0
+            candidateHDRStrength > 0 || candidateSharpness > 0
         guard let url = videoURL, videoWidth > 0, videoHeight > 0 else {
             appliedPipelineConfiguration = candidate
             appliedSharpness = candidateSharpness
@@ -264,12 +264,7 @@ extension VTPlayerViewModel {
             }
             guard self.enhancedCachePreparationGeneration == preparationGeneration,
                   self.videoURL == url,
-                  preservesDraft || (
-                    self.draftPipelineConfiguration == candidate &&
-                    abs(self.sharpness - candidateSharpness) <= 0.0001 &&
-                    abs(self.hdrStrength - candidateHDRStrength) <= 0.0001 &&
-                    abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
-                  ) else { return }
+                  preservesDraft || self.draftPipelineConfiguration == candidate else { return }
 
             let sourceRate = self.sourceFrameRate > 0 ? self.sourceFrameRate : 30
             let preparer = EnhancedFrameCachePreparer(diskCache: self.enhancedFrameDiskCache)
@@ -291,12 +286,7 @@ extension VTPlayerViewModel {
                 }
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
                       self.videoURL == url,
-                      preservesDraft || (
-                        self.draftPipelineConfiguration == candidate &&
-                        abs(self.sharpness - candidateSharpness) <= 0.0001 &&
-                        abs(self.hdrStrength - candidateHDRStrength) <= 0.0001 &&
-                        abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
-                      ) else { return }
+                      preservesDraft || self.draftPipelineConfiguration == candidate else { return }
 
                 self.liveFallbackBenchmark = benchmark
                 self.liveFallbackBenchmarkURL = url
@@ -350,16 +340,16 @@ extension VTPlayerViewModel {
                     self.preparedEnhancedFrameCacheMode = nil
                     self.enhancedCacheCoveragePercent = 0
                     self.appliedPipelineConfiguration = candidate
-                    self.appliedSharpness = candidateSharpness
-                    self.appliedHDRStrength = candidateHDRStrength
-                    self.appliedHDRColorfulness = candidateHDRColorfulness
+                    self.appliedSharpness = self.sharpness
+                    self.appliedHDRStrength = self.hdrStrength
+                    self.appliedHDRColorfulness = self.hdrColorfulness
                     self.applyActiveRendererSettings()
                     self.enhancedCachePreparationState = .ready
                     self.nativeFallbackActive = false
                     self.persistedPipelineConfiguration = candidate
-                    self.persistedSharpness = candidateSharpness
-                    self.persistedHDRStrength = candidateHDRStrength
-                    self.persistedHDRColorfulness = candidateHDRColorfulness
+                    self.persistedSharpness = self.sharpness
+                    self.persistedHDRStrength = self.hdrStrength
+                    self.persistedHDRColorfulness = self.hdrColorfulness
                     self.liveFallbackPreviousConfiguration = previousConfiguration
                     self.liveFallbackCandidateConfiguration = candidate
                     let shouldResume = self.enhancementTransactionWasPlaying
@@ -446,26 +436,21 @@ extension VTPlayerViewModel {
                 }
                 guard self.enhancedCachePreparationGeneration == preparationGeneration,
                       self.videoURL == url,
-                      preservesDraft || (
-                        self.draftPipelineConfiguration == candidate &&
-                        abs(self.sharpness - candidateSharpness) <= 0.0001 &&
-                        abs(self.hdrStrength - candidateHDRStrength) <= 0.0001 &&
-                        abs(self.hdrColorfulness - candidateHDRColorfulness) <= 0.0001
-                      ) else { return }
+                      preservesDraft || self.draftPipelineConfiguration == candidate else { return }
                 self.preparedEnhancedFrameCacheKey = result.key
                 self.preparedEnhancedFrameCacheMode = result.mode
                 self.enhancedCacheCoveragePercent = result.status.coverageBitmap.isEmpty
                     ? 0
                     : Int((Double(result.status.coverageBitmap.filter { $0 }.count) / Double(result.status.coverageBitmap.count) * 100).rounded())
                 self.appliedPipelineConfiguration = candidate
-                self.appliedSharpness = candidateSharpness
-                self.appliedHDRStrength = candidateHDRStrength
-                self.appliedHDRColorfulness = candidateHDRColorfulness
+                self.appliedSharpness = self.sharpness
+                self.appliedHDRStrength = self.hdrStrength
+                self.appliedHDRColorfulness = self.hdrColorfulness
                 self.applyActiveRendererSettings()
                 self.persistedPipelineConfiguration = candidate
-                self.persistedSharpness = candidateSharpness
-                self.persistedHDRStrength = candidateHDRStrength
-                self.persistedHDRColorfulness = candidateHDRColorfulness
+                self.persistedSharpness = self.sharpness
+                self.persistedHDRStrength = self.hdrStrength
+                self.persistedHDRColorfulness = self.hdrColorfulness
                 self.enhancedCachePreparationState = .ready
                 self.nativeFallbackActive = false
                 self.liveFallbackPreviousConfiguration = previousConfiguration
@@ -500,9 +485,9 @@ extension VTPlayerViewModel {
                 if self.enhancedCachePreparationGeneration == preparationGeneration {
                     self.enhancedCachePreparationState = .idle
                     self.appliedPipelineConfiguration = previousConfiguration
-                    self.appliedSharpness = previousSharpness
-                    self.appliedHDRStrength = previousHDRStrength
-                    self.appliedHDRColorfulness = previousHDRColorfulness
+                    self.appliedSharpness = self.enhancementTransactionPreviousSharpness
+                    self.appliedHDRStrength = self.enhancementTransactionPreviousHDRStrength
+                    self.appliedHDRColorfulness = self.enhancementTransactionPreviousHDRColorfulness
                     self.applyActiveRendererSettings()
                     self.nativeFallbackActive = false
                     let shouldResume = self.enhancementTransactionWasPlaying
@@ -514,7 +499,7 @@ extension VTPlayerViewModel {
                     } else if shouldResume {
                         self.isPlaying = true
                         self.isPaused = false
-                        if !wasPipelineActive {
+                        if !self.isPipelineActive {
                             self.setNativeVideoEnabled(true)
                             self.transitionPlayback(to: .playingNative)
                             self.player?.play()
@@ -531,7 +516,7 @@ extension VTPlayerViewModel {
                             previousConfiguration.frameInterpolationLevel > 0 ||
                             previousConfiguration.denoiseStrength > 0 ||
                             previousConfiguration.motionBlurStrength > 0 ||
-                            previousHDRStrength > 0
+                            self.appliedHDRStrength > 0 || self.appliedSharpness > 0
                         self.transitionPlayback(to: previousPipelineWasActive ? .paused : .readyPaused)
                     }
                 }
@@ -544,9 +529,9 @@ extension VTPlayerViewModel {
                     self.enhancedAudioPlayer?.pause()
                     self.setNativeVideoEnabled(true)
                     self.appliedPipelineConfiguration = previousConfiguration
-                    self.appliedSharpness = previousSharpness
-                    self.appliedHDRStrength = previousHDRStrength
-                    self.appliedHDRColorfulness = previousHDRColorfulness
+                    self.appliedSharpness = self.enhancementTransactionPreviousSharpness
+                    self.appliedHDRStrength = self.enhancementTransactionPreviousHDRStrength
+                    self.appliedHDRColorfulness = self.enhancementTransactionPreviousHDRColorfulness
                     self.applyActiveRendererSettings()
                     self.nativeFallbackActive = true
                     self.isPlaying = false

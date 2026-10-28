@@ -103,8 +103,6 @@ extension VTPlayerView {
             GeometryReader { proxy in
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(spacing: 8) {
-                pendingEnhancementControls
-
                 // Super Resolution Popover
                 Button {
                     showSuperResolutionPopover.toggle()
@@ -218,15 +216,11 @@ extension VTPlayerView {
                                 get: { Double(viewModel.motionBlurStrength) },
                                 set: { newValue in
                                     withAnimation(.snappy(duration: 0.18)) { viewModel.motionBlurStrength = Int(newValue) }
+                                    viewModel.updateEnhancements()
                                 }
                             ),
                             in: 0...100,
-                            step: 5,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    viewModel.updateEnhancements()
-                                }
-                            }
+                            step: 5
                         )
                     }
                     .padding(16)
@@ -257,15 +251,11 @@ extension VTPlayerView {
                                 get: { viewModel.denoiseStrength },
                                 set: { newValue in
                                     withAnimation(.snappy(duration: 0.18)) { viewModel.denoiseStrength = newValue }
+                                    viewModel.updateEnhancements()
                                 }
                             ),
                             in: 0...1,
-                            step: 0.05,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    viewModel.updateEnhancements()
-                                }
-                            }
+                            step: 0.05
                         )
                     }
                     .padding(16)
@@ -298,7 +288,10 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
                             Slider(value: Binding(
                                 get: { viewModel.sharpness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue } }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue }
+                                    viewModel.updateRendererEnhancements()
+                                }
                             ), in: 0...2, step: 0.05)
                         }
 
@@ -309,7 +302,10 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
                             Slider(value: Binding(
                                 get: { viewModel.hdrStrength },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue } }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue }
+                                    viewModel.updateRendererEnhancements()
+                                }
                             ), in: 0...2, step: 0.05)
                         }
 
@@ -320,7 +316,10 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
                             Slider(value: Binding(
                                 get: { viewModel.hdrColorfulness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue } }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue }
+                                    viewModel.updateRendererEnhancements()
+                                }
                             ), in: 0...1, step: 0.05)
                                 .disabled(viewModel.hdrStrength <= 0)
                         }
@@ -333,7 +332,6 @@ extension VTPlayerView {
                     }
                     .frame(minWidth: proxy.size.width, alignment: .leading)
                 }
-                .disabled(viewModel.isPreparingEnhancedCache)
             }
             .frame(height: 30)
         }

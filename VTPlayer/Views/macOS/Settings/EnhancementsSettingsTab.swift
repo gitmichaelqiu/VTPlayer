@@ -24,32 +24,11 @@ struct EnhancementsSettingsTab: View {
                    viewModel.videoURL != nil {
                     SettingsSection("Current Video") {
                         VStack(alignment: .leading, spacing: 10) {
-                            Label(
-                                viewModel.hasUnappliedPipelineChanges
-                                    ? "Enhancement changes are not applied"
-                                    : "Applied settings for this video",
-                                systemImage: viewModel.hasUnappliedPipelineChanges
-                                    ? "circle.dotted"
-                                    : "checkmark.circle"
-                            )
-                            .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
-
-                            LabeledContent("Selected settings", value: viewModel.draftEnhancementSummary)
+                            LabeledContent("Current video", value: viewModel.draftEnhancementSummary)
                                 .font(.caption)
-                            if viewModel.hasUnappliedPipelineChanges {
-                                LabeledContent("Currently in use", value: viewModel.appliedEnhancementSummary)
-                                    .font(.caption)
-                                Text(viewModel.draftPipelineConfiguration == viewModel.appliedPipelineConfiguration &&
-                                     !viewModel.forceFullCachePreparation
-                                     ? "Apply these image adjustments in the player, then press Play separately. The frame cache is unchanged."
-                                     : "Apply these settings in the player, then press Play separately. The original video stays available while VTPlayer prepares enhanced playback.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("Settings are ready. Press Play to start. VTPlayer checks smoothness and prepares a cache automatically if needed.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("Enhancement changes apply automatically.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }

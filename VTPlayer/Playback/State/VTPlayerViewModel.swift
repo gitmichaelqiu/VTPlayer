@@ -206,8 +206,7 @@ final class VTPlayerViewModel {
     }
     var denoiseStrength: Double = 0.0  // 0.0=off, 0.0-1.0
     var qualityPrioritization: Int = 1  // 1=normal, 2=quality
-    /// macOS edits these controls as a draft. The processor only reads the
-    /// applied value, keeping playback stable until the user confirms Apply.
+    /// The processor uses the applied configuration while edits settle or prepare.
     var appliedPipelineConfiguration = AppliedPipelineConfiguration.disabled
     var enhancedCachePreparationState: EnhancedCachePreparationState = .idle
 
@@ -232,6 +231,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var preparedEnhancedFrameCacheKey: EnhancedFrameCacheKey?
     @ObservationIgnored var preparedEnhancedFrameCacheMode: EnhancedCachePlaybackMode?
     @ObservationIgnored var enhancedCachePreparationTask: Task<Void, Never>?
+    @ObservationIgnored var enhancementApplyTask: Task<Void, Never>?
     @ObservationIgnored var enhancedCachePreparationGeneration: UInt64 = 0
     @ObservationIgnored var dedicatedPresentationFallbackURL: URL?
     @ObservationIgnored var dedicatedPresentationFallbackConfiguration: AppliedPipelineConfiguration?
@@ -273,7 +273,7 @@ final class VTPlayerViewModel {
         #if os(macOS) || os(iOS)
         #if os(macOS)
         if nativeFallbackActive { return false }
-        let hdrIsActive = appliedHDRStrength > 0
+        let hdrIsActive = appliedHDRStrength > 0 || appliedSharpness > 0
         #else
         let hdrIsActive = hdrStrength > 0
         #endif

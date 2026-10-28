@@ -212,9 +212,7 @@ extension VTPlayerViewModel {
         persistedSharpness = sharpness
         persistedHDRStrength = hdrStrength
         persistedHDRColorfulness = hdrColorfulness
-        // Saved processor settings are intentionally restored as a draft.
-        // The first transport action therefore prepares the exact cache
-        // before enhanced presentation begins.
+        // Restore the saved selection after the new player's capabilities load.
         appliedPipelineConfiguration = .disabled
         appliedSharpness = 0
         appliedHDRStrength = 0

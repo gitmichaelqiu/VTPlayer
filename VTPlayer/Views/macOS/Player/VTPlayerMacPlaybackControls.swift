@@ -42,14 +42,11 @@ extension VTPlayerView {
         if viewModel.isPlaying && !viewModel.isPaused {
             return "Pause playback"
         }
-        if viewModel.isPreparingEnhancedCache && viewModel.enhancedCachePreparationState != .prerolling {
-            return "Watch the original video during setup; VTPlayer switches to enhanced playback when ready"
-        }
-        if viewModel.hasUnappliedPipelineChanges {
-            return "Start playback with the applied settings. Apply pending changes in Enhancements first to use them."
+        if viewModel.isPreparingEnhancedCache {
+            return "Enhanced playback is preparing. You can keep watching while it finishes."
         }
         return viewModel.isPipelineActive
-            ? "Start enhanced playback. VTPlayer verifies on-screen playback and prepares a cache automatically only if live presentation misses the target."
+            ? "Start enhanced playback"
             : "Play video with native presentation"
     }
 
@@ -58,7 +55,7 @@ extension VTPlayerView {
         let status = playbackStatusText
         Text(status)
             .font(.caption.weight(.medium))
-            .foregroundStyle(viewModel.hasUnappliedPipelineChanges ? .orange : .secondary)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
             .frame(maxWidth: 220, alignment: .leading)
             .accessibilityLabel("Playback status: \(status)")
@@ -105,19 +102,6 @@ extension VTPlayerView {
     }
 
     private var playbackStatusText: String {
-        let isPlaying = viewModel.isPlaying && !viewModel.isPaused
-        if viewModel.hasUnappliedPipelineChanges {
-            let currentPlayback: String
-            if isPlaying {
-                currentPlayback = viewModel.isPipelineActive ? "Playing · Enhanced" : "Playing · Native"
-            } else if viewModel.isPlaying {
-                currentPlayback = viewModel.isPipelineActive ? "Paused · Enhanced" : "Paused · Native"
-            } else {
-                currentPlayback = viewModel.isPipelineActive ? "Enhanced selected" : "Ready · paused"
-            }
-            return "\(currentPlayback) · settings not applied"
-        }
-
         switch viewModel.playbackPhase {
         case .empty:
             return "No video"
@@ -128,56 +112,21 @@ extension VTPlayerView {
         case .playingNative:
             return "Playing · Native"
         case .benchmarking:
-            return isPlaying ? "Checking settings · video continues" : "Checking settings · press Play to watch"
+            return "Preparing enhancements…"
         case .prerollingEnhanced:
             return "Starting enhanced playback…"
         case .monitoringEnhanced:
-            return "Enhanced · verifying display"
+            return "Checking enhanced playback…"
         case .preparingCache:
-            return isPlaying ? "Preparing playback · video continues" : "Preparing playback · press Play to watch"
+            return "Preparing enhanced playback…"
         case .playingEnhanced:
             return "Playing · Enhanced"
         case .paused:
-            if viewModel.isPipelineActive {
-                return viewModel.isPlaying ? "Paused · Enhanced" : "Enhanced playback ready · press Play"
-            }
-            return viewModel.isPlaying ? "Paused · Native" : "Ready · paused"
+            return viewModel.isPipelineActive ? "Paused · Enhanced" : "Paused"
         case .ended:
-            return "Ended · press Play to replay"
+            return "Ended"
         case .failed:
             return "Playback issue · see details"
-        }
-    }
-
-    @ViewBuilder
-    var pendingEnhancementControls: some View {
-        if !viewModel.isPreparingEnhancedCache && viewModel.hasUnappliedPipelineChanges {
-            HStack(spacing: 6) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Label("Settings not applied", systemImage: "circle.dotted")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
-                    Text("In use: \(viewModel.appliedEnhancementSummary)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Button("Apply") {
-                    viewModel.applyPipelineEnhancements()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .help("Apply the selected settings. Press Play separately to start or resume playback.")
-
-                Button("Revert") {
-                    viewModel.dismissPendingEnhancementChanges()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Restore the settings currently in use for this video")
-            }
-            .padding(.horizontal, 6)
         }
     }
 
@@ -273,38 +222,19 @@ extension VTPlayerView {
 
     @ViewBuilder
     func enhancementControlLabel(_ title: String, isActive: Bool) -> some View {
-        let isPending = viewModel.hasUnappliedPipelineChanges
-        HStack(spacing: 4) {
-            Text(title)
-            if isPending {
-                Image(systemName: "circle.dotted")
-                    .imageScale(.small)
-                    .accessibilityHidden(true)
-            }
-        }
+        Text(title)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(isPending ? .orange : (isActive ? .primary : .secondary))
+            .foregroundStyle(isActive ? .primary : .secondary)
             .padding(.vertical, 5)
             .padding(.horizontal, 10)
             // Use the adaptive primary color so active controls remain
             // distinguishable on the light appearance without changing the
             // existing dark-appearance contrast.
             .background(
-                isPending
-                    ? Color.orange.opacity(0.12)
-                    : Color.primary.opacity(isActive ? 0.12 : 0.04)
+                Color.primary.opacity(isActive ? 0.12 : 0.04)
             )
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(
-                        isPending ? Color.orange.opacity(0.45) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .accessibilityLabel(
-                isPending ? "\(title), selected but not active" : title
-            )
+            .accessibilityLabel(title)
     }
 
     @ViewBuilder

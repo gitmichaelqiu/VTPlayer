@@ -130,24 +130,5 @@ extension VTPlayerView {
         return "\(size), about \(remainingTimeLabel(estimatedRemainingSeconds)) remaining"
     }
 
-    @ViewBuilder
-    var livePresentationMonitoringIndicator: some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Playback is running")
-                    .font(.caption.weight(.semibold))
-                Text("Verifying enhanced frames reach the display")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .padding(16)
-        .accessibilityElement(children: .combine)
-    }
 }
 #endif
