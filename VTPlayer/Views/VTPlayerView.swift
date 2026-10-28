@@ -176,13 +176,6 @@ struct VTPlayerView: View {
             splitViewLayout
             #endif
         }
-        #if os(macOS)
-        .overlay(alignment: .topTrailing) {
-            if viewModel.isPreparingEnhancedCache {
-                enhancedCachePreparationIndicator
-            }
-        }
-        #endif
         .alert("Rename Video", isPresented: $showRenameAlert) {
             TextField("New Name", text: $renameText)
             Button("Cancel", role: .cancel) { }
@@ -392,6 +385,13 @@ struct VTPlayerView: View {
                 .ignoresSafeArea()
 
             mainVideoArea
+                #if os(macOS)
+                .overlay(alignment: .topTrailing) {
+                    if viewModel.isPreparingEnhancedCache {
+                        enhancedCachePreparationIndicator
+                    }
+                }
+                #endif
 
             // QuickTime-style Floating Control Bar at the bottom
             if viewModel.videoURL != nil {

@@ -11,7 +11,7 @@ private struct EnhancedCachePreparationIndicator: View {
     let viewModel: VTPlayerViewModel
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
                     ProgressView()
@@ -20,16 +20,16 @@ private struct EnhancedCachePreparationIndicator: View {
                         .font(.caption.weight(.semibold))
                 }
                 Text(preparationStatus)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if case let .preparing(progress, bytesWritten, estimatedTotalBytes, estimatedRemainingSeconds) = viewModel.enhancedCachePreparationState {
                     ProgressView(value: progress)
-                        .frame(maxWidth: 220)
+                        .frame(maxWidth: .infinity)
                     let writtenSize = ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
                     let estimatedSize = ByteCountFormatter.string(fromByteCount: estimatedTotalBytes, countStyle: .file)
                     Text("\(Int((progress * 100).rounded()))% · \(writtenSize) of ~\(estimatedSize)")
-                        .font(.caption2.monospacedDigit())
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .accessibilityLabel(preparationProgressAccessibilityLabel(
                             progress: progress,
@@ -39,7 +39,7 @@ private struct EnhancedCachePreparationIndicator: View {
                         ))
                     if let estimatedRemainingSeconds {
                         Text("About \(remainingTimeLabel(estimatedRemainingSeconds)) remaining")
-                            .font(.caption2.monospacedDigit())
+                            .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -59,7 +59,7 @@ private struct EnhancedCachePreparationIndicator: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .frame(maxWidth: 360, alignment: .leading)
+        .frame(width: 300, alignment: .leading)
         .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .padding(16)
         .accessibilityElement(children: .contain)
