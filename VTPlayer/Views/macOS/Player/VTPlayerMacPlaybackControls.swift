@@ -51,18 +51,6 @@ extension VTPlayerView {
     }
 
     @ViewBuilder
-    var playbackStatusLabel: some View {
-        let status = playbackStatusText
-        Text(status)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .frame(maxWidth: 220, alignment: .leading)
-            .accessibilityLabel("Playback status: \(status)")
-            .help(status)
-    }
-
-    @ViewBuilder
     var playbackFallbackNotice: some View {
         if let message = viewModel.playbackNotice {
             HStack(spacing: 10) {
@@ -77,7 +65,7 @@ extension VTPlayerView {
                     viewModel.retryEnhancedPlayback()
                 }
                 .controlSize(.small)
-                .help("Retry enhanced playback with the prepared cache")
+                .help("Retry enhanced playback")
                 Button {
                     viewModel.dismissPlaybackNotice()
                 } label: {
@@ -98,35 +86,6 @@ extension VTPlayerView {
             }
             .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
             .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    private var playbackStatusText: String {
-        switch viewModel.playbackPhase {
-        case .empty:
-            return "No video"
-        case .loading:
-            return "Loading video…"
-        case .readyPaused:
-            return viewModel.isPipelineActive ? "Enhanced playback ready · press Play" : "Ready · paused"
-        case .playingNative:
-            return "Playing · Native"
-        case .benchmarking:
-            return "Preparing enhancements…"
-        case .prerollingEnhanced:
-            return "Starting enhanced playback…"
-        case .monitoringEnhanced:
-            return "Checking enhanced playback…"
-        case .preparingCache:
-            return "Preparing enhanced playback…"
-        case .playingEnhanced:
-            return "Playing · Enhanced"
-        case .paused:
-            return viewModel.isPipelineActive ? "Paused · Enhanced" : "Paused"
-        case .ended:
-            return "Ended"
-        case .failed:
-            return "Playback issue · see details"
         }
     }
 

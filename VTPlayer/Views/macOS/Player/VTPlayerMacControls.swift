@@ -84,23 +84,8 @@ extension VTPlayerView {
             }
             .padding(.horizontal, 12)
 
-            // Keep core transport and playback state pinned. Enhancement
-            // controls use their own scroll region so they cannot push Play,
-            // volume, speed, or fullscreen out of view.
             HStack(spacing: 10) {
                 playPauseButton
-                playbackStatusLabel
-                Spacer(minLength: 10)
-                volumeControl
-                playbackSpeedControl
-                Divider()
-                    .frame(height: 16)
-                fullscreenButton
-            }
-            .frame(height: 30)
-
-            // Enhancement controls remain reachable at narrow widths.
-            GeometryReader { proxy in
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(spacing: 8) {
                 // Super Resolution Popover
@@ -328,10 +313,14 @@ extension VTPlayerView {
                     .frame(width: 220)
                 }
 
-                        Spacer()
                     }
-                    .frame(minWidth: proxy.size.width, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                volumeControl
+                playbackSpeedControl
+                Divider()
+                    .frame(height: 16)
+                fullscreenButton
             }
             .frame(height: 30)
         }
