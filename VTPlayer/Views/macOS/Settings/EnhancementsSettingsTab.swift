@@ -20,19 +20,6 @@ struct EnhancementsSettingsTab: View {
     var body: some View {
         SettingsContainer(.enhancements) {
             VStack(alignment: .leading, spacing: 20) {
-                if let viewModel = VTPlayerViewModel.activeInstance,
-                   viewModel.videoURL != nil {
-                    SettingsSection("Current Video") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            LabeledContent("Current video", value: viewModel.draftEnhancementSummary)
-                                .font(.caption)
-                            Text("Enhancement changes apply automatically.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
                 SettingsSection("Neural Engine Enhancements") {
                     SliderSettingsRow(
                         "Enhanced frame cache",
@@ -66,24 +53,23 @@ struct EnhancementsSettingsTab: View {
                         valueString: { String(format: "%.0f GB", $0) }
                     )
 
-                    HStack {
-                        Label("Current disk usage", systemImage: "internaldrive")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: diskCacheUsageBytes, countStyle: .file))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
+                    Divider()
 
-                    HStack {
-                        Button("Clear Disk Cache", role: .destructive) {
-                            showClearDiskCacheConfirmation = true
-                        }
-                        .disabled(isClearingDiskCache || diskCacheUsageBytes == 0)
+                    SettingsRow("Current disk usage") {
+                        HStack(spacing: 10) {
+                            Text(ByteCountFormatter.string(fromByteCount: diskCacheUsageBytes, countStyle: .file))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
 
-                        if isClearingDiskCache {
-                            ProgressView()
-                                .controlSize(.small)
+                            if isClearingDiskCache {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+
+                            Button("Clear Disk Cache", role: .destructive) {
+                                showClearDiskCacheConfirmation = true
+                            }
+                            .disabled(isClearingDiskCache || diskCacheUsageBytes == 0)
                         }
                     }
 
@@ -91,6 +77,9 @@ struct EnhancementsSettingsTab: View {
                         Text(diskCacheError)
                             .font(.caption)
                             .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.bottom, 8)
                     }
                 }
 
