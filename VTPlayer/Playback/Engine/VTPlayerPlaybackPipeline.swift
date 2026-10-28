@@ -191,6 +191,7 @@ extension VTPlayerViewModel {
                 }
             }
             var pausedForInitialization = false
+            var consecutiveFrameReadFailures = 0
 
             @MainActor
             func isCurrentPipeline() -> Bool {
@@ -1010,9 +1011,22 @@ extension VTPlayerViewModel {
                         break  // EOF
                     }
                     vtFrame = next
+                    consecutiveFrameReadFailures = 0
                 } catch {
-                    print("VTFrameSequence error: \(error.localizedDescription)")
+                    guard isCurrentPipeline() else { break }
+                    consecutiveFrameReadFailures += 1
+                    if consecutiveFrameReadFailures >= 3 {
+                        self.srInitializationError = "Could not read video frames: \(error.localizedDescription)"
+                        #if os(macOS)
+                        self.restoreNativePresentationAfterPipelineFailure()
+                        #else
+                        self.isInitializingPipeline = false
+                        self.isBuffering = false
+                        #endif
+                        break
+                    }
                     try? await Task.sleep(nanoseconds: 100_000_000)
+                    if Task.isCancelled { break }
                     continue
                 }
                 let decodeWaitMilliseconds = Double(

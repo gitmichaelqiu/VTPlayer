@@ -10,6 +10,40 @@ import AVFoundation
 import CoreVideo
 import CoreMedia
 
+enum VTFrameSequenceError: LocalizedError {
+    case missingVideoTrack
+    case cannotAddOutput
+    case readerStartFailed(String?)
+    case readerFailed(String?)
+    case unexpectedReaderStatus(Int, String?)
+    case missingPixelBuffer
+    case endedWhileReading
+
+    var errorDescription: String? {
+        switch self {
+        case .missingVideoTrack:
+            return "The video file does not contain a readable video track."
+        case .cannotAddOutput:
+            return "The video decoder could not configure its output."
+        case .readerStartFailed(let detail):
+            return Self.message("The video decoder could not start.", detail: detail)
+        case .readerFailed(let detail):
+            return Self.message("The video decoder failed while reading.", detail: detail)
+        case .unexpectedReaderStatus(let status, let detail):
+            return Self.message("The video decoder stopped unexpectedly (status \(status)).", detail: detail)
+        case .missingPixelBuffer:
+            return "The video decoder returned a frame without an image buffer."
+        case .endedWhileReading:
+            return "The video decoder ended before reaching the end of the video."
+        }
+    }
+
+    private static func message(_ message: String, detail: String?) -> String {
+        guard let detail, !detail.isEmpty else { return message }
+        return "\(message) \(detail)"
+    }
+}
+
 /// A frame representation wrapping the pixel buffer and its presentation timestamp.
 nonisolated public struct VTFrame: @unchecked Sendable {
     public let buffer: CVPixelBuffer
@@ -104,12 +138,12 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                 extendedPixelsRight: Int,
                 extendedPixelsBottom: Int
             ) async throws -> VTFrame? {
+                guard !Task.isCancelled else { return nil }
                 if !isInitialized {
                     let asset = AVURLAsset(url: url)
                     let tracks = try await asset.loadTracks(withMediaType: .video)
                     guard let videoTrack = tracks.first else {
-                        isInitialized = true
-                        return nil
+                        throw VTFrameSequenceError.missingVideoTrack
                     }
 
                     // AVAssetReader does not consistently copy the color
@@ -165,14 +199,12 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     trackOutput.alwaysCopiesSampleData = false
                     
                     guard reader.canAdd(trackOutput) else {
-                        isInitialized = true
-                        return nil
+                        throw VTFrameSequenceError.cannotAddOutput
                     }
                     reader.add(trackOutput)
                     
                     guard reader.startReading() else {
-                        isInitialized = true
-                        return nil
+                        throw VTFrameSequenceError.readerStartFailed(reader.error?.localizedDescription)
                     }
                     
                     self.reader = reader
@@ -180,26 +212,36 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                     self.isInitialized = true
                 }
                 
-                guard let reader = reader, let trackOutput = trackOutput else {
-                    return nil
-                }
+                guard let reader = reader, let trackOutput = trackOutput else { return nil }
                 
-                if reader.status == .reading {
-                    return autoreleasepool { () -> VTFrame? in
-                        guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else {
-                            return nil
-                        }
-                        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                            return nil
-                        }
-                        for (key, value) in sourceColorAttachments {
-                            CVBufferSetAttachment(pixelBuffer, key, value, .shouldPropagate)
-                        }
-                        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        return VTFrame(buffer: pixelBuffer, presentationTimeStamp: pts)
-                    }
-                } else {
+                switch reader.status {
+                case .completed, .cancelled:
                     return nil
+                case .failed:
+                    throw VTFrameSequenceError.readerFailed(reader.error?.localizedDescription)
+                case .reading:
+                    guard let sampleBuffer = autoreleasepool(invoking: { trackOutput.copyNextSampleBuffer() }) else {
+                        switch reader.status {
+                        case .completed, .cancelled:
+                            return nil
+                        case .failed:
+                            throw VTFrameSequenceError.readerFailed(reader.error?.localizedDescription)
+                        case .reading:
+                            throw VTFrameSequenceError.endedWhileReading
+                        default:
+                            throw VTFrameSequenceError.unexpectedReaderStatus(reader.status.rawValue, reader.error?.localizedDescription)
+                        }
+                    }
+                    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                        throw VTFrameSequenceError.missingPixelBuffer
+                    }
+                    for (key, value) in sourceColorAttachments {
+                        CVBufferSetAttachment(pixelBuffer, key, value, .shouldPropagate)
+                    }
+                    let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                    return VTFrame(buffer: pixelBuffer, presentationTimeStamp: pts)
+                default:
+                    throw VTFrameSequenceError.unexpectedReaderStatus(reader.status.rawValue, reader.error?.localizedDescription)
                 }
             }
         }

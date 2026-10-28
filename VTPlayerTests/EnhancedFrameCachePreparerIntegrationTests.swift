@@ -4,6 +4,17 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
+    func testFrameReaderReportsUnreadableVideo() async {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        let iterator = VTFrameSequence(url: url).makeAsyncIterator()
+        do {
+            _ = try await iterator.next()
+            XCTFail("An unreadable video should report a reader error")
+        } catch {
+            XCTAssertFalse(error is CancellationError)
+        }
+    }
+
     func testSparsePreparationReadsBackRealVideoToolboxOutput() async throws {
         let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -45,7 +56,9 @@ final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
             configuration: configuration,
             totalGroupCount: groupCount
         )
-        XCTAssertEqual(plan.mode, .sparse)
+        guard plan.mode == .sparse else {
+            throw XCTSkip("This machine does not require sparse caching for the fixture.")
+        }
 
         let result = try await preparer.prepareCache(
             url: url,
