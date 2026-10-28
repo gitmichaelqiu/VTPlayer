@@ -31,6 +31,7 @@ extension VTMetalRenderer {
         self.enableSetNeedsDisplay = false
         self.isPaused = true
         self.preferredFramesPerSecond = 60
+        (layer as? CAMetalLayer)?.maximumDrawableCount = 3
         configureMacOSPresentationScheduling()
         #else
         self.enableSetNeedsDisplay = true
@@ -222,7 +223,6 @@ extension VTMetalRenderer {
         guard let metalLayer = layer as? CAMetalLayer else { return }
         metalLayer.presentsWithTransaction = false
         metalLayer.displaySyncEnabled = true
-        metalLayer.maximumDrawableCount = 3
         metalLayer.allowsNextDrawableTimeout = false
     }
 
