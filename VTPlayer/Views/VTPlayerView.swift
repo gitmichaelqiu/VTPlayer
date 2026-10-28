@@ -389,9 +389,9 @@ struct VTPlayerView: View {
                 .overlay(alignment: .topTrailing) {
                     if viewModel.isPreparingEnhancedCache {
                         enhancedCachePreparationIndicator
-                            .opacity(!viewModel.isFullScreen || viewModel.showControls ? 1 : 0)
-                            .allowsHitTesting(!viewModel.isFullScreen || viewModel.showControls)
-                            .accessibilityHidden(viewModel.isFullScreen && !viewModel.showControls)
+                            .opacity(viewModel.showControls ? 1 : 0)
+                            .allowsHitTesting(viewModel.showControls)
+                            .accessibilityHidden(!viewModel.showControls)
                             .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
                     }
                 }
