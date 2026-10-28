@@ -188,10 +188,10 @@ final class VTPlayerViewModel {
     var superResolutionLevel: Float = 0
     var frameInterpolationLevel: Int = 0
     var frameInterpolationIsSupported = false
-    /// QSR4 and FI cannot sustain an enhanced display cadence together on
-    /// supported hardware without compromising QSR output quality.
+    /// FI availability is based on VideoToolbox support for this video's
+    /// dimensions. QSR4 + FI uses temporal-first processing, then Quality SR.
     var frameInterpolationIsAvailable: Bool {
-        frameInterpolationIsSupported && qualitySuperResolutionScaleFactor != 4
+        frameInterpolationIsSupported
     }
 
     // New API Feature Levels

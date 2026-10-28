@@ -3,6 +3,15 @@ import AVFoundation
 @testable import VTPlayer
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
+    @MainActor
+    func testQualitySuperResolution4xCanCombineWithSupportedFrameInterpolation() {
+        let viewModel = VTPlayerViewModel()
+        viewModel.frameInterpolationIsSupported = true
+        viewModel.qualitySuperResolutionScaleFactor = 4
+
+        XCTAssertTrue(viewModel.frameInterpolationIsAvailable)
+    }
+
     func testBenchmarkStopsEarlyOnlyAfterSustainedSevereSlowdown() {
         XCTAssertFalse(EnhancedBenchmarkSampling.isConfidentlyOverBudget(
             samples: Array(repeating: 0.2, count: 4), sourceFramesPerSecond: 30

@@ -24,6 +24,28 @@ final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(result.averageOutputBytesPerGroup, 0)
     }
 
+    func testQualitySuperResolutionAndInterpolationProcessTogether() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/367266_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(width: 1280, height: 720, scale: 4),
+              VTFrameProcessorCoordinator.isFrameInterpolationSupported(width: 1280, height: 720) else {
+            throw XCTSkip("Combination fixture or device support is unavailable.")
+        }
+        let coordinator = VTFrameProcessorCoordinator(frameInterpolationLevel: 2, qualitySuperResolutionScaleFactor: 4)
+        try await coordinator.startSession(width: 1280, height: 720)
+        let padding = await coordinator.sourceFramePadding()
+        let iterator = VTFrameSequence(url: url, extendedPixelsRight: padding.right,
+                                       extendedPixelsBottom: padding.bottom).makeAsyncIterator()
+        let first = try await iterator.next()
+        let second = try await iterator.next()
+        _ = try await coordinator.processFrame(try XCTUnwrap(first))
+        let frames = try await coordinator.processFrame(try XCTUnwrap(second))
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertTrue(frames.contains(where: \.isInterpolated))
+        XCTAssertTrue(frames.allSatisfy { CVPixelBufferGetWidth($0.buffer) == 5120 && CVPixelBufferGetHeight($0.buffer) == 2880 })
+        await coordinator.endSession()
+    }
+
     func testQualitySuperResolutionProducesVisiblePixels() async throws {
         let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
         guard FileManager.default.fileExists(atPath: url.path),
