@@ -47,9 +47,9 @@ struct EnhancementsSettingsTab: View {
                             get: { Double(min(max(enhancedFrameCacheDiskGB, 2), 200)) },
                             set: { enhancedFrameCacheDiskGB = Int($0.rounded()) }
                         ),
-                        range: 2.0...200.0,
-                        defaultValue: 20.0,
-                        step: 1.0,
+                        range: 5.0...200.0,
+                        defaultValue: 15.0,
+                        step: 5.0,
                         valueString: { String(format: "%.0f GB", $0) }
                     )
 
