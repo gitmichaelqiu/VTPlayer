@@ -12,8 +12,26 @@ nonisolated struct EnhancedFrameCachePreparationResult: Sendable {
 }
 
 nonisolated enum EnhancedBenchmarkSampling {
+    static let minimumConfidentSlowSampleCount = 5
+    static let minimumConfidentSlowDuration = 0.5
+    static let confidentSlowBudgetMultiplier = 2.0
+
     static func isComplete(sampleCount: Int, sampleDuration: Double) -> Bool {
         sampleCount >= 3 && sampleDuration >= 2.0
+    }
+
+    static func isConfidentlyOverBudget(samples: [Double], sourceFramesPerSecond: Double) -> Bool {
+        guard samples.count >= minimumConfidentSlowSampleCount,
+              sourceFramesPerSecond.isFinite,
+              sourceFramesPerSecond > 0,
+              samples.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+            return false
+        }
+
+        let sampleDuration = samples.reduce(0, +)
+        let realTimeBudget = 1 / (sourceFramesPerSecond * 0.95)
+        return sampleDuration >= minimumConfidentSlowDuration &&
+            samples.allSatisfy { $0 >= realTimeBudget * confidentSlowBudgetMultiplier }
     }
 }
 
@@ -125,6 +143,14 @@ actor EnhancedFrameCachePreparer {
                 if EnhancedBenchmarkSampling.isComplete(sampleCount: samples.count, sampleDuration: sampleDuration) {
                     break
                 }
+                #if os(macOS)
+                if EnhancedBenchmarkSampling.isConfidentlyOverBudget(
+                    samples: samples,
+                    sourceFramesPerSecond: sourceFramesPerSecond
+                ) {
+                    break
+                }
+                #endif
             }
             try Task.checkCancellation()
             await coordinator.endSession()

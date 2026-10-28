@@ -3,6 +3,18 @@ import AVFoundation
 @testable import VTPlayer
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
+    func testBenchmarkStopsEarlyOnlyAfterSustainedSevereSlowdown() {
+        XCTAssertFalse(EnhancedBenchmarkSampling.isConfidentlyOverBudget(
+            samples: Array(repeating: 0.2, count: 4), sourceFramesPerSecond: 30
+        ))
+        XCTAssertFalse(EnhancedBenchmarkSampling.isConfidentlyOverBudget(
+            samples: Array(repeating: 0.04, count: 5), sourceFramesPerSecond: 30
+        ))
+        XCTAssertTrue(EnhancedBenchmarkSampling.isConfidentlyOverBudget(
+            samples: Array(repeating: 0.2, count: 5), sourceFramesPerSecond: 30
+        ))
+    }
+
     func testSlowBenchmarkStopsAfterEnoughSamples() {
         XCTAssertFalse(EnhancedBenchmarkSampling.isComplete(sampleCount: 2, sampleDuration: 2.0))
         XCTAssertFalse(EnhancedBenchmarkSampling.isComplete(sampleCount: 3, sampleDuration: 0.2))
