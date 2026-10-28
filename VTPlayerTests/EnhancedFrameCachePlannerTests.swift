@@ -3,6 +3,50 @@ import AVFoundation
 @testable import VTPlayer
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
+    func testSlowBenchmarkStopsAfterEnoughSamples() {
+        XCTAssertFalse(EnhancedBenchmarkSampling.isComplete(sampleCount: 2, sampleDuration: 2.0))
+        XCTAssertFalse(EnhancedBenchmarkSampling.isComplete(sampleCount: 3, sampleDuration: 0.2))
+        XCTAssertTrue(EnhancedBenchmarkSampling.isComplete(sampleCount: 3, sampleDuration: 2.1))
+    }
+
+    @MainActor
+    func testPauseDuringPreparationDoesNotReplayStaleEndState() {
+        #if os(macOS)
+        let model = VTPlayerViewModel()
+        model.player = AVPlayer()
+        model.enhancedCachePreparationState = .benchmarking
+        model.playbackPhase = .ended
+        model.enhancementTransactionReachedEnd = true
+        model.isPlaying = true
+        model.isPaused = false
+
+        model.togglePlayPause()
+
+        XCTAssertTrue(model.isPaused)
+        XCTAssertFalse(model.enhancementTransactionWasPlaying)
+        XCTAssertFalse(model.enhancementTransactionReachedEnd)
+        XCTAssertEqual(model.playbackPhase, .benchmarking)
+        #endif
+    }
+
+    @MainActor
+    func testResumeDuringPreparationClearsEndState() {
+        #if os(macOS)
+        let model = VTPlayerViewModel()
+        model.player = AVPlayer()
+        model.enhancedCachePreparationState = .benchmarking
+        model.playbackPhase = .ended
+        model.enhancementTransactionReachedEnd = true
+
+        model.play()
+
+        XCTAssertTrue(model.isPlaying)
+        XCTAssertFalse(model.isPaused)
+        XCTAssertFalse(model.enhancementTransactionReachedEnd)
+        XCTAssertEqual(model.playbackPhase, .benchmarking)
+        #endif
+    }
+
     @MainActor
     func testMacOSPipelineSettingsApplyAfterDebounce() async throws {
         let viewModel = VTPlayerViewModel()

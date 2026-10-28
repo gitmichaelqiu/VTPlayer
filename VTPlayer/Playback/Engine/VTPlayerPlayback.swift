@@ -124,7 +124,7 @@ extension VTPlayerViewModel {
         guard enhancedCachePreparationState != .prerolling else { return }
         guard player != nil else { return }
         #if os(macOS)
-        if playbackPhase == .ended {
+        if playbackPhase == .ended && (!isPlaying || isPaused) {
             let endingPlayer = player
             seek(to: 0)
             nativeFallbackActive = false
@@ -158,10 +158,12 @@ extension VTPlayerViewModel {
         #if os(macOS)
         if isPreparingEnhancementTransaction {
             enhancementTransactionWasPlaying = true
+            enhancementTransactionReachedEnd = false
             nativeFallbackActive = true
             setNativeVideoEnabled(true)
             isPlaying = true
             isPaused = false
+            transitionPlayback(to: enhancedCachePreparationState == .benchmarking ? .benchmarking : .preparingCache)
             player.play()
             player.rate = Float(playbackSpeed)
             return
@@ -276,6 +278,10 @@ extension VTPlayerViewModel {
         let preparationWasInProgress = isPreparingEnhancementTransaction
         if preparationWasInProgress {
             enhancementTransactionWasPlaying = false
+            if playbackPhase == .ended && isPlaying && !isPaused {
+                enhancementTransactionReachedEnd = false
+                transitionPlayback(to: enhancedCachePreparationState == .benchmarking ? .benchmarking : .preparingCache)
+            }
         }
         #endif
         player.pause()
