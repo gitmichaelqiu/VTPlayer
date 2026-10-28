@@ -53,6 +53,55 @@ final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
         await coordinator.endSession()
     }
 
+    func testSpatialWarmupOutputMatchesFreshSession() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isLowLatencySuperResolutionSupported(width: 1280, height: 720, scale: 1.5) else {
+            throw XCTSkip("Low-latency SR fixture or device support is unavailable.")
+        }
+        let iterator = VTFrameSequence(url: url, startTime: CMTime(seconds: 1, preferredTimescale: 600)).makeAsyncIterator()
+        let warmCoordinator = VTFrameProcessorCoordinator(superResolutionLevel: 1.5)
+        try await warmCoordinator.startSession(width: 1280, height: 720)
+        let warmStart = DispatchTime.now().uptimeNanoseconds
+        var target: VTFrame?
+        var warmed: [VTFrame] = []
+        for _ in 0..<61 {
+            target = try await iterator.next()
+            guard let frame = target else { break }
+            warmed = try await warmCoordinator.processFrame(frame)
+        }
+        let warmMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - warmStart) / 1_000_000
+        await warmCoordinator.endSession()
+        let freshCoordinator = VTFrameProcessorCoordinator(superResolutionLevel: 1.5)
+        try await freshCoordinator.startSession(width: 1280, height: 720)
+        let freshStart = DispatchTime.now().uptimeNanoseconds
+        let fresh = try await freshCoordinator.processFrame(try XCTUnwrap(target))
+        let freshMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - freshStart) / 1_000_000
+        let warmBuffer = try XCTUnwrap(warmed.first?.buffer)
+        let freshBuffer = try XCTUnwrap(fresh.first?.buffer)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(warmBuffer, .readOnly), kCVReturnSuccess)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(freshBuffer, .readOnly), kCVReturnSuccess)
+        defer {
+            CVPixelBufferUnlockBaseAddress(warmBuffer, .readOnly)
+            CVPixelBufferUnlockBaseAddress(freshBuffer, .readOnly)
+        }
+        XCTAssertEqual(CVPixelBufferGetPlaneCount(warmBuffer), CVPixelBufferGetPlaneCount(freshBuffer))
+        let visibleBytes = CVPixelBufferGetWidth(warmBuffer)
+        for plane in 0..<CVPixelBufferGetPlaneCount(warmBuffer) {
+            let warmBase = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(warmBuffer, plane))
+            let freshBase = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(freshBuffer, plane))
+            let warmStride = CVPixelBufferGetBytesPerRowOfPlane(warmBuffer, plane)
+            let freshStride = CVPixelBufferGetBytesPerRowOfPlane(freshBuffer, plane)
+            let height = CVPixelBufferGetHeightOfPlane(warmBuffer, plane)
+            for row in 0..<height {
+                XCTAssertEqual(memcmp(warmBase.advanced(by: row * warmStride),
+                                      freshBase.advanced(by: row * freshStride), visibleBytes), 0)
+            }
+        }
+        print("Spatial warmup 61 frames: \(warmMilliseconds) ms; single frame: \(freshMilliseconds) ms")
+        await freshCoordinator.endSession()
+    }
+
     func testCancelledFrameReaderThrowsCancellation() async {
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }

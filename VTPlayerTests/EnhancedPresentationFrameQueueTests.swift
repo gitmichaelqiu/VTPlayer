@@ -4,6 +4,23 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedPresentationFrameQueueTests: XCTestCase {
+    func testOnlyStatelessSpatialPipelineSkipsWarmupProcessing() {
+        var configuration = AppliedPipelineConfiguration.disabled
+        configuration.superResolutionLevel = 2
+        XCTAssertTrue(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.frameInterpolationLevel = 2
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.frameInterpolationLevel = 0
+        configuration.denoiseStrength = 0.5
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.denoiseStrength = 0
+        configuration.motionBlurStrength = 1
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.motionBlurStrength = 0
+        configuration.qualitySuperResolutionScaleFactor = 4
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+    }
+
     func testHighRateLiveInterpolationUsesDedicatedPresentation() {
         XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
             sourceFramesPerSecond: 25,

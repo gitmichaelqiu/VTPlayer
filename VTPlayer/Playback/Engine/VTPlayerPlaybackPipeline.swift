@@ -8,6 +8,16 @@ import Synchronization
 import MediaPlayer
 #endif
 
+nonisolated enum PlaybackWarmupPolicy {
+    static func canSkipProcessing(_ configuration: AppliedPipelineConfiguration) -> Bool {
+        configuration.superResolutionLevel > 0 &&
+            configuration.qualitySuperResolutionScaleFactor == 0 &&
+            configuration.frameInterpolationLevel == 0 &&
+            configuration.denoiseStrength == 0 &&
+            configuration.motionBlurStrength == 0
+    }
+}
+
 @MainActor
 struct PlaybackPipelineSnapshot {
     let generation: UInt64
@@ -1047,6 +1057,13 @@ extension VTPlayerViewModel {
                 let iteratorForPrefetch = frameIterator
                 prefetchedFrameTask = Task.detached(priority: .userInitiated) {
                     try await iteratorForPrefetch.next()
+                }
+
+                if preparedFrameCacheMode == nil,
+                   PlaybackWarmupPolicy.canSkipProcessing(configuration),
+                   self.lastRenderedPTS.isValid,
+                   CMTimeCompare(vtFrame.presentationTimeStamp, self.lastRenderedPTS) <= 0 {
+                    continue
                 }
 
                 sourceFrameOrdinal += 1
