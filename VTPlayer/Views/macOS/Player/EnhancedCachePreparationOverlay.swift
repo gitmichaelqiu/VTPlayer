@@ -2,10 +2,17 @@ import SwiftUI
 
 #if os(macOS)
 extension VTPlayerView {
-    @ViewBuilder
     var enhancedCachePreparationIndicator: some View {
+        EnhancedCachePreparationIndicator(viewModel: viewModel)
+    }
+}
+
+private struct EnhancedCachePreparationIndicator: View {
+    let viewModel: VTPlayerViewModel
+
+    var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
                     ProgressView()
                         .controlSize(.small)
@@ -45,15 +52,15 @@ extension VTPlayerView {
                     viewModel.cancelEnhancedCachePreparation()
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
             .controlSize(.small)
             .keyboardShortcut(.escape, modifiers: [])
             .help("Cancel this setup step. The original video is unchanged.")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .frame(maxWidth: 430, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(maxWidth: 360, alignment: .leading)
+        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .padding(16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Enhanced playback setup in progress")
@@ -81,12 +88,12 @@ extension VTPlayerView {
         switch viewModel.enhancedCachePreparationState {
         case .benchmarking:
             return viewModel.isPlaying && !viewModel.isPaused
-                ? "Checking processing speed · video continues"
-                : "Checking processing speed · press Play to watch the original"
+                ? "Video continues while checking"
+                : "Press Play to watch the original"
         case .preparing:
             return viewModel.isPlaying && !viewModel.isPaused
-                ? "Preparing enhanced frames · video continues"
-                : "Preparing enhanced frames · press Play to watch the original"
+                ? "Video continues while preparing"
+                : "Press Play to watch the original"
         case .prerolling:
             if viewModel.isPlaying && !viewModel.isPaused {
                 return viewModel.preparedEnhancedFrameCacheMode == nil
