@@ -4,6 +4,26 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
+    func testQualitySuperResolutionBenchmarkCompletesWithMeasuredSamples() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(width: 1280, height: 720, scale: 4) else {
+            throw XCTSkip("Quality SR fixture or device support is unavailable.")
+        }
+        var configuration = AppliedPipelineConfiguration.disabled
+        configuration.qualitySuperResolutionScaleFactor = 4
+        let preparer = EnhancedFrameCachePreparer(diskCache: .shared)
+        let start = DispatchTime.now()
+        let result = try await preparer.benchmark(
+            url: url, width: 1280, height: 720, sourceFramesPerSecond: 59.94,
+            configuration: configuration, qualityPrioritization: 1, preferSequentialSRFI: false
+        )
+        let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
+        print("Quality SR benchmark completed in \(seconds) seconds")
+        XCTAssertGreaterThan(result.p95GroupSeconds, 0)
+        XCTAssertGreaterThan(result.averageOutputBytesPerGroup, 0)
+    }
+
     func testQualitySuperResolutionProducesVisiblePixels() async throws {
         let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
         guard FileManager.default.fileExists(atPath: url.path),

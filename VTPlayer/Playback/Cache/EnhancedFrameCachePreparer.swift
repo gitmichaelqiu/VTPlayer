@@ -11,6 +11,12 @@ nonisolated struct EnhancedFrameCachePreparationResult: Sendable {
     var mode: EnhancedCachePlaybackMode
 }
 
+nonisolated enum EnhancedBenchmarkSampling {
+    static func isComplete(sampleCount: Int, sampleDuration: Double) -> Bool {
+        sampleCount >= 3 && sampleDuration >= 2.0
+    }
+}
+
 nonisolated private struct EnhancedPipelineBenchmarkOutputState: Sendable {
     var count = 0
     var byteCount: Int64 = 0
@@ -75,7 +81,8 @@ actor EnhancedFrameCachePreparer {
             var samples: [Double] = []
             var outputCount = 0
             var outputBytes: Int64 = 0
-            var warmupRemaining = 4
+            var warmupRemaining = 2
+            var sampleDuration = 0.0
 
             while samples.count < sampleCount, let frame = try await iterator.next() {
                 try Task.checkCancellation()
@@ -92,11 +99,16 @@ actor EnhancedFrameCachePreparer {
                     continue
                 }
                 samples.append(elapsed)
+                sampleDuration += elapsed
                 outputCount += output.count + streamedOutput.count
                 outputBytes += streamedOutput.byteCount + output.reduce(into: 0) { partialResult, frame in
                     partialResult += Int64(CVPixelBufferGetDataSize(frame.buffer))
                 }
+                if EnhancedBenchmarkSampling.isComplete(sampleCount: samples.count, sampleDuration: sampleDuration) {
+                    break
+                }
             }
+            try Task.checkCancellation()
             await coordinator.endSession()
             guard !samples.isEmpty else { throw EnhancedFrameDiskCacheError.invalidFrameData }
             let sorted = samples.sorted()
