@@ -54,7 +54,6 @@ private struct EnhancedCachePreparationIndicator: View {
             }
             .buttonStyle(.glass)
             .controlSize(.small)
-            .keyboardShortcut(.escape, modifiers: [])
             .help("Cancel this setup step. The original video is unchanged.")
         }
         .padding(.horizontal, 16)
