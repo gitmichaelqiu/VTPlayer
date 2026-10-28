@@ -82,6 +82,8 @@ nonisolated enum EnhancedFrameDiskCacheError: LocalizedError {
 actor EnhancedFrameDiskCache {
     static let shared = EnhancedFrameDiskCache()
     private static let manifestFilename = "manifest.plist"
+    private static let compressedManifestPrefix = Data("VTP-LZFSE-1\n".utf8)
+    private static let minimumCompressedManifestBytes = 128 * 1_024
     private static let accessPersistenceInterval: TimeInterval = 30
     private static let minimumVolumeFreeBytes: Int64 = 1 * 1_024 * 1_024 * 1_024
 
@@ -100,11 +102,15 @@ actor EnhancedFrameDiskCache {
         var filename: String?
         var chunkIndex: Int?
         var byteCount: Int64
-        var sourcePresentationSeconds: Double
         var sourcePresentationTimeValue: Int64
         var sourcePresentationTimeScale: Int32
         var sourcePresentationTimeFlags: UInt32
         var sourcePresentationTimeEpoch: Int64
+
+        var sourcePresentationSeconds: Double {
+            let seconds = CMTimeGetSeconds(sourcePresentationTime)
+            return seconds.isFinite ? seconds : 0
+        }
 
         var sourcePresentationTime: CMTime {
             CMTime(
@@ -314,13 +320,11 @@ actor EnhancedFrameDiskCache {
         }
         guard preparedManifest!.coverageBitmap.indices.contains(groupIndex),
               preparedManifest!.coverageBitmap[groupIndex] else { return }
-        let seconds = CMTimeGetSeconds(presentationTime)
         upsertGroupEntry(GroupEntry(
             groupIndex: groupIndex,
             filename: nil,
             chunkIndex: chunkIndex,
             byteCount: 0,
-            sourcePresentationSeconds: seconds.isFinite ? seconds : 0,
             sourcePresentationTimeValue: presentationTime.value,
             sourcePresentationTimeScale: presentationTime.timescale,
             sourcePresentationTimeFlags: presentationTime.flags.rawValue,
@@ -439,17 +443,16 @@ actor EnhancedFrameDiskCache {
         }
         try fileManager.moveItem(at: temporary, to: destination)
 
-        let sourceSeconds = CMTimeGetSeconds(sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero)
+        let presentationTime = sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero
         let entry = GroupEntry(
             groupIndex: groupIndex,
             filename: filename,
             chunkIndex: nil,
             byteCount: Int64(encoded.count),
-            sourcePresentationSeconds: sourceSeconds.isFinite ? sourceSeconds : 0,
-            sourcePresentationTimeValue: (sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero).value,
-            sourcePresentationTimeScale: (sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero).timescale,
-            sourcePresentationTimeFlags: (sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero).flags.rawValue,
-            sourcePresentationTimeEpoch: (sourcePresentationTime ?? frames.last?.presentationTimeStamp ?? .zero).epoch
+            sourcePresentationTimeValue: presentationTime.value,
+            sourcePresentationTimeScale: presentationTime.timescale,
+            sourcePresentationTimeFlags: presentationTime.flags.rawValue,
+            sourcePresentationTimeEpoch: presentationTime.epoch
         )
         let previousByteCount = preparedManifest!.groups.first {
             $0.groupIndex == groupIndex
@@ -474,13 +477,11 @@ actor EnhancedFrameDiskCache {
         }
         if let lastGroupIndex = preparedManifest!.groups.last?.groupIndex,
            lastGroupIndex < groupIndex {
-            let seconds = CMTimeGetSeconds(presentationTime)
             preparedManifest!.groups.append(GroupEntry(
                 groupIndex: groupIndex,
                 filename: nil,
                 chunkIndex: nil,
                 byteCount: 0,
-                sourcePresentationSeconds: seconds.isFinite ? seconds : 0,
                 sourcePresentationTimeValue: presentationTime.value,
                 sourcePresentationTimeScale: presentationTime.timescale,
                 sourcePresentationTimeFlags: presentationTime.flags.rawValue,
@@ -489,13 +490,11 @@ actor EnhancedFrameDiskCache {
             return
         }
         guard !preparedManifest!.groups.contains(where: { $0.groupIndex == groupIndex }) else { return }
-        let seconds = CMTimeGetSeconds(presentationTime)
         upsertGroupEntry(GroupEntry(
             groupIndex: groupIndex,
             filename: nil,
             chunkIndex: nil,
             byteCount: 0,
-            sourcePresentationSeconds: seconds.isFinite ? seconds : 0,
             sourcePresentationTimeValue: presentationTime.value,
             sourcePresentationTimeScale: presentationTime.timescale,
             sourcePresentationTimeFlags: presentationTime.flags.rawValue,
@@ -983,7 +982,9 @@ actor EnhancedFrameDiskCache {
     private func loadManifest(at directory: URL) throws -> Manifest? {
         let url = directory.appendingPathComponent(Self.manifestFilename)
         guard fileManager.fileExists(atPath: url.path) else { return nil }
-        guard let manifest = try? PropertyListDecoder().decode(Manifest.self, from: Data(contentsOf: url)) else {
+        guard let stored = try? Data(contentsOf: url),
+              let data = try? Self.decodeManifestData(stored),
+              let manifest = try? PropertyListDecoder().decode(Manifest.self, from: data) else {
             return nil
         }
         guard manifest.schemaVersion == EnhancedFrameCacheKey.schemaVersion else { return nil }
@@ -994,7 +995,26 @@ actor EnhancedFrameDiskCache {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
         let data = try encoder.encode(manifest)
-        try data.write(to: directory.appendingPathComponent(Self.manifestFilename), options: .atomic)
+        let stored = Self.encodeManifestData(
+            data,
+            compress: manifest.key.cacheFormatVersion == EnhancedFrameCacheKey.currentHEVCChunkFormatVersion
+        )
+        try stored.write(to: directory.appendingPathComponent(Self.manifestFilename), options: .atomic)
+    }
+
+    nonisolated static func encodeManifestData(_ data: Data, compress: Bool) -> Data {
+        guard compress, data.count >= minimumCompressedManifestBytes else { return data }
+        guard let compressed = try? (data as NSData).compressed(using: .lzfse) as Data,
+              compressed.count + compressedManifestPrefix.count < data.count else { return data }
+        var result = compressedManifestPrefix
+        result.append(compressed)
+        return result
+    }
+
+    nonisolated static func decodeManifestData(_ data: Data) throws -> Data {
+        guard data.starts(with: compressedManifestPrefix) else { return data }
+        let compressed = Data(data.dropFirst(compressedManifestPrefix.count))
+        return try (compressed as NSData).decompressed(using: .lzfse) as Data
     }
 
     private func evictForCapacity(

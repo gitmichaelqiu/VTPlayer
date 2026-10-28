@@ -747,6 +747,60 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertEqual(remainingUsage, 0)
     }
 
+    func testCompressedManifestRoundTripAndLegacyData() throws {
+        let original = Data(repeating: 42, count: 256 * 1_024)
+        let compressed = EnhancedFrameDiskCache.encodeManifestData(original, compress: true)
+        XCTAssertLessThan(compressed.count, original.count)
+        XCTAssertEqual(try EnhancedFrameDiskCache.decodeManifestData(compressed), original)
+        XCTAssertEqual(try EnhancedFrameDiskCache.decodeManifestData(original), original)
+        XCTAssertEqual(EnhancedFrameDiskCache.encodeManifestData(original, compress: false), original)
+        XCTAssertThrowsError(try EnhancedFrameDiskCache.decodeManifestData(Data("VTP-LZFSE-1\ninvalid".utf8)))
+    }
+
+    func testLargeEncodedManifestCanBeReopened() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        var key = cacheKey("compressed-manifest")
+        key.cacheFormatVersion = EnhancedFrameCacheKey.currentHEVCChunkFormatVersion
+        var coverage = Array(repeating: false, count: 200_000)
+        coverage[0] = true
+        _ = try await cache.prepare(key: key, coverageBitmap: coverage, diskBudgetBytes: 1_000_000,
+                                    requiredAdditionalBytes: 0)
+        try await cache.writeGroup([try makeFrame(value: 1, time: .zero, interpolated: false)], for: 0)
+        _ = try await cache.finalizePreparation()
+        let manifestURL = directory.appendingPathComponent(key.directoryName).appendingPathComponent("manifest.plist")
+        let stored = try Data(contentsOf: manifestURL)
+        XCTAssertTrue(stored.starts(with: Data("VTP-LZFSE-1\n".utf8)))
+        let reopened = EnhancedFrameDiskCache(rootDirectory: directory)
+        let status = try await reopened.cachedStatus(for: key)
+        let frames = try await reopened.readGroup(0, for: key)
+        XCTAssertEqual(status?.coverageBitmap, coverage)
+        XCTAssertEqual(frames?.count, 1)
+    }
+
+    func testManifestOmitsRedundantSecondsAndReadsLegacyEntries() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let key = cacheKey("legacy-timestamps")
+        try await completeCache(EnhancedFrameDiskCache(rootDirectory: directory), key: key)
+        let manifestURL = directory.appendingPathComponent(key.directoryName).appendingPathComponent("manifest.plist")
+        let data = try Data(contentsOf: manifestURL)
+        var manifest = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        var groups = try XCTUnwrap(manifest["groups"] as? [[String: Any]])
+        XCTAssertNil(groups[0]["sourcePresentationSeconds"])
+        groups[0]["sourcePresentationSeconds"] = 0.0
+        manifest["groups"] = groups
+        let legacyData = try PropertyListSerialization.data(fromPropertyList: manifest, format: .binary, options: 0)
+        try legacyData.write(to: manifestURL)
+
+        let restored = EnhancedFrameDiskCache(rootDirectory: directory)
+        let status = try await restored.cachedStatus(for: key)
+        let frames = try await restored.readGroup(0, for: key)
+        XCTAssertNotNil(status)
+        XCTAssertEqual(frames?.count, 1)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
     }
