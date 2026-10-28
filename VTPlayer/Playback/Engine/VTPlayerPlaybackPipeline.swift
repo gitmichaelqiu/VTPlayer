@@ -564,6 +564,10 @@ extension VTPlayerViewModel {
             }
 
             let admitStreamedFrame: @MainActor @Sendable (VTFrame) async -> Bool = { frame in
+                if self.lastRenderedPTS.isValid,
+                   CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) <= 0 {
+                    return true
+                }
                 let byteCount = CVPixelBufferGetDataSize(frame.buffer)
                 guard byteCount <= self.frameCacheMemoryBudget else {
                     self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
@@ -1088,7 +1092,7 @@ extension VTPlayerViewModel {
                 let processStart = DispatchTime.now()
                 do {
                     let streamedFrameCount = Mutex(0)
-                    let outputFrames = try await coordinator.processFrame(vtFrame) { frame in
+                    let processedFrames = try await coordinator.processFrame(vtFrame) { frame in
                         let admitted = await admitStreamedFrame(frame)
                         if admitted {
                             streamedFrameCount.withLock { $0 += 1 }
@@ -1096,6 +1100,10 @@ extension VTPlayerViewModel {
                         return admitted
                     }
                     let admittedStreamedFrameCount = streamedFrameCount.withLock { $0 }
+                    let outputFrames = processedFrames.filter { frame in
+                        !self.lastRenderedPTS.isValid ||
+                            CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) > 0
+                    }
                     let processEnd = DispatchTime.now()
 
                     guard gen == self.playbackGeneration else { break }
