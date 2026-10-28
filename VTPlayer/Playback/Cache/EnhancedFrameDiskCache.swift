@@ -592,7 +592,7 @@ actor EnhancedFrameDiskCache {
         maximumFrameCount: Int? = nil
     ) throws -> [VTFrame]? {
         guard var manifest = try completedManifest(for: key), manifest.key == key,
-              let entry = manifest.groups.first(where: { $0.groupIndex == groupIndex }),
+              let entry = groupEntry(for: groupIndex, in: manifest.groups),
               let filename = entry.filename else {
             return nil
         }
@@ -615,7 +615,7 @@ actor EnhancedFrameDiskCache {
     /// performed by a bounded playback read-ahead task.
     func groupFileURL(_ groupIndex: Int, for key: EnhancedFrameCacheKey) throws -> URL? {
         guard let manifest = try completedManifest(for: key), manifest.key == key,
-              let entry = manifest.groups.first(where: { $0.groupIndex == groupIndex }),
+              let entry = groupEntry(for: groupIndex, in: manifest.groups),
               let filename = entry.filename else {
             return nil
         }
@@ -889,6 +889,21 @@ actor EnhancedFrameDiskCache {
         } else {
             orderedTimelineKeys.remove(manifest.key.directoryName)
         }
+    }
+
+    private func groupEntry(for groupIndex: Int, in groups: [GroupEntry]) -> GroupEntry? {
+        var low = 0
+        var high = groups.count
+        while low < high {
+            let middle = low + (high - low) / 2
+            if groups[middle].groupIndex < groupIndex {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        guard groups.indices.contains(low), groups[low].groupIndex == groupIndex else { return nil }
+        return groups[low]
     }
 
     private func lowerBound(for time: CMTime, in groups: [GroupEntry]) -> Int {
