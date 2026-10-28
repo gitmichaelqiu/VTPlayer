@@ -454,11 +454,23 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
             requestedFramesPerSecond: 239.76,
             renderedTimelineRatio: 1.0
         ))
-        XCTAssertFalse(EnhancedPresentationGate.passes(
+        XCTAssertTrue(EnhancedPresentationGate.passes(
             measuredFramesPerSecond: 119,
             physicalFramesPerSecond: 120,
             requestedFramesPerSecond: 119.88,
             renderedTimelineRatio: 0.96
+        ))
+        XCTAssertTrue(EnhancedPresentationGate.passes(
+            measuredFramesPerSecond: 25,
+            physicalFramesPerSecond: 120,
+            requestedFramesPerSecond: 25,
+            renderedTimelineRatio: 1.022
+        ))
+        XCTAssertFalse(EnhancedPresentationGate.passes(
+            measuredFramesPerSecond: 25,
+            physicalFramesPerSecond: 120,
+            requestedFramesPerSecond: 25,
+            renderedTimelineRatio: 0.90
         ))
     }
 

@@ -100,7 +100,8 @@ struct EnhancedPresentationGate {
             : requestedFramesPerSecond
         let target = min(requestedFramesPerSecond, physicalCeiling)
         guard measuredFramesPerSecond >= target * minimumAcceptedTargetRatio else { return false }
-        return renderedTimelineRatio == 0 || (0.99...1.01).contains(renderedTimelineRatio)
+        // The short timeline sample can vary by a frame at either boundary.
+        return renderedTimelineRatio == 0 || (0.95...1.05).contains(renderedTimelineRatio)
     }
 }
 
