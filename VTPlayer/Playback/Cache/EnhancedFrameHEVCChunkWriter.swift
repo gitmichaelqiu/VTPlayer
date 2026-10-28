@@ -194,8 +194,7 @@ actor EnhancedFrameHEVCChunkWriter {
         guard try await Self.firstSampleIsSync(in: outputURL) else {
             throw EnhancedFrameDiskCacheError.invalidFrameData
         }
-        let fileData = try Data(contentsOf: outputURL, options: [.mappedIfSafe])
-        let digest = SHA256.hash(data: fileData).map { String(format: "%02x", $0) }.joined()
+        let digest = try Self.sha256(of: outputURL)
         return EnhancedFrameCacheEncodedChunk(
             chunkIndex: chunkIndex,
             filename: outputURL.lastPathComponent,
@@ -242,10 +241,7 @@ actor EnhancedFrameHEVCChunkWriter {
         from url: URL,
         consumeFrame: @escaping @Sendable (VTFrame) async throws -> Void
     ) async throws -> Int {
-        let fileData = try Data(contentsOf: url, options: [.mappedIfSafe])
-        let actualDigest = SHA256.hash(data: fileData).map { String(format: "%02x", $0) }.joined()
-        guard actualDigest == chunk.sha256,
-              chunk.codec == "HEVC",
+        guard chunk.codec == "HEVC",
               chunk.closedGOP,
               chunk.startsWithSyncSample,
               !chunk.allowsFrameReordering,
@@ -256,6 +252,10 @@ actor EnhancedFrameHEVCChunkWriter {
             guard let identifier = frame.attachmentIdentifier else { return true }
             return chunk.attachmentTable[identifier] != nil
         }) else {
+            throw EnhancedFrameDiskCacheError.invalidFrameData
+        }
+
+        guard try sha256(of: url) == chunk.sha256 else {
             throw EnhancedFrameDiskCacheError.invalidFrameData
         }
 
@@ -378,6 +378,19 @@ actor EnhancedFrameHEVCChunkWriter {
         self.input = input
         self.adaptor = adaptor
         self.startTime = presentationTime
+    }
+
+    private nonisolated static func sha256(of url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+
+        var hasher = SHA256()
+        while try autoreleasepool(invoking: {
+            guard let data = try handle.read(upToCount: 1 * 1_024 * 1_024), !data.isEmpty else { return false }
+            hasher.update(data: data)
+            return true
+        }) {}
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private nonisolated static func colorProperties(for pixelBuffer: CVPixelBuffer) -> [String: Any] {
