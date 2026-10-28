@@ -109,6 +109,20 @@ struct EnhancedPresentationGate {
     }
 }
 
+nonisolated struct EnhancedPresentationFailureTracker {
+    static let windowSeconds = 2.0
+    private var consecutiveFailures = 0
+
+    mutating func shouldRecover(passes: Bool) -> Bool {
+        if passes {
+            consecutiveFailures = 0
+            return false
+        }
+        consecutiveFailures += 1
+        return consecutiveFailures >= 2
+    }
+}
+
 nonisolated struct MacDisplayTickDriverSnapshot: Sendable {
     var callbacks: Int = 0
     var scheduled: Int = 0

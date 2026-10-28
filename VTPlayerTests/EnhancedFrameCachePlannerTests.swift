@@ -530,6 +530,19 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         ))
     }
 
+    func testSustainedLowPresentationRateRecoversWithinShortClip() {
+        var tracker = EnhancedPresentationFailureTracker()
+        let passes = EnhancedPresentationGate.passes(
+            measuredFramesPerSecond: 40, physicalFramesPerSecond: 120,
+            requestedFramesPerSecond: 119.88, renderedTimelineRatio: 0.34
+        )
+        XCTAssertFalse(tracker.shouldRecover(passes: passes))
+        XCTAssertTrue(tracker.shouldRecover(passes: passes))
+        XCTAssertLessThan(2 * EnhancedPresentationFailureTracker.windowSeconds, 10)
+        XCTAssertFalse(tracker.shouldRecover(passes: true))
+        XCTAssertFalse(tracker.shouldRecover(passes: false))
+    }
+
     func testRendererOnlyPlaybackDoesNotUseProcessedFrameCache() {
         XCTAssertFalse(EnhancedPresentationGate.canUseProcessedFrameCache(for: .disabled))
         var denoise = AppliedPipelineConfiguration.disabled

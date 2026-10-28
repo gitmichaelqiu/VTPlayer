@@ -677,9 +677,9 @@ extension VTPlayerViewModel {
             }
             var presentationWindowStart = DispatchTime.now()
             var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
-            var consecutiveFailedWindows = 0
+            var failureTracker = EnhancedPresentationFailureTracker()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !Task.isCancelled,
                       self.enhancedPresentationMonitorGeneration == monitorGeneration,
                       self.enhancedCachePreparationGeneration == preparationGeneration,
@@ -694,7 +694,7 @@ extension VTPlayerViewModel {
                 }
                 let now = DispatchTime.now()
                 let elapsed = self.elapsedUptimeSeconds(since: presentationWindowStart, until: now)
-                guard elapsed >= 5 else { continue }
+                guard elapsed >= EnhancedPresentationFailureTracker.windowSeconds else { continue }
 
                 let requestedRate = self.sourceFrameRate *
                     (candidate.frameInterpolationLevel > 0 ? Double(candidate.frameInterpolationLevel) : 1) *
@@ -724,8 +724,8 @@ extension VTPlayerViewModel {
                     self.renderedTimelineRatio,
                     passes.description
                 )
+                let shouldRecover = failureTracker.shouldRecover(passes: passes)
                 if passes {
-                    consecutiveFailedWindows = 0
                     self.livePresentationGateValidated = true
                     self.enhancedCachePreparationState = .ready
                     if self.playbackPhase == .monitoringEnhanced ||
@@ -738,8 +738,7 @@ extension VTPlayerViewModel {
                         presentationWindowStart = now
                         continue
                     }
-                    consecutiveFailedWindows += 1
-                    if consecutiveFailedWindows < 2 {
+                    if !shouldRecover {
                         presentationFrameBaseline = totalPresentedFrames
                         presentationWindowStart = now
                         continue
