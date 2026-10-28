@@ -363,7 +363,7 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertTrue(decodedChunk.metadata.closedGOP)
         XCTAssertTrue(decodedChunk.metadata.startsWithSyncSample)
         XCTAssertFalse(decodedChunk.metadata.allowsFrameReordering)
-        XCTAssertEqual(decodedChunk.metadata.maximumKeyFrameInterval, 60)
+        XCTAssertEqual(decodedChunk.metadata.maximumKeyFrameInterval, 600)
         XCTAssertEqual(decodedChunk.metadata.attachmentTable.count, 1)
         XCTAssertNotNil(CVBufferCopyAttachment(
             decodedChunk.frames[0].buffer,
@@ -449,6 +449,51 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
             CVBufferCopyAttachment(chunk.frames[0].buffer, kCVImageBufferColorPrimariesKey, nil) as? String,
             kCVImageBufferColorPrimaries_ITU_R_2020 as String
         )
+    }
+
+    func testEncodedChunksDecodeInOrderAcrossSeekBoundary() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        var key = cacheKey("long-gop-boundary")
+        key.cacheFormatVersion = EnhancedFrameCacheKey.currentHEVCChunkFormatVersion
+        let preparation = UUID()
+        let frameCount = 180
+        _ = try await cache.prepare(key: key, coverageBitmap: Array(repeating: true, count: frameCount),
+                                    diskBudgetBytes: 20 * 1_024 * 1_024, requiredAdditionalBytes: 0,
+                                    preparationIdentifier: preparation)
+        for index in 0..<frameCount {
+            let time = CMTime(value: Int64(index), timescale: 30)
+            let chunkIndex = EnhancedFrameCacheSizing.chunkIndex(for: time)
+            try await cache.recordEncodedSourceGroup(index, presentationTime: time, chunkIndex: chunkIndex,
+                                                     preparationIdentifier: preparation)
+            let frame = try makeFrame(value: UInt8(index % 255), time: time,
+                                      interpolated: index % 2 == 1, width: 64, height: 64)
+            try await cache.appendEncodedFrame(frame, groupIndex: index, chunkIndex: chunkIndex,
+                                               averageBitRate: 2_000_000, expectedFrameRate: 30,
+                                               preparationIdentifier: preparation)
+        }
+        _ = try await cache.finalizePreparation(preparationIdentifier: preparation)
+        let firstChunk = try await cache.readEncodedChunk(0, for: key)
+        let secondChunk = try await cache.readEncodedChunk(1, for: key)
+        let first = try XCTUnwrap(firstChunk)
+        let second = try XCTUnwrap(secondChunk)
+        XCTAssertTrue(first.metadata.startsWithSyncSample)
+        XCTAssertTrue(second.metadata.startsWithSyncSample)
+        XCTAssertEqual(first.metadata.maximumKeyFrameInterval, 150)
+        let decoded = first.frames + second.frames
+        XCTAssertEqual(decoded.count, frameCount)
+        for (index, frame) in decoded.enumerated() {
+            XCTAssertEqual(CMTimeCompare(frame.presentationTimeStamp, CMTime(value: Int64(index), timescale: 30)), 0)
+            XCTAssertEqual(frame.isInterpolated, index % 2 == 1)
+        }
+        for (seconds, expectedChunk) in [(4.9, 0), (4.99, 1), (5.0, 1), (5.01, 1), (5.9, 1)] {
+            let seek = CMTime(seconds: seconds, preferredTimescale: 600)
+            let chunk = try await cache.encodedChunkIndex(atOrAfter: seek, for: key)
+            XCTAssertEqual(chunk, expectedChunk)
+            let frames = expectedChunk == 0 ? first.frames : second.frames
+            XCTAssertNotNil(frames.first { CMTimeCompare($0.presentationTimeStamp, seek) >= 0 })
+        }
     }
 
     func testEncodedChunkMeetsMinimumQualityAgainstEnhancedInput() async throws {

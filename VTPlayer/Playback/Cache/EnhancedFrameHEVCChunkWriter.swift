@@ -88,6 +88,7 @@ actor EnhancedFrameHEVCChunkWriter {
     private let chunkIndex: Int
     private let averageBitRate: Int
     private let expectedFrameRate: Int
+    private let maximumKeyFrameInterval: Int
     private var writer: AVAssetWriter?
     private var input: AVAssetWriterInput?
     private var adaptor: AVAssetWriterInputPixelBufferAdaptor?
@@ -105,6 +106,10 @@ actor EnhancedFrameHEVCChunkWriter {
         self.chunkIndex = chunkIndex
         self.averageBitRate = averageBitRate
         self.expectedFrameRate = max(1, expectedFrameRate)
+        // Each seek decodes from the chunk’s first sync sample.
+        let chunkSeconds = max(1, Int(CMTimeGetSeconds(EnhancedFrameCacheSizing.chunkDuration)))
+        self.maximumKeyFrameInterval = self.expectedFrameRate > Int.max / chunkSeconds
+            ? Int.max : self.expectedFrameRate * chunkSeconds
     }
 
     func append(_ cachedFrame: EnhancedFrameCacheEncodedFrame) async throws {
@@ -202,7 +207,7 @@ actor EnhancedFrameHEVCChunkWriter {
             profile: profileName,
             averageBitRate: averageBitRate,
             expectedFrameRate: expectedFrameRate,
-            maximumKeyFrameInterval: max(1, expectedFrameRate / 2),
+            maximumKeyFrameInterval: maximumKeyFrameInterval,
             closedGOP: true,
             startsWithSyncSample: true,
             allowsFrameReordering: false,
@@ -335,7 +340,7 @@ actor EnhancedFrameHEVCChunkWriter {
             AVVideoAverageBitRateKey: averageBitRate,
             AVVideoProfileLevelKey: profile,
             AVVideoExpectedSourceFrameRateKey: expectedFrameRate,
-            AVVideoMaxKeyFrameIntervalKey: max(1, expectedFrameRate / 2),
+            AVVideoMaxKeyFrameIntervalKey: maximumKeyFrameInterval,
             AVVideoAllowFrameReorderingKey: false,
             kVTCompressionPropertyKey_DataRateLimits as String: [
                 NSNumber(value: hardLimitBytesPerSecond),
