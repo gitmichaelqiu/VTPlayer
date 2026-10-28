@@ -6,7 +6,7 @@ import Foundation
 nonisolated struct EnhancedFrameCacheKey: Codable, Equatable, Hashable, Sendable {
     static let schemaVersion = 7
     static let currentHEVCChunkFormatVersion = 6
-    static let currentProcessingPipelineVersion = 1
+    static let currentProcessingPipelineVersion = 2
     static let currentFrameSelectionPolicyVersion = 1
     static let currentCodecSettingsVersion = 1
 
@@ -510,6 +510,7 @@ actor EnhancedFrameDiskCache {
         } else if let activePreparationIdentifier {
             try await finishEncodedChunk(preparationIdentifier: activePreparationIdentifier)
         }
+        try Task.checkCancellation()
         guard let partialDirectory, var manifest = preparedManifest else {
             throw EnhancedFrameDiskCacheError.cacheNotPrepared
         }

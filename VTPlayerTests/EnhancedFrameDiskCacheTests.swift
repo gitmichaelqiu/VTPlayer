@@ -465,6 +465,37 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         }
     }
 
+    func testCancelledPreparationCannotBeFinalized() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("cancelled-preparation")
+        let preparation = UUID()
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.writeGroup(
+            [try makeFrame(value: 1, time: .zero, interpolated: false)],
+            for: 0,
+            preparationIdentifier: preparation
+        )
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await cache.finalizePreparation(preparationIdentifier: preparation)
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled preparation must not be promoted")
+        } catch is CancellationError { }
+        let status = try await cache.cachedStatus(for: key)
+        XCTAssertNil(status)
+        try await cache.discardPreparation(preparationIdentifier: preparation)
+    }
+
     func testStalePreparationCannotWriteOrDiscardNewPreparation() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

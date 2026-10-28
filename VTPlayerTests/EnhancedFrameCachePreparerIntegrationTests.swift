@@ -4,6 +4,21 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
+    func testCancelledFrameReaderThrowsCancellation() async {
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await VTFrameSequence(url: URL(fileURLWithPath: "/tmp/unused.mov"))
+                .makeAsyncIterator().next()
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled reading must not look like end of video")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     func testFrameReaderReportsUnreadableVideo() async {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
         let iterator = VTFrameSequence(url: url).makeAsyncIterator()

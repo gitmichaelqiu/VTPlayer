@@ -138,7 +138,7 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                 extendedPixelsRight: Int,
                 extendedPixelsBottom: Int
             ) async throws -> VTFrame? {
-                guard !Task.isCancelled else { return nil }
+                try Task.checkCancellation()
                 if !isInitialized {
                     let asset = AVURLAsset(url: url)
                     let tracks = try await asset.loadTracks(withMediaType: .video)
@@ -215,15 +215,19 @@ public struct VTFrameSequence: AsyncSequence, Sendable {
                 guard let reader = reader, let trackOutput = trackOutput else { return nil }
                 
                 switch reader.status {
-                case .completed, .cancelled:
+                case .completed:
                     return nil
+                case .cancelled:
+                    throw CancellationError()
                 case .failed:
                     throw VTFrameSequenceError.readerFailed(reader.error?.localizedDescription)
                 case .reading:
                     guard let sampleBuffer = autoreleasepool(invoking: { trackOutput.copyNextSampleBuffer() }) else {
                         switch reader.status {
-                        case .completed, .cancelled:
+                        case .completed:
                             return nil
+                        case .cancelled:
+                            throw CancellationError()
                         case .failed:
                             throw VTFrameSequenceError.readerFailed(reader.error?.localizedDescription)
                         case .reading:

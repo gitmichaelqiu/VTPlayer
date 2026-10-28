@@ -297,6 +297,7 @@ actor EnhancedFrameCachePreparer {
                     )
                 }
             }
+            try Task.checkCancellation()
             await coordinator.endSession()
             let status = try await diskCache.finalizePreparation(
                 actualGroupCount: groupIndex,
