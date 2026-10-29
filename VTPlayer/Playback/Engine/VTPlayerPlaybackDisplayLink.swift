@@ -73,11 +73,8 @@ struct MacDedicatedPresentationPolicy {
         frameInterpolationLevel: Int,
         screenMaximumFramesPerSecond: Int
     ) -> Bool {
-        guard sourceFramesPerSecond > 0 else { return false }
-        // Native-cadence live playback also benefits from moving presentation
-        // admission and scheduling off the main-thread cache path.
-        if frameInterpolationLevel == 0 { return true }
-        guard frameInterpolationLevel > 1,
+        guard sourceFramesPerSecond > 0,
+              frameInterpolationLevel > 1,
               screenMaximumFramesPerSecond > 60 else { return false }
         return sourceFramesPerSecond * Double(frameInterpolationLevel) > 60
     }

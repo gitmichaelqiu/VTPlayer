@@ -979,7 +979,7 @@ extension VTPlayerViewModel {
                 sparseCacheStatus = nil
             }
 
-            producerFrames: while !Task.isCancelled {
+            while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
 
                 if self.isPaused && !self.isBuffering && pausedPreparationFramesRemaining == 0 {
@@ -1143,16 +1143,6 @@ extension VTPlayerViewModel {
                         continue
                     }
 
-                    #if os(macOS)
-                    if usesLiveDedicatedPresentation {
-                        for frame in outputFrames {
-                            guard await admitStreamedFrame(frame) else { break producerFrames }
-                        }
-                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
-                        continue
-                    }
-                    #endif
-
                     let outputByteCount = outputFrames.reduce(into: 0) { total, frame in
                         total += CVPixelBufferGetDataSize(frame.buffer)
                     }
@@ -1204,13 +1194,6 @@ extension VTPlayerViewModel {
                         self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
                         break
                     }
-                    #if os(macOS)
-                    if usesLiveDedicatedPresentation {
-                        guard await admitStreamedFrame(vtFrame) else { break producerFrames }
-                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
-                        continue
-                    }
-                    #endif
                     let cacheAdmissionStart = DispatchTime.now()
                     guard await waitForCacheCapacity(fallbackByteCount) else { break }
                     let cacheAdmissionMilliseconds = Double(
