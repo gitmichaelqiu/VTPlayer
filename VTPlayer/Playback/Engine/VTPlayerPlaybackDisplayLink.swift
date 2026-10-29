@@ -807,7 +807,7 @@ extension VTPlayerViewModel {
                     anchorPresentationSeconds: anchorSeconds,
                     playbackRate: playbackSpeed,
                     lastRenderedPTS: lastRenderedPTS,
-                    catchesUpInterpolation: appliedPipelineConfiguration.frameInterpolationLevel > 0
+                    catchesUpInterpolation: true
                 )
                 macDedicatedMetalDisplayTickDriver = driver
                 let presentedFrameBaseline = renderer.totalPresentedFrameCount()
@@ -1002,43 +1002,22 @@ extension VTPlayerViewModel {
         var drained = 0
         var droppedInterpolatedFrames = 0
         let now = DispatchTime.now()
-        let needsTimelineCatchUp = appliedPipelineConfiguration.frameInterpolationLevel > 0 && sourceFrameRate > 0
 
         func dequeueFromMemoryCache() {
             self.lockCache {
-            if needsTimelineCatchUp {
-                // 4x output can exceed the display callback rate. Keep media
-                // time authoritative: present the newest frame due now and
-                // discard only interpolation frames the display has missed.
-                while self.processedFrameCacheStart < self.processedFrameCache.count {
-                    let candidate = self.processedFrameCache[self.processedFrameCacheStart]
-                    if candidate.presentationTimeStamp <= self.lastRenderedPTS {
-                        self.processedFrameCacheStart += 1
-                        drained += 1
-                        continue
-                    }
-                    let candidateTime = CMTimeGetSeconds(candidate.presentationTimeStamp)
-                    guard candidateTime <= presentationSecs + 0.005 else { break }
-                    lastFrameToRender = candidate
-                    self.lastRenderedPTS = candidate.presentationTimeStamp
+            while self.processedFrameCacheStart < self.processedFrameCache.count {
+                let candidate = self.processedFrameCache[self.processedFrameCacheStart]
+                if candidate.presentationTimeStamp <= self.lastRenderedPTS {
                     self.processedFrameCacheStart += 1
                     drained += 1
+                    continue
                 }
-                guard lastFrameToRender != nil else { return }
-            } else {
-                while self.processedFrameCacheStart < self.processedFrameCache.count,
-                      self.processedFrameCache[self.processedFrameCacheStart].presentationTimeStamp <= self.lastRenderedPTS {
-                    self.processedFrameCacheStart += 1
-                    drained += 1
-                }
-                guard self.processedFrameCacheStart < self.processedFrameCache.count else { return }
-                let firstFrame = self.processedFrameCache[self.processedFrameCacheStart]
-                let frameTime = CMTimeGetSeconds(firstFrame.presentationTimeStamp)
-                guard frameTime <= presentationSecs + 0.005 else { return }
-                lastFrameToRender = firstFrame
-                self.lastRenderedPTS = firstFrame.presentationTimeStamp
-                drained = 1
+                let candidateTime = CMTimeGetSeconds(candidate.presentationTimeStamp)
+                guard candidateTime <= presentationSecs + 0.005 else { break }
+                lastFrameToRender = candidate
+                self.lastRenderedPTS = candidate.presentationTimeStamp
                 self.processedFrameCacheStart += 1
+                drained += 1
             }
             self.compactProcessedFrameCacheIfNeeded()
             }
@@ -1048,7 +1027,7 @@ extension VTPlayerViewModel {
             if let selection = presentationQueue.dequeueNewestDue(
                 at: presentationSecs,
                 after: lastRenderedPTS,
-                catchesUpInterpolation: needsTimelineCatchUp
+                catchesUpInterpolation: true
             ) {
                 lastFrameToRender = selection.frame
                 lastRenderedPTS = selection.frame.presentationTimeStamp

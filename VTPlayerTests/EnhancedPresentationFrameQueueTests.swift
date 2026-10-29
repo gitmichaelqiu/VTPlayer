@@ -200,6 +200,18 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
         XCTAssertEqual(queue.snapshot().frameCount, 0)
     }
 
+    func testLateSourceFramesCatchUpToPresentationClock() throws {
+        let queue = EnhancedPresentationFrameQueue(capacityBytes: 1_000_000, capacityFrames: 8, generation: 1)
+        let frames = try (0..<6).map {
+            try makeFrame(time: CMTime(value: Int64($0), timescale: 30), interpolated: false)
+        }
+        XCTAssertTrue(queue.enqueue(contentsOf: frames, generation: 1))
+        let selection = queue.dequeueNewestDue(at: 0.14, after: CMTime(value: -1, timescale: 30),
+                                               catchesUpInterpolation: true)
+        XCTAssertEqual(selection?.frame.presentationTimeStamp, frames[4].presentationTimeStamp)
+        XCTAssertEqual(queue.snapshot().frameCount, 1)
+    }
+
     func testResetRejectsFramesFromSupersededGeneration() throws {
         let queue = EnhancedPresentationFrameQueue(
             capacityBytes: 1_000_000,
