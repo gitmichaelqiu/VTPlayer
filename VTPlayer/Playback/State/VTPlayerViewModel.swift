@@ -628,6 +628,8 @@ final class VTPlayerViewModel {
     
     // Fullscreen and Auto-hide HUD controls state
     var isFullScreen = false
+    private var fullscreenResumeURL: URL?
+    private weak var fullscreenTransitionWindow: NSWindow?
     var showControls = true
     var isHoveringControlBar = false
     var isHoveringVideo = false
@@ -1196,16 +1198,22 @@ final class VTPlayerViewModel {
             object: nil
         )
         
+        for name in [NSWindow.willEnterFullScreenNotification, NSWindow.willExitFullScreenNotification] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowWillChangeFullScreen(_:)), name: name, object: nil
+            )
+        }
+
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidEnterFullScreen),
+            selector: #selector(windowDidEnterFullScreen(_:)),
             name: NSWindow.didEnterFullScreenNotification,
             object: nil
         )
         
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidExitFullScreen),
+            selector: #selector(windowDidExitFullScreen(_:)),
             name: NSWindow.didExitFullScreenNotification,
             object: nil
         )
@@ -1544,8 +1552,27 @@ final class VTPlayerViewModel {
     }
     
     #if os(macOS)
-    @objc func windowDidEnterFullScreen() {
+    @objc private func windowWillChangeFullScreen(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === (NSApp.mainWindow ?? NSApp.keyWindow),
+              isPlaying, !isPaused, let videoURL else { return }
+        fullscreenResumeURL = videoURL
+        fullscreenTransitionWindow = window
+        pause()
+    }
+
+    private func resumeAfterFullScreenTransition(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === fullscreenTransitionWindow, let url = fullscreenResumeURL else { return }
+        fullscreenResumeURL = nil
+        fullscreenTransitionWindow = nil
+        guard videoURL == url, isPaused, isPlaying else { return }
+        play()
+    }
+
+    @objc func windowDidEnterFullScreen(_ notification: Notification) {
         self.isFullScreen = true
+        resumeAfterFullScreenTransition(notification)
         self.userActivityDetected()
         
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
@@ -1553,8 +1580,9 @@ final class VTPlayerViewModel {
         }
     }
     
-    @objc func windowDidExitFullScreen() {
+    @objc func windowDidExitFullScreen(_ notification: Notification) {
         self.isFullScreen = false
+        resumeAfterFullScreenTransition(notification)
         self.showControls = true
         if self.cursorHidden {
             NSCursor.unhide()
