@@ -48,6 +48,7 @@ final class EnhancedAudioPlayer {
     private var playbackRate = 1.0
     private var volume: Float = 1.0
     private var operationGate = EnhancedAudioOperationGate()
+    private var latestRenderedPTS: CMTime = .invalid
 
     func prepare(url: URL, initialRate: Double) async -> Bool {
         let asset = AVURLAsset(url: url)
@@ -70,7 +71,9 @@ final class EnhancedAudioPlayer {
     }
 
     func frameRendered(at pts: CMTime) {
-        guard let player, !started, !paused,
+        guard pts.isValid, pts.isNumeric else { return }
+        latestRenderedPTS = pts
+        guard let player, player.status == .readyToPlay, !started, !paused,
               let operation = operationGate.beginFrameAnchor() else { return }
 
         started = true
@@ -80,15 +83,26 @@ final class EnhancedAudioPlayer {
             to: CMTime(seconds: anchor, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
-        ) { [weak self, weak player] _ in
+        ) { [weak self, weak player] completed in
             guard let self, let player else { return }
             Task { @MainActor in
                 guard self.player === player,
                       self.operationGate.accepts(operation),
                       self.started,
                       !self.paused else { return }
-                player.rate = Float(self.playbackRate)
-                player.play()
+                guard completed, player.status == .readyToPlay else {
+                    self.started = false
+                    self.operationGate.armFrameAnchor(shouldPlay: true)
+                    return
+                }
+                // The video can advance while the initial seek is pending.
+                // Start from the latest displayed frame, not the stale one
+                // that initiated the seek.
+                player.setRate(
+                    Float(self.playbackRate),
+                    time: self.latestRenderedPTS,
+                    atHostTime: CMClockGetTime(CMClockGetHostTimeClock())
+                )
             }
         }
     }
@@ -96,6 +110,8 @@ final class EnhancedAudioPlayer {
     func pause() {
         paused = true
         player?.pause()
+        started = false
+        operationGate.armFrameAnchor(shouldPlay: false)
     }
 
     /// Stops the independent audio clock until the display path presents a
@@ -122,14 +138,9 @@ final class EnhancedAudioPlayer {
 
     func resume() {
         paused = false
-        guard started, let player else {
-            if !operationGate.isAwaitingFrameAnchor {
-                operationGate.armFrameAnchor(shouldPlay: true)
-            }
-            return
+        if !started && !operationGate.isAwaitingFrameAnchor {
+            operationGate.armFrameAnchor(shouldPlay: true)
         }
-        player.rate = Float(playbackRate)
-        player.play()
     }
 
     func stop() {

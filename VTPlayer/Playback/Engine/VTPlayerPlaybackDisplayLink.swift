@@ -610,7 +610,6 @@ extension VTPlayerViewModel {
                 pipelinePresentationReady = true
                 setNativeVideoEnabled(false)
             }
-            enhancedAudioPlayer?.frameRendered(at: update.presentationTimeStamp)
             if playbackPhase == .prerollingEnhanced {
                 if preparedEnhancedFrameCacheMode == nil {
                     transitionPlayback(to: .monitoringEnhanced)
@@ -621,6 +620,7 @@ extension VTPlayerViewModel {
                 }
             }
         }
+        enhancedAudioPlayer?.frameRendered(at: update.presentationTimeStamp)
         lastRenderedPTS = update.presentationTimeStamp
         lastPresentationWall = .now()
         displayLinkTickCount += update.callbacks
