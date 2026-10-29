@@ -23,6 +23,16 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
 
     func testHighRateLiveInterpolationUsesDedicatedPresentation() {
         XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 30,
+            frameInterpolationLevel: 0,
+            screenMaximumFramesPerSecond: 60
+        ))
+        XCTAssertFalse(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 0,
+            frameInterpolationLevel: 0,
+            screenMaximumFramesPerSecond: 120
+        ))
+        XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
             sourceFramesPerSecond: 25,
             frameInterpolationLevel: 4,
             screenMaximumFramesPerSecond: 120
