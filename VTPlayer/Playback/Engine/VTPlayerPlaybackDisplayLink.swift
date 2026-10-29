@@ -351,17 +351,23 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: @unchecked Sendable 
                 state.metrics.totalMainQueueDelayNanoseconds &+= now - dispatchedAt
             }
             state.pendingCallbacks += 1
+            let queued = presentationQueue.snapshot()
+            guard let nextSeconds = queued.nextPresentationSeconds else {
+                state.metrics.emptyQueueCallbacks += 1
+                return
+            }
+            guard nextSeconds <= presentationSeconds + 0.005 else { return }
+            let drawableAcquisitionStart = DispatchTime.now()
+            guard let drawable = metalLayer.nextDrawable(), state.isRunning else {
+                state.metrics.drawableAcquisitionFailures += 1
+                return
+            }
             guard let selection = presentationQueue.dequeueNewestDue(
                 at: presentationSeconds,
                 after: state.lastRenderedPTS,
                 catchesUpInterpolation: catchesUpInterpolation
             ), state.isRunning else {
                 state.metrics.emptyQueueCallbacks += 1
-                return
-            }
-            let drawableAcquisitionStart = DispatchTime.now()
-            guard let drawable = metalLayer.nextDrawable(), state.isRunning else {
-                state.metrics.drawableAcquisitionFailures += 1
                 return
             }
             guard encoder.encode(

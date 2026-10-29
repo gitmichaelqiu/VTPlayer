@@ -586,6 +586,7 @@ extension VTPlayerViewModel {
                 #if os(macOS)
                 if usesLiveDedicatedPresentation,
                    let presentationQueue = self.fullCachePresentationQueue {
+                    self.renderer.updateNativeHDRPresentation(for: frame.buffer)
                     let admissionStart = DispatchTime.now()
                     while !Task.isCancelled && gen == self.playbackGeneration {
                         switch presentationQueue.enqueueResult(
@@ -1104,6 +1105,14 @@ extension VTPlayerViewModel {
                 if preparedFrameCacheMode == .sparse {
                     self.enhancedCacheMissGroupCount += 1
                 }
+
+                #if os(macOS)
+                if usesLiveDedicatedPresentation, configuration == .disabled {
+                    guard await admitStreamedFrame(vtFrame) else { break producerFrames }
+                    self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
+                    continue
+                }
+                #endif
 
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()

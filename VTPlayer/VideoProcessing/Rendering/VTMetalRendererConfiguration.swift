@@ -153,6 +153,9 @@ extension VTMetalRenderer {
         guard transfer != nativeHDRTransfer else { return }
         nativeHDRTransfer = transfer
         configureExtendedDynamicRangePresentation()
+        #if os(macOS)
+        refreshFullCacheEncoderConfiguration()
+        #endif
     }
 
     /// The usable headroom can change with the selected display, brightness,
