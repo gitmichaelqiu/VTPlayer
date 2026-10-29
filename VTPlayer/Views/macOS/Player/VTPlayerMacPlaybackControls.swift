@@ -119,36 +119,10 @@ extension VTPlayerView {
         }
     }
 
-    @ViewBuilder
     var volumeControl: some View {
-        Button(action: { showVolumePopover.toggle() }) {
-            compactPlaybackControlLabel(
-                systemImage: volumeSymbolName,
-                value: viewModel.volume == 1
-                    ? nil
-                    : "\(Int((viewModel.volume * 100).rounded()))%",
-                isActive: viewModel.volume != 1
-            )
-        }
-        .buttonStyle(.plain)
-        .help("Adjust volume (0–100 percent)")
-        .popover(isPresented: $showVolumePopover, arrowEdge: .top) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(String(localized: "Volume: %@", defaultValue: "Volume: \(viewModel.volume.formatted(.percent.precision(.fractionLength(0))))", comment: "Current volume"))
-                    .font(.headline)
-                Slider(value: Binding(
-                    get: { viewModel.volume },
-                    set: { newValue in
-                        viewModel.volume = newValue
-                    }
-                ), in: 0...1, step: 0.05)
-            }
-            .padding(16)
-            .frame(width: 220)
-        }
+        MacVolumeControl(viewModel: viewModel, showVolumePopover: $showVolumePopover)
     }
 
-    @ViewBuilder
     private func compactPlaybackControlLabel(
         systemImage: String,
         value: String?,
@@ -166,15 +140,6 @@ extension VTPlayerView {
         .padding(.horizontal, value == nil ? 7 : 9)
         .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
-
-    private var volumeSymbolName: String {
-        switch viewModel.volume {
-        case 0: return "speaker.slash.fill"
-        case 0..<0.5: return "speaker.wave.1.fill"
-        case 0..<0.8: return "speaker.wave.2.fill"
-        default: return "speaker.wave.3.fill"
-        }
     }
 
     @ViewBuilder
@@ -213,6 +178,71 @@ extension VTPlayerView {
         EmptyView()
         #endif
     }
+
+private struct MacVolumeControl: View {
+    let viewModel: VTPlayerViewModel
+    @Binding var showVolumePopover: Bool
+
+    var body: some View {
+        Button(action: { showVolumePopover.toggle() }) {
+            compactPlaybackControlLabel(
+                systemImage: volumeSymbolName,
+                value: viewModel.volume == 1
+                    ? nil
+                    : "\(Int((viewModel.volume * 100).rounded()))%",
+                isActive: viewModel.volume != 1
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Adjust volume (0–100 percent)")
+        .popover(isPresented: $showVolumePopover, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(String(localized: "Volume: %@", defaultValue: "Volume: \(viewModel.volume.formatted(.percent.precision(.fractionLength(0))))", comment: "Current volume"))
+                    .font(.headline)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.18), value: viewModel.volume)
+                Slider(value: Binding(
+                    get: { viewModel.volume },
+                    set: { newValue in
+                        withAnimation(.snappy(duration: 0.18)) { viewModel.volume = newValue }
+                    }
+                ), in: 0...1, step: 0.05)
+            }
+            .padding(16)
+            .frame(width: 220)
+        }
+    }
+
+    @ViewBuilder
+    private func compactPlaybackControlLabel(
+        systemImage: String,
+        value: String?,
+        isActive: Bool
+    ) -> some View {
+        HStack(spacing: value == nil ? 0 : 5) {
+            Image(systemName: systemImage)
+            if let value {
+                Text(value)
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(isActive ? .primary : .secondary)
+        .padding(.vertical, 5)
+        .padding(.horizontal, value == nil ? 7 : 9)
+        .background(isActive ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private var volumeSymbolName: String {
+        switch viewModel.volume {
+        case 0: return "speaker.slash.fill"
+        case 0..<0.5: return "speaker.wave.1.fill"
+        case 0..<0.8: return "speaker.wave.2.fill"
+        default: return "speaker.wave.3.fill"
+        }
+    }
+
+ }
 
 #endif
 }
