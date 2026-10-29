@@ -338,7 +338,9 @@ final class VTPlayerViewModel {
                 volume = clamped
                 return
             }
-            player?.volume = primaryAudioMutedForEnhancement ? 0 : Float(clamped)
+            if !primaryAudioMutedForEnhancement {
+                player?.volume = Float(clamped)
+            }
             enhancedAudioPlayer?.setVolume(Float(clamped))
         }
     }

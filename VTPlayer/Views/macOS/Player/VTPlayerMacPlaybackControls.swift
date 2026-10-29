@@ -136,12 +136,10 @@ extension VTPlayerView {
             VStack(alignment: .leading, spacing: 10) {
                 Text(String(localized: "Volume: %@", defaultValue: "Volume: \(viewModel.volume.formatted(.percent.precision(.fractionLength(0))))", comment: "Current volume"))
                     .font(.headline)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.18), value: viewModel.volume)
                 Slider(value: Binding(
                     get: { viewModel.volume },
                     set: { newValue in
-                        withAnimation(.snappy(duration: 0.18)) { viewModel.volume = newValue }
+                        viewModel.volume = newValue
                     }
                 ), in: 0...1, step: 0.05)
             }
