@@ -500,6 +500,18 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         XCTAssertTrue(plan.coverageBitmap.allSatisfy { $0 })
     }
 
+    @MainActor
+    func testChangingVolumeKeepsPrimaryAudioMutedDuringEnhancedPlayback() {
+        let model = VTPlayerViewModel()
+        let player = AVPlayer()
+        model.player = player
+        model.setPrimaryAudioMuted(true)
+        model.volume = 0.4
+        XCTAssertEqual(player.volume, 0)
+        model.setPrimaryAudioMuted(false)
+        XCTAssertEqual(player.volume, 0.4, accuracy: 0.001)
+    }
+
     func testPresentationGateUsesPhysicalDisplayCeiling() {
         XCTAssertTrue(EnhancedPresentationGate.passes(
             measuredFramesPerSecond: 116.5,

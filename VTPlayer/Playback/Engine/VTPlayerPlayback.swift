@@ -375,6 +375,7 @@ extension VTPlayerViewModel {
     #endif
 
     func setPrimaryAudioMuted(_ muted: Bool) {
+        primaryAudioMutedForEnhancement = muted
         player?.volume = muted ? 0 : Float(volume)
     }
 

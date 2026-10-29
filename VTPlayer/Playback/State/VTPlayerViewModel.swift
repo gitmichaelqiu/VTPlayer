@@ -330,6 +330,7 @@ final class VTPlayerViewModel {
             }
         }
     }
+    @ObservationIgnored var primaryAudioMutedForEnhancement = false
     var volume: Double = 1.0 {
         didSet {
             let clamped = max(0.0, min(1.0, volume))
@@ -337,7 +338,7 @@ final class VTPlayerViewModel {
                 volume = clamped
                 return
             }
-            player?.volume = Float(clamped)
+            player?.volume = primaryAudioMutedForEnhancement ? 0 : Float(clamped)
             enhancedAudioPlayer?.setVolume(Float(clamped))
         }
     }
