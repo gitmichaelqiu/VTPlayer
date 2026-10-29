@@ -1677,6 +1677,7 @@ final class VTPlayerViewModel {
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         let targetRate = Float(self.playbackSpeed)
         let shouldPlay = self.isPlaying && !self.isPaused
+        enhancedAudioPlayer?.awaitRenderedFrameAnchor(shouldPlay: shouldPlay)
         #if os(macOS)
         suppressNativeTimeObserverDuringSeek = true
         suppressRateObserver = true
@@ -1691,6 +1692,7 @@ final class VTPlayerViewModel {
                 self.suppressRateObserver = false
 #endif
                 guard completed else { return }
+                self.pendingExplicitSeekPTS = nil
 
                 // Re-assert player rate — AVPlayer can transiently drop
                 // rate to 0 during seek, causing arrow-key seeks to
@@ -1754,6 +1756,7 @@ final class VTPlayerViewModel {
                 return
             }
             self.pendingExplicitSeekPTS = nil
+            return
         } else if pendingResumePTS == nil {
             // Do not let an unsolicited AVPlayer time jump rewrite the
             // enhanced decoder timeline. Explicit seek/scrub paths register
@@ -1782,8 +1785,11 @@ final class VTPlayerViewModel {
         // If paused (e.g. scrubbing), read and draw a single frame immediately
         // at the new seek position so the screen updates in real time.
         if self.isPaused, let url = videoURL {
+            let requestGeneration = seekGeneration
             Task { @MainActor in
-                if let frame = await self.readSingleFrame(from: url, at: currentTime) {
+                if let frame = await self.readSingleFrame(from: url, at: currentTime),
+                   requestGeneration == self.seekGeneration, self.player === player,
+                   self.isPaused {
                     self.renderer.render(pixelBuffer: frame.buffer)
                 }
             }
@@ -1826,6 +1832,7 @@ final class VTPlayerViewModel {
     }
 
     private func performScrub(to seconds: Double, shouldResume: Bool) {
+        enhancedAudioPlayer?.awaitRenderedFrameAnchor(shouldPlay: shouldResume)
         ignoreAutomaticTimeJumpsUntil = nil
         pendingResumePTS = nil
         pendingExplicitSeekPTS = CMTime(seconds: seconds, preferredTimescale: 600)
@@ -1858,13 +1865,16 @@ final class VTPlayerViewModel {
                 self.suppressRateObserver = false
 #endif
                 guard completed else { return }
+                self.pendingExplicitSeekPTS = nil
 
                 // Read a single frame via AVAssetReader (video track is
                 // disabled on AVPlayer, so copyPixelBuffer won't work).
-                if let frame = await self.readSingleFrame(from: url, at: time) {
+                if let frame = await self.readSingleFrame(from: url, at: time),
+                   requestGeneration == self.seekGeneration, self.player === player,
+                   self.isPaused || !self.isPlaying {
                     self.renderer.render(pixelBuffer: frame.buffer)
                 }
-                if shouldResume, requestGeneration == self.seekGeneration {
+                if shouldResume, requestGeneration == self.seekGeneration, self.player === player {
                     self.play()
                 }
             }
@@ -1885,8 +1895,11 @@ final class VTPlayerViewModel {
         guard let url = videoURL else { return }
         // Small delay to let the seek settle
         try? await Task.sleep(nanoseconds: 10_000_000)
-        guard requestGeneration == seekGeneration, self.player === player else { return }
-        if let frame = await readSingleFrame(from: url, at: time) {
+        guard requestGeneration == seekGeneration, self.player === player,
+              isPaused || !isPlaying else { return }
+        if let frame = await readSingleFrame(from: url, at: time),
+           requestGeneration == seekGeneration, self.player === player,
+           isPaused || !isPlaying {
             self.renderer.render(pixelBuffer: frame.buffer)
         }
     }
