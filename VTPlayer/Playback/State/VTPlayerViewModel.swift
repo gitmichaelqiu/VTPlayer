@@ -140,6 +140,7 @@ final class VTPlayerViewModel {
     var playbackIssue: PlaybackIssue?
     var playbackNotice: String?
     var nativeFallbackActive = false
+    var processingEnhancementsEnabled = true
     @ObservationIgnored var playbackNoticeTask: Task<Void, Never>?
     @ObservationIgnored var suppressNativeTimeObserverDuringSeek = false
     @ObservationIgnored var scrubPreviewTask: Task<Void, Never>?
@@ -237,7 +238,7 @@ final class VTPlayerViewModel {
     @ObservationIgnored var dedicatedPresentationFallbackConfiguration: AppliedPipelineConfiguration?
     @ObservationIgnored var dedicatedPresentationFallbackSummary: String?
 
-    var draftPipelineConfiguration: AppliedPipelineConfiguration {
+    var selectedPipelineConfiguration: AppliedPipelineConfiguration {
         AppliedPipelineConfiguration(
             superResolutionLevel: superResolutionLevel,
             qualitySuperResolutionScaleFactor: qualitySuperResolutionScaleFactor,
@@ -245,6 +246,13 @@ final class VTPlayerViewModel {
             denoiseStrength: denoiseStrength,
             motionBlurStrength: motionBlurStrength
         )
+    }
+
+    var draftPipelineConfiguration: AppliedPipelineConfiguration {
+        #if os(macOS)
+        if !processingEnhancementsEnabled { return .disabled }
+        #endif
+        return selectedPipelineConfiguration
     }
 
     var hasUnappliedPipelineChanges: Bool {

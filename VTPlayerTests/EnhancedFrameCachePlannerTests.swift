@@ -3,6 +3,25 @@ import AVFoundation
 @testable import VTPlayer
 
 final class EnhancedFrameCachePlannerTests: XCTestCase {
+    #if os(macOS)
+    @MainActor
+    func testDisablingProcessingPreservesSelectionAndAdjustments() {
+        let model = VTPlayerViewModel()
+        model.frameInterpolationIsSupported = true
+        model.frameInterpolationLevel = 2
+        model.appliedPipelineConfiguration = model.selectedPipelineConfiguration
+        model.sharpness = 0.5
+        model.appliedSharpness = 0.5
+
+        model.setProcessingEnhancementsEnabled(false)
+
+        XCTAssertFalse(model.processingEnhancementsEnabled)
+        XCTAssertEqual(model.frameInterpolationLevel, 2)
+        XCTAssertEqual(model.draftPipelineConfiguration, .disabled)
+        XCTAssertEqual(model.appliedSharpness, 0.5)
+        XCTAssertTrue(model.isPipelineActive)
+    }
+    #endif
     @MainActor
     func testQualitySuperResolution4xCanCombineWithSupportedFrameInterpolation() {
         let viewModel = VTPlayerViewModel()

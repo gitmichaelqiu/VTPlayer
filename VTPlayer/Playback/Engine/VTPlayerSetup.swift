@@ -8,6 +8,7 @@ extension VTPlayerViewModel {
         transitionPlayback(to: .loading)
         clearPlaybackIssue()
         nativeFallbackActive = false
+        processingEnhancementsEnabled = true
         livePresentationGateValidated = false
         // The previous video's applied values must not make the new title
         // look enhanced while its settings/capabilities are still loading.

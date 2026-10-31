@@ -114,9 +114,9 @@ extension VTPlayerViewModel {
     func saveVideoSettings() {
         guard let url = videoURL else { return }
         #if os(macOS)
-        let pipelineConfiguration = hasUnappliedPipelineChanges
-            ? persistedPipelineConfiguration
-            : appliedPipelineConfiguration
+        let pipelineConfiguration = !processingEnhancementsEnabled
+            ? selectedPipelineConfiguration
+            : (hasUnappliedPipelineChanges ? persistedPipelineConfiguration : appliedPipelineConfiguration)
         let savedSharpness = hasUnappliedPipelineChanges ? persistedSharpness : appliedSharpness
         let savedHDRStrength = hasUnappliedPipelineChanges ? persistedHDRStrength : appliedHDRStrength
         let savedHDRColorfulness = hasUnappliedPipelineChanges ? persistedHDRColorfulness : appliedHDRColorfulness

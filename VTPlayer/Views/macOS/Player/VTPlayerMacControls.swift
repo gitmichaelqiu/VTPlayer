@@ -87,8 +87,15 @@ extension VTPlayerView {
 
             HStack(spacing: 10) {
                 playPauseButton
+                Toggle("Enhancements", isOn: Binding(
+                    get: { viewModel.processingEnhancementsEnabled },
+                    set: { viewModel.setProcessingEnhancementsEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(spacing: 8) {
+                Group {
                 // Super Resolution Popover
                 Button {
                     showSuperResolutionPopover.toggle()
@@ -247,6 +254,10 @@ extension VTPlayerView {
                     .padding(16)
                     .frame(width: 220)
                 }
+
+                }
+                .disabled(!viewModel.processingEnhancementsEnabled)
+                .opacity(viewModel.processingEnhancementsEnabled ? 1 : 0.5)
 
                 // Image Adjustments Popover Button
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {

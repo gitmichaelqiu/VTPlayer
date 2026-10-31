@@ -4,6 +4,30 @@ import Foundation
 
 extension VTPlayerViewModel {
     #if os(macOS)
+    func setProcessingEnhancementsEnabled(_ enabled: Bool) {
+        guard processingEnhancementsEnabled != enabled else { return }
+        enhancementApplyTask?.cancel()
+        enhancementApplyTask = nil
+        cancelEnhancedCachePreparation(restorePreviousPlayback: false)
+        processingEnhancementsEnabled = enabled
+        nativeFallbackActive = false
+        if enabled {
+            applyPipelineEnhancements()
+        } else {
+            stopPlaybackLoopOnly()
+            appliedPipelineConfiguration = .disabled
+            preparedEnhancedFrameCacheKey = nil
+            preparedEnhancedFrameCacheMode = nil
+            enhancedCacheCoveragePercent = 0
+            restartAppliedEnhancements()
+        }
+        saveVideoSettings()
+    }
+
+    func cancelPreparationAndDisableEnhancements() {
+        setProcessingEnhancementsEnabled(false)
+    }
+
     func cancelEnhancedCachePreparation(restorePreviousPlayback: Bool = true) {
         let hasActivePreparation = enhancedCachePreparationTask != nil ||
             enhancedPresentationMonitorTask != nil ||

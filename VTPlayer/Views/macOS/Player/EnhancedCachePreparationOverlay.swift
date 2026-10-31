@@ -50,11 +50,7 @@ private struct EnhancedCachePreparationIndicator: View {
             }
 
             Button("Cancel", role: .cancel) {
-                if viewModel.enhancedCachePreparationState == .prerolling {
-                    viewModel.cancelEnhancedPlaybackPreroll()
-                } else {
-                    viewModel.cancelEnhancedCachePreparation()
-                }
+                viewModel.cancelPreparationAndDisableEnhancements()
             }
             .buttonStyle(.glass)
             .controlSize(.small)
