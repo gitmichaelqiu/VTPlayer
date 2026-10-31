@@ -1357,12 +1357,12 @@
         }
       }
     },
-    "Presented 1% Low" : {
+    "Presented %@ Low" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "实际呈现帧率 1% 低值"
+            "value" : "实际呈现帧率 %@ 低值"
           }
         }
       }

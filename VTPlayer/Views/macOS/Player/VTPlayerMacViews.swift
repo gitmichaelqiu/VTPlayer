@@ -235,7 +235,8 @@ extension VTPlayerView {
                             .monospacedDigit()
                             .foregroundStyle(viewModel.actualPresentedFrameRate >= viewModel.displayTargetFrameRate * 0.97 ? .blue : .red)
                     }
-                    LabeledContent("Presented 1% Low") {
+                    let onePercent = 0.01.formatted(.percent.precision(.fractionLength(0)))
+                    LabeledContent("Presented \(onePercent) Low") {
                         Text(String(format: "%.1f Hz", viewModel.actualPresented1PercentLow))
                             .monospacedDigit()
                             .foregroundStyle(viewModel.actualPresented1PercentLow >= viewModel.displayTargetFrameRate * 0.97 ? .blue : .red)
