@@ -552,6 +552,13 @@ import MediaPlayer
 
 extension VTPlayerViewModel {
     #if os(macOS)
+    private func logPlaybackBaseline() {
+        let video = CMTimeGetSeconds(lastRenderedPTS)
+        let audio = enhancedAudioPlayer?.currentTime.map(CMTimeGetSeconds)
+        let valid = audio.map { $0.isFinite && video.isFinite } ?? false
+        let offset = valid ? (audio ?? 0) - video : 0
+        NSLog("PLAYBACK-METRICS: timelineRatio=%.4f timelineSampleSeconds=%.2f audioClockAvailable=%d audioVideoOffsetSeconds=%.4f", renderedTimelineRatio, renderedTimelineSampleDuration, valid ? 1 : 0, offset)
+    }
     func resetActualPresentedFrameMetrics() {
         actualPresentedFrameBaseline = renderer.totalPresentedFrameCount()
         actualPresentedMetricWindowStart = .now()
@@ -631,6 +638,7 @@ extension VTPlayerViewModel {
         guard elapsed >= 5,
               let driver = macDedicatedMetalDisplayTickDriver,
               let presentationQueue = fullCachePresentationQueue else { return }
+        logPlaybackBaseline()
 
         let queue = presentationQueue.snapshot(consumeActivity: true)
         let rendererPerformance = renderer.consumePerformanceSnapshot()
@@ -1112,6 +1120,7 @@ extension VTPlayerViewModel {
             let cacheMisses = enhancedCacheMissGroupCount
             #if os(macOS)
             let rendererPerformance = renderer.consumePerformanceSnapshot()
+            logPlaybackBaseline()
             let drawRate = Double(rendererPerformance.drawAttempts) / diagElapsed
             let drawableRate = Double(rendererPerformance.drawableAcquisitions) / diagElapsed
             let drawableSize = renderer.drawableSize
