@@ -559,13 +559,6 @@ final class MacAppKitDisplayTickDriver: NSObject {
 
 }
 
-private let macDisplayLinkCallback: CVDisplayLinkOutputCallback = {
-    _, _, _, _, _, userInfo in
-    guard let userInfo else { return kCVReturnError }
-    let driver = Unmanaged<MacDisplayTickDriver>.fromOpaque(userInfo).takeUnretainedValue()
-    driver.scheduleTick()
-    return kCVReturnSuccess
-}
 #endif
 #if os(iOS)
 import MediaPlayer
@@ -766,8 +759,7 @@ extension VTPlayerViewModel {
 
         // Use the same display-link scheduler on both platforms.
         #if os(macOS)
-        guard macDisplayLink == nil,
-              macMetalDisplayLink == nil,
+        guard macMetalDisplayLink == nil,
               macDedicatedMetalDisplayTickDriver == nil else { return }
         let displayID = renderer.window?.screen?.deviceDescription[
             NSDeviceDescriptionKey("NSScreenNumber")
@@ -882,7 +874,7 @@ extension VTPlayerViewModel {
             NSLog("RENDER: scheduling=metalDisplayLink requestedHz=%d latency=1", maximumFramesPerSecond)
             return
         }
-        if #available(macOS 14.0, *) {
+        do {
             let driver = MacAppKitDisplayTickDriver(viewModel: self)
             let link = renderer.displayLink(
                 target: driver,
@@ -906,34 +898,6 @@ extension VTPlayerViewModel {
             return
         }
 
-        let driver = MacDisplayTickDriver(viewModel: self)
-        var displayLink: CVDisplayLink?
-        let createResult: CVReturn
-        if let displayID {
-            createResult = CVDisplayLinkCreateWithCGDisplay(displayID, &displayLink)
-        } else {
-            createResult = CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
-        }
-        guard createResult == kCVReturnSuccess,
-              let displayLink,
-              CVDisplayLinkSetOutputCallback(
-                displayLink,
-                macDisplayLinkCallback,
-                Unmanaged.passUnretained(driver).toOpaque()
-              ) == kCVReturnSuccess else {
-            renderer.setExternalDisplayScheduling(false)
-            return
-        }
-        macDisplayTickDriver = driver
-        macDisplayLink = displayLink
-        CVDisplayLinkStart(displayLink)
-        if macPhysicalDisplayCadenceMonitor == nil {
-            let monitor = MacPhysicalDisplayCadenceMonitor(displayID: displayID)
-            monitor?.start()
-            macPhysicalDisplayCadenceMonitor = monitor
-        }
-        NSLog("RENDER: scheduling=cvDisplayLink requestedHz=%d", renderer.preferredFramesPerSecond)
-        return
         #else
         let link = CADisplayLink(target: self, selector: #selector(caDisplayLinkTick))
         #if os(iOS)

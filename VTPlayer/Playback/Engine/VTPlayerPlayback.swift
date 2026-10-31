@@ -348,10 +348,6 @@ extension VTPlayerViewModel {
         macMetalDisplayTickDriver = nil
         macPhysicalDisplayCadenceMonitor?.stop()
         macPhysicalDisplayCadenceMonitor = nil
-        if let macDisplayLink {
-            CVDisplayLinkStop(macDisplayLink)
-            self.macDisplayLink = nil
-        }
         macDisplayTickDriver = nil
         macAppKitDisplayTickDriver = nil
         renderer.setExternalDisplayScheduling(false)
