@@ -308,6 +308,7 @@ struct VTPlayerView: View {
         }
     }
 
+    #if os(macOS)
     @ViewBuilder
     var splitViewLayout: some View {
         if !viewModel.isFullScreen {
@@ -368,6 +369,8 @@ struct VTPlayerView: View {
         }
     }
 
+    #endif
+
     #if os(iOS)
     @ViewBuilder
     var iphoneLayout: some View {
@@ -377,6 +380,7 @@ struct VTPlayerView: View {
 
 
 
+    #if os(macOS)
     @ViewBuilder
     var videoContent: some View {
         ZStack {
@@ -397,6 +401,7 @@ struct VTPlayerView: View {
                 }
                 #endif
 
+            #if os(macOS)
             // QuickTime-style Floating Control Bar at the bottom
             if viewModel.videoURL != nil {
                 VStack {
@@ -404,6 +409,8 @@ struct VTPlayerView: View {
                     controlBar
                 }
             }
+
+            #endif
 
             // Hidden keyboard shortcuts for seeking
             Button("") { viewModel.seekRelative(-5) }
@@ -485,6 +492,8 @@ struct VTPlayerView: View {
             }
         }
     }
+
+    #endif
 
     func formatTime(_ seconds: Double) -> String {
         guard !seconds.isNaN && !seconds.isInfinite else { return "00:00" }

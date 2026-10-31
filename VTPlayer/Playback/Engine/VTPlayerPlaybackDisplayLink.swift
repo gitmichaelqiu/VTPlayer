@@ -3,6 +3,25 @@ import AVFoundation
 import VideoToolbox
 import CoreVideo
 import MetalKit
+struct DisplayTargetClock {
+    nonisolated static func presentationSeconds(
+        currentPresentationSeconds: Double,
+        targetHostTime: CFTimeInterval?,
+        currentHostTime: CFTimeInterval,
+        playbackRate: Double
+    ) -> Double {
+        guard let targetHostTime,
+              targetHostTime.isFinite,
+              currentHostTime.isFinite,
+              targetHostTime > currentHostTime else {
+            return currentPresentationSeconds
+        }
+        return currentPresentationSeconds +
+            (targetHostTime - currentHostTime) * max(0, playbackRate)
+    }
+}
+
+
 #if os(macOS)
 import AppKit
 import Synchronization
@@ -37,23 +56,6 @@ struct EnhancedDisplaySchedulingPolicy {
     }
 }
 
-struct DisplayTargetClock {
-    nonisolated static func presentationSeconds(
-        currentPresentationSeconds: Double,
-        targetHostTime: CFTimeInterval?,
-        currentHostTime: CFTimeInterval,
-        playbackRate: Double
-    ) -> Double {
-        guard let targetHostTime,
-              targetHostTime.isFinite,
-              currentHostTime.isFinite,
-              targetHostTime > currentHostTime else {
-            return currentPresentationSeconds
-        }
-        return currentPresentationSeconds +
-            (targetHostTime - currentHostTime) * max(0, playbackRate)
-    }
-}
 
 struct FullCachePresentationGeneration {
     nonisolated static func accepts(

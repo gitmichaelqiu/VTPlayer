@@ -54,10 +54,14 @@ extension VTPlayerViewModel {
                     await MainActor.run {
                         guard setupGeneration == self.playbackGeneration,
                               self.videoURL == url else { return }
+                        #if os(macOS)
                         self.reportPlaybackIssue(
                             stage: .loading,
                             message: "This file does not contain a playable video track."
                         )
+                        #else
+                        self.srInitializationError = "This file does not contain a playable video track."
+                        #endif
                     }
                     return
                 }
@@ -429,6 +433,16 @@ extension VTPlayerViewModel {
         isBuffering = false
         pipelinePresentationReady = isPipelineActive ? pipelinePresentationReady : false
         transitionPlayback(to: .ended)
+        saveProgress()
+    }
+    #else
+    func handlePlaybackEnd(for endingPlayer: AVPlayer) {
+        guard player === endingPlayer else { return }
+        stopPlaybackLoopOnly()
+        stopEnhancedAudioPlayback()
+        isPlaying = false
+        isPaused = true
+        isBuffering = false
         saveProgress()
     }
     #endif

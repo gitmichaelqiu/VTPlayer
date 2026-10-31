@@ -538,7 +538,9 @@ extension VTPlayerViewModel {
                 if !shouldResumePlayback {
                     self.isBuffering = false
                     self.enhancedCachePreparationState = .ready
+                    #if os(macOS)
                     self.transitionPlayback(to: .paused)
+                    #endif
                     return
                 }
                 guard waitingForFramePreroll else { return }
@@ -809,6 +811,7 @@ extension VTPlayerViewModel {
             }
             #endif
 
+            #if os(macOS)
             if let preparedFrameCacheKey, preparedFrameCacheMode == .full {
                 #if os(macOS)
                 let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
@@ -926,15 +929,19 @@ extension VTPlayerViewModel {
                                 break
                             }
                             scheduleReadAhead(from: groupIndex + 1)
+                            #if os(macOS)
                             let admissionSignpost = MacPresentationSignposts.begin("FullCacheAdmission")
+                            #endif
                             let admitted = presentationQueue.enqueue(
                                 contentsOf: frames,
                                 generation: handledGeneration
                             )
+                            #if os(macOS)
                             MacPresentationSignposts.end(
                                 "FullCacheAdmission",
                                 identifier: admissionSignpost
                             )
+                            #endif
                             guard admitted else { continue }
                             presentationQueue.recordCacheHitGroup(
                                 generation: handledGeneration,
@@ -970,6 +977,7 @@ extension VTPlayerViewModel {
                 return
             }
 
+            #endif
             let sparseCacheStatus: EnhancedFrameCacheStatus?
             if let preparedFrameCacheKey, preparedFrameCacheMode == .sparse {
                 sparseCacheStatus = try? await self.enhancedFrameDiskCache.cachedStatus(for: preparedFrameCacheKey)

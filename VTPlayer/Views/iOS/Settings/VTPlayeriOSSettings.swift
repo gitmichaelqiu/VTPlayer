@@ -28,7 +28,7 @@ private struct AnimatedIOSSettingValue: View {
     }
 }
 
-private struct IOSSliderSettingRow: View {
+struct IOSSliderSettingRow: View {
     let title: LocalizedStringKey
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -92,7 +92,7 @@ private struct IOSMoreApp: Identifiable {
     let iconName: String
 }
 
-private struct IOSMoreAppsSheet: View {
+struct IOSMoreAppsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
@@ -186,7 +186,7 @@ private struct IOSMoreAppsSheet: View {
     }
 }
 
-private struct IOSAcknowledgementSheet: View {
+struct IOSAcknowledgementSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

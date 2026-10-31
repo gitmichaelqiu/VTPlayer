@@ -632,7 +632,9 @@ final class VTPlayerViewModel {
     // Fullscreen and Auto-hide HUD controls state
     var isFullScreen = false
     private var fullscreenResumeURL: URL?
+    #if os(macOS)
     private weak var fullscreenTransitionWindow: NSWindow?
+    #endif
     var showControls = true
     var isHoveringControlBar = false
     var isHoveringVideo = false

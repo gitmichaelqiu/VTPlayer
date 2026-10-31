@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import AVKit
 import AVFoundation
@@ -356,3 +357,5 @@ extension VTPlayerView {
     }
 
 }
+
+#endif

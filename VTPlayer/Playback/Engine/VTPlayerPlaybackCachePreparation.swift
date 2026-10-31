@@ -3,6 +3,7 @@ import CoreMedia
 import Foundation
 
 extension VTPlayerViewModel {
+    #if os(macOS)
     func cancelEnhancedCachePreparation(restorePreviousPlayback: Bool = true) {
         let hasActivePreparation = enhancedCachePreparationTask != nil ||
             enhancedPresentationMonitorTask != nil ||
@@ -75,10 +76,20 @@ extension VTPlayerViewModel {
         saveProgress()
     }
 
+    #else
+    func cancelEnhancedCachePreparation(restorePreviousPlayback: Bool = true) {
+        enhancedCachePreparationGeneration &+= 1
+        enhancedCachePreparationTask?.cancel()
+        enhancedCachePreparationTask = nil
+        enhancedCachePreparationState = .idle
+    }
+    #endif
+
     func applyPipelineEnhancements() {
         applyPipelineEnhancements(fullCacheConfiguration: nil, rendererSettings: nil)
     }
 
+    #if os(macOS)
     func retryEnhancedPreparation(configuration: AppliedPipelineConfiguration) {
         let benchmark: EnhancedPipelineBenchmark?
         if liveFallbackBenchmarkURL == videoURL,
@@ -97,6 +108,8 @@ extension VTPlayerViewModel {
             benchmarkOverride: benchmark
         )
     }
+
+    #endif
 
     private func applyPipelineEnhancements(
         fullCacheConfiguration: AppliedPipelineConfiguration?,
@@ -226,7 +239,9 @@ extension VTPlayerViewModel {
             } else {
                 isPlaying = false
                 isPaused = true
-                transitionPlayback(to: .readyPaused)
+                #if os(macOS)
+            transitionPlayback(to: .readyPaused)
+            #endif
             }
             saveVideoSettings()
             return
@@ -621,14 +636,18 @@ extension VTPlayerViewModel {
         guard isPipelineActive else {
             isPlaying = false
             isPaused = true
+            #if os(macOS)
             transitionPlayback(to: .readyPaused)
+            #endif
             return
         }
 
         isPlaying = false
         isPaused = true
         enhancedCachePreparationState = .prerolling
+        #if os(macOS)
         transitionPlayback(to: .prerollingEnhanced)
+        #endif
         startPlaybackLoop()
     }
 
