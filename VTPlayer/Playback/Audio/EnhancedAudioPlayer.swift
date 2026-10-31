@@ -79,14 +79,14 @@ final class EnhancedAudioPlayer {
         return true
     }
 
-    func frameRendered(at pts: CMTime) {
+    func frameRendered(at pts: CMTime, synchronizeToFrame: Bool = false) {
         guard pts.isValid, pts.isNumeric else { return }
         latestRenderedPTS = pts
         if started, !anchorInProgress, !paused, let player, let referencePlayer {
             let now = CACurrentMediaTime()
             if now >= nextSyncCheck {
                 nextSyncCheck = now + 1
-                let referenceTime = referencePlayer.currentTime()
+                let referenceTime = synchronizeToFrame ? pts : referencePlayer.currentTime()
                 let difference = CMTimeGetSeconds(CMTimeSubtract(player.currentTime(), referenceTime))
                 if referencePlayer.rate != 0, difference.isFinite, abs(difference) > 0.12 {
                     player.setRate(Float(playbackRate), time: referenceTime,

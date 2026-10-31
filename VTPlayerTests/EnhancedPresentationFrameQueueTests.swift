@@ -27,7 +27,7 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
             frameInterpolationLevel: 4,
             screenMaximumFramesPerSecond: 120
         ))
-        XCTAssertFalse(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+        XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
             sourceFramesPerSecond: 25,
             frameInterpolationLevel: 2,
             screenMaximumFramesPerSecond: 120

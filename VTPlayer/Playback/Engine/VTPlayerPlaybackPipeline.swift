@@ -112,7 +112,9 @@ extension VTPlayerViewModel {
         // renderer still encodes only when a frame is due, and macOS clamps
         // this request to the display's supported cadence.
         renderer.preferredFramesPerSecond = configuration.frameInterpolationLevel > 0 || sourceFrameRate >= 50 ? 120 : 60
-        let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+        let attachedScreenRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+        let screenMaximumFrameRate = attachedScreenRate > 0
+            ? attachedScreenRate : (NSScreen.main?.maximumFramesPerSecond ?? 0)
         let usesLiveDedicatedPresentation = preparedFrameCacheMode != .full &&
             MacDedicatedPresentationPolicy.shouldUseLiveQueue(
                 sourceFramesPerSecond: sourceFPS,

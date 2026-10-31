@@ -662,8 +662,7 @@ extension VTPlayerViewModel {
         enhancedPresentationMonitorTask?.cancel()
         enhancedPresentationMonitorTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let startupAllowanceNanoseconds: UInt64 =
-                self.preparedEnhancedFrameCacheMode == .full ? 6_000_000_000 : 2_000_000_000
+            let startupAllowanceNanoseconds: UInt64 = 6_000_000_000
             let startupDeadline = DispatchTime.now().uptimeNanoseconds + startupAllowanceNanoseconds
             while !Task.isCancelled,
                   self.enhancedPresentationMonitorGeneration == monitorGeneration,

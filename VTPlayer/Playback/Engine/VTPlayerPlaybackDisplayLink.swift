@@ -78,7 +78,7 @@ struct MacDedicatedPresentationPolicy {
         guard sourceFramesPerSecond > 0,
               frameInterpolationLevel > 1,
               screenMaximumFramesPerSecond > 60 else { return false }
-        return sourceFramesPerSecond * Double(frameInterpolationLevel) > 60
+        return sourceFramesPerSecond * Double(frameInterpolationLevel) >= 50
     }
 }
 
@@ -245,6 +245,7 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
     private let state: Mutex<State>
     private let tickQueue = DispatchQueue(label: "VTPlayer.presentation", qos: .userInteractive)
     private let tickPending = Mutex(false)
+    private let runLoop = Mutex<CFRunLoop?>(nil)
 
     @MainActor
     init(
@@ -286,7 +287,21 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
             state.isRunning = true
             state.displayLink = displayLink
         }
-        displayLink.add(to: .main, forMode: .common)
+        let thread = Thread { [weak self] in
+            guard let self else { return }
+            guard let displayLink = self.state.withLock({ $0.displayLink }) else { return }
+            let loop = CFRunLoopGetCurrent()
+            self.runLoop.withLock { $0 = loop }
+            displayLink.add(to: .current, forMode: .common)
+            while self.state.withLock({ $0.isRunning }) {
+                CFRunLoopRunInMode(.defaultMode, 0.25, false)
+            }
+            displayLink.invalidate()
+            self.runLoop.withLock { $0 = nil }
+        }
+        thread.name = "VTPlayer presentation"
+        thread.qualityOfService = .userInteractive
+        thread.start()
         return true
     }
 
@@ -297,8 +312,8 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
             defer { state.displayLink = nil }
             return state.displayLink
         }
-        if let displayLink {
-            displayLink.invalidate()
+        if displayLink != nil {
+            runLoop.withLock { if let loop = $0 { CFRunLoopWakeUp(loop) } }
         }
     }
 
@@ -418,7 +433,7 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
         }
     }
 
-    @objc @MainActor private func displayLinkCallback(_ link: CADisplayLink) {
+    @objc private func displayLinkCallback(_ link: CADisplayLink) {
         let shouldSchedule = tickPending.withLock { pending in
             guard !pending else { return false }
             pending = true
@@ -608,7 +623,7 @@ extension VTPlayerViewModel {
                 }
             }
         }
-        enhancedAudioPlayer?.frameRendered(at: update.presentationTimeStamp)
+        enhancedAudioPlayer?.frameRendered(at: update.presentationTimeStamp, synchronizeToFrame: true)
         lastRenderedPTS = update.presentationTimeStamp
         lastPresentationWall = .now()
         displayLinkTickCount += update.callbacks
@@ -807,7 +822,7 @@ extension VTPlayerViewModel {
                     }
                     let generation = playbackGeneration
                     Task { @MainActor [weak self, weak driver] in
-                        try? await Task.sleep(nanoseconds: 800_000_000)
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
                         guard let self, let driver,
                               self.playbackGeneration == generation,
                               self.macDedicatedMetalDisplayTickDriver === driver,

@@ -420,10 +420,7 @@ nonisolated final class MacFullCacheMetalEncoder: @unchecked Sendable {
             guard duration <= Double(UInt64.max) else { return }
             gpuRecorder.recordCompletion(durationNanoseconds: UInt64(duration))
         }
-        commandBuffer.present(
-            drawable,
-            atTime: max(targetPresentationTime, CACurrentMediaTime())
-        )
+        commandBuffer.present(drawable)
         commandBuffer.commit()
         performanceAggregate.recordCPUEncode(start: encodeStart)
         return true

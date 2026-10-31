@@ -1659,6 +1659,11 @@ final class VTPlayerViewModel {
 
     /// Seeks to a specific timestamp in seconds.
     func seek(to seconds: Double) {
+        #if os(macOS)
+        if macDedicatedMetalDisplayTickDriver != nil {
+            stopDisplayLinkIfNeeded()
+        }
+        #endif
         ignoreAutomaticTimeJumpsUntil = nil
         pendingResumePTS = nil
         pendingExplicitSeekPTS = CMTime(seconds: seconds, preferredTimescale: 600)
@@ -1700,6 +1705,18 @@ final class VTPlayerViewModel {
                 // unexpectedly pause playback.
                 if shouldPlay && self.isPlaying && !self.isPaused {
                     player.rate = targetRate
+                    #if os(macOS)
+                    if self.fullCachePresentationQueue != nil {
+                        self.startDisplayLinkIfNeeded()
+                        if let url = self.videoURL {
+                            self.startEnhancedPresentationGateMonitor(
+                                url: url,
+                                candidate: self.appliedPipelineConfiguration,
+                                preparationGeneration: self.enhancedCachePreparationGeneration
+                            )
+                        }
+                    }
+                    #endif
                 }
                 await self.triggerSingleFrameUpdate(
                     at: time,
