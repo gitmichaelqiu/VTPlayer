@@ -1026,7 +1026,15 @@ extension VTPlayerViewModel {
                 let count = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
-                if count >= self.bufferedFrameLimit {
+                #if os(macOS)
+                let liveFrameLimit = min(
+                    self.bufferedFrameLimit,
+                    max(self.initialPrerollFrameCount, Int(ceil(max(1, targetFrameRate) * 2)))
+                )
+                #else
+                let liveFrameLimit = self.bufferedFrameLimit
+                #endif
+                if count >= liveFrameLimit {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
