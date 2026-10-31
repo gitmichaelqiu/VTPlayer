@@ -87,15 +87,15 @@ extension VTPlayerView {
 
             HStack(spacing: 10) {
                 playPauseButton
-                Button {
-                    viewModel.setProcessingEnhancementsEnabled(!viewModel.processingEnhancementsEnabled)
-                } label: {
+                Toggle(isOn: Binding(
+                    get: { viewModel.processingEnhancementsEnabled },
+                    set: { viewModel.setProcessingEnhancementsEnabled($0) }
+                )) {
                     Image(systemName: "sparkles")
-                        .opacity(viewModel.processingEnhancementsEnabled ? 1 : 0.45)
                 }
+                .toggleStyle(.button)
                 .help(viewModel.processingEnhancementsEnabled ? "Turn enhancements off" : "Turn enhancements on")
                 .accessibilityLabel("Enhancements")
-                .accessibilityValue(viewModel.processingEnhancementsEnabled ? "On" : "Off")
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(spacing: 8) {
                 Group {
