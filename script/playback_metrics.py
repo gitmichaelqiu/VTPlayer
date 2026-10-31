@@ -6,28 +6,37 @@ import re
 import statistics
 import subprocess
 import sys
+import os
+import time
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--pid', type=int, required=True, help='PID of the VTPlayer instance')
+source = parser.add_mutually_exclusive_group(required=True)
+source.add_argument('--pid', type=int, help='PID for unified log capture')
+source.add_argument('--log-file', help='Path to redirected VTPlayer output')
 parser.add_argument('--seconds', type=int, default=20, help='capture duration (at least 6 seconds recommended)')
 args = parser.parse_args()
 if args.seconds <= 0:
     parser.error('--seconds must be positive')
-try:
-    subprocess.run(['kill', '-0', str(args.pid)], check=True, capture_output=True)
-except subprocess.CalledProcessError:
-    sys.exit('Process is not running or is inaccessible')
-
-command = ['/usr/bin/log', 'stream', '--style', 'compact', '--level', 'info',
-           '--predicate', f'processIdentifier == {args.pid}']
-process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-try:
-    output, errors = process.communicate(timeout=args.seconds)
-except subprocess.TimeoutExpired:
-    process.terminate()
-    output, errors = process.communicate()
-if process.returncode not in (0, -15):
-    sys.exit(f'Log capture failed: {errors.strip()}')
+if args.log_file:
+    with open(args.log_file, encoding='utf-8', errors='replace') as stream:
+        stream.seek(0, os.SEEK_END)
+        time.sleep(args.seconds)
+        output = stream.read()
+else:
+    try:
+        subprocess.run(['kill', '-0', str(args.pid)], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        sys.exit('Process is not running or is inaccessible')
+    command = ['/usr/bin/log', 'stream', '--style', 'compact', '--level', 'info',
+               '--predicate', f'processIdentifier == {args.pid}']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        output, errors = process.communicate(timeout=args.seconds)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        output, errors = process.communicate()
+    if process.returncode not in (0, -15):
+        sys.exit(f'Log capture failed: {errors.strip()}')
 
 prefix = re.compile(r'\b(RENDER-CADENCE|RENDER-INTERVALS|CACHE-PRESENTATION|DIAG|PERF|CACHE|RENDER|FI):\s*(.*)')
 pair = re.compile(r'([\w]+)=([^\s]+)')
@@ -49,10 +58,10 @@ statistics_by_field = {
           'min': min(values), 'max': max(values)}
     for key, values in samples.items()
 }
-summary = {'pid': args.pid, 'durationSeconds': args.seconds,
+summary = {'pid': args.pid, 'logFile': args.log_file, 'durationSeconds': args.seconds,
            'statistics': statistics_by_field, 'records': records,
            'note': 'Only emitted diagnostics are reported; missing data is not zero. Audio/video output sync is not measured.'}
 print(json.dumps(summary, indent=2))
 if not records:
-    print('No playback diagnostics captured. Play an enhanced video for at least 6 seconds and retry.', file=sys.stderr)
+    print('No playback diagnostics captured. Play an enhanced video for at least 6 seconds and retry. Xcode can redirect NSLog away from unified logging; use --log-file with redirected app output.', file=sys.stderr)
     sys.exit(2)
