@@ -7,12 +7,44 @@
     "%lld" : {
       "shouldTranslate" : false
     },
-    "%lld%% · %@" : {
+    "%lld percent complete, %@ written of an estimated %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld%% · %2$@"
+            "value" : "%1$lld percent complete, %2$@ written of an estimated %3$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld% 已完成，已写入 %2$@（预计共 %3$@）"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%%"
+          }
+        }
+      }
+    },
+    "%lld%% · %@ of ~%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%% · %2$@ of ~%3$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld%% · 已写入 %2$@ / 预计共 %3$@"
           }
         }
       }
@@ -55,6 +87,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关于"
+          }
+        }
+      }
+    },
+    "About %@ remaining" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还剩约 %@"
           }
         }
       }
@@ -189,8 +231,15 @@
         }
       }
     },
-    "Apply enhancement changes" : {
-
+    "Applied Enhancements" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已应用增强"
+          }
+        }
+      }
     },
     "Apply motion blur." : {
       "localizations" : {
@@ -252,15 +301,22 @@
         }
       }
     },
-    "Cached enhanced frames will be removed. Frames currently being played or prepared are retained until they are no longer in use." : {
-
-    },
-    "Cached Frames" : {
+    "Buffered Frames" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已缓存帧数"
+            "value" : "缓冲帧数"
+          }
+        }
+      }
+    },
+    "Cached enhanced frames will be removed. Frames currently being played or prepared are retained until they are no longer in use." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将移除已缓存的增强帧。正在播放或准备中的帧会保留，直到不再使用。"
           }
         }
       }
@@ -271,6 +327,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消"
+          }
+        }
+      }
+    },
+    "Cancel this setup step. The original video is unchanged." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消此准备步骤。原始视频不会受到影响。"
+          }
+        }
+      }
+    },
+    "Change Upscale Settings" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改超分辨率设置"
           }
         }
       }
@@ -336,10 +412,24 @@
       }
     },
     "Clear Disk Cache" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除磁盘缓存"
+          }
+        }
+      }
     },
     "Clear Enhanced Frame Disk Cache?" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除增强帧磁盘缓存？"
+          }
+        }
+      }
     },
     "Clear History" : {
       "localizations" : {
@@ -438,7 +528,14 @@
       }
     },
     "Current disk usage" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前磁盘占用"
+          }
+        }
+      }
     },
     "Date Added" : {
       "localizations" : {
@@ -530,6 +627,16 @@
         }
       }
     },
+    "Dismiss message" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭提示"
+          }
+        }
+      }
+    },
     "Display" : {
       "localizations" : {
         "zh-Hans" : {
@@ -540,22 +647,12 @@
         }
       }
     },
-    "Display 1st Percentile Low" : {
+    "Display Target" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : " 1% 低帧率"
-          }
-        }
-      }
-    },
-    "Display Rate" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示帧率"
+            "value" : "显示目标帧率"
           }
         }
       }
@@ -602,10 +699,24 @@
       }
     },
     "Enhanced frame disk cache" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "增强帧磁盘缓存"
+          }
+        }
+      }
     },
-    "Enhancement preparation in progress" : {
-
+    "Enhanced playback setup in progress" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备增强播放"
+          }
+        }
+      }
     },
     "Enter a new name for the video file." : {
       "localizations" : {
@@ -767,6 +878,16 @@
         }
       }
     },
+    "Generated Rate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成帧率"
+          }
+        }
+      }
+    },
     "HDR Boost" : {
       "localizations" : {
         "zh-Hans" : {
@@ -817,6 +938,16 @@
         }
       }
     },
+    "Latest observed enhancement-processing time. Full-cache playback reuses saved frames instead of processing each frame live." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近一次观测到的增强处理耗时。完整缓存播放会重用已保存的帧，无需实时处理每一帧。"
+          }
+        }
+      }
+    },
     "Let you right-click with the Option key." : {
       "localizations" : {
         "zh-Hans" : {
@@ -847,22 +978,6 @@
         }
       }
     },
-    "Low Latency player scale %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Super Res: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超分：%@"
-          }
-        }
-      }
-    },
     "Made by Michael Qiu." : {
       "localizations" : {
         "zh-Hans" : {
@@ -883,11 +998,15 @@
         }
       }
     },
-    "Maximum persistent storage for lossless enhanced frames." : {
-
-    },
-    "Measuring the selected pipeline before playback." : {
-
+    "Maximum space for high-quality HEVC-compressed enhanced playback. The cache may be lossy; your source file is never changed." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于存储高画质 HEVC 压缩增强帧的最大空间。缓存可能有损；源文件不会被修改。"
+          }
+        }
+      }
     },
     "Measuring…" : {
       "localizations" : {
@@ -1049,6 +1168,16 @@
         }
       }
     },
+    "OK" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好"
+          }
+        }
+      }
+    },
     "On" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1199,6 +1328,16 @@
         }
       }
     },
+    "Playback State" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放状态"
+          }
+        }
+      }
+    },
     "Player" : {
       "shouldTranslate" : false
     },
@@ -1212,8 +1351,35 @@
         }
       }
     },
-    "Preparing Enhancements" : {
-
+    "Presented 1% Low" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实际呈现帧率 1% 低值"
+          }
+        }
+      }
+    },
+    "Presented Rate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实际呈现帧率"
+          }
+        }
+      }
+    },
+    "Processing Mode" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "处理模式"
+          }
+        }
+      }
     },
     "QL Model" : {
       "localizations" : {
@@ -1231,22 +1397,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高质量 %@"
-          }
-        }
-      }
-    },
-    "Quality player scale %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Super Res: %@ QL"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超分：%@ 质量"
           }
         }
       }
@@ -1397,6 +1547,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从保存的位置继续播放新视频。"
+          }
+        }
+      }
+    },
+    "Retry enhanced playback" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试增强播放"
           }
         }
       }
@@ -1601,6 +1761,16 @@
         }
       }
     },
+    "Submitted Rate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提交帧率"
+          }
+        }
+      }
+    },
     "Super Res" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1662,16 +1832,6 @@
       }
     },
     "Target rate" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "目标帧率"
-          }
-        }
-      }
-    },
-    "Target Rate" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1747,6 +1907,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "切换边栏"
+          }
+        }
+      }
+    },
+    "Try Enhanced Again" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再次尝试增强播放"
           }
         }
       }
@@ -1894,6 +2064,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "VTPlayer 的 GitHub"
+          }
+        }
+      }
+    },
+    "Watch Original Video" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "观看原始视频"
           }
         }
       }
