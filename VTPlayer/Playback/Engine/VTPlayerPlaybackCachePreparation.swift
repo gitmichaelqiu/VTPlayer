@@ -693,6 +693,14 @@ extension VTPlayerViewModel {
                 )
                 return
             }
+            // Allow seek and display-link handoffs to settle before sampling.
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled,
+                  self.enhancedPresentationMonitorGeneration == monitorGeneration,
+                  self.enhancedCachePreparationGeneration == preparationGeneration,
+                  self.videoURL == url,
+                  self.appliedPipelineConfiguration == candidate,
+                  self.isPlaying, !self.isPaused else { return }
             var presentationWindowStart = DispatchTime.now()
             var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
             var failureTracker = EnhancedPresentationFailureTracker()
