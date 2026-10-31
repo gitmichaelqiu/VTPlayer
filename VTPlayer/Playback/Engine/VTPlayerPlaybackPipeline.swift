@@ -553,10 +553,12 @@ extension VTPlayerViewModel {
                 #endif
             }
 
+            let sourceSeekGeneration = Mutex(self.seekGeneration)
             @MainActor
             func waitForCacheCapacity(_ byteCount: Int) async -> Bool {
                 guard byteCount <= self.frameCacheMemoryBudget else { return false }
-                while !Task.isCancelled && gen == self.playbackGeneration {
+                while !Task.isCancelled && gen == self.playbackGeneration &&
+                    sourceSeekGeneration.withLock { $0 } == self.seekGeneration {
                     let hasRoom = self.lockCache {
                         self.cacheCanAccept(byteCount)
                     }
@@ -574,6 +576,7 @@ extension VTPlayerViewModel {
             }
 
             let admitStreamedFrame: @MainActor @Sendable (VTFrame) async -> Bool = { frame in
+                guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { return false }
                 if self.lastRenderedPTS.isValid,
                    CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) <= 0 {
                     return true
@@ -587,7 +590,8 @@ extension VTPlayerViewModel {
                 if usesLiveDedicatedPresentation,
                    let presentationQueue = self.fullCachePresentationQueue {
                     let admissionStart = DispatchTime.now()
-                    while !Task.isCancelled && gen == self.playbackGeneration {
+                    while !Task.isCancelled && gen == self.playbackGeneration &&
+                        sourceSeekGeneration.withLock { $0 } == self.seekGeneration {
                         switch presentationQueue.enqueueResult(
                             contentsOf: [frame],
                             generation: gen
@@ -617,6 +621,7 @@ extension VTPlayerViewModel {
                 #endif
                 let admissionStart = DispatchTime.now()
                 guard await waitForCacheCapacity(byteCount) else { return false }
+                guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { return false }
                 let admissionMilliseconds = Double(
                     DispatchTime.now().uptimeNanoseconds - admissionStart.uptimeNanoseconds
                 ) / 1_000_000.0
@@ -981,6 +986,7 @@ extension VTPlayerViewModel {
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
+                sourceSeekGeneration.withLock { $0 = self.seekGeneration }
 
                 if self.isPaused && !self.isBuffering && pausedPreparationFramesRemaining == 0 {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
@@ -1028,6 +1034,7 @@ extension VTPlayerViewModel {
                     } else {
                         next = try await frameIterator.next()
                     }
+                    guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { continue }
                     guard let next else {
                         break  // EOF
                     }
@@ -1116,6 +1123,7 @@ extension VTPlayerViewModel {
                         }
                         return admitted
                     }
+                    guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { continue }
                     let admittedStreamedFrameCount = streamedFrameCount.withLock { $0 }
                     let outputFrames = processedFrames.filter { frame in
                         !self.lastRenderedPTS.isValid ||
@@ -1152,7 +1160,11 @@ extension VTPlayerViewModel {
                         break
                     }
                     let cacheAdmissionStart = DispatchTime.now()
-                    guard await waitForCacheCapacity(outputByteCount) else { break }
+                    guard await waitForCacheCapacity(outputByteCount) else {
+                        if sourceSeekGeneration.withLock { $0 } != self.seekGeneration { continue }
+                        break
+                    }
+                    guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { continue }
                     let cacheAdmissionMilliseconds = Double(
                         DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
                     ) / 1_000_000.0
@@ -1179,6 +1191,7 @@ extension VTPlayerViewModel {
 
                 } catch {
                     guard gen == self.playbackGeneration else { break }
+                    guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { continue }
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 &&
                         !self.useSequentialSRFIFallback && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true
@@ -1195,7 +1208,11 @@ extension VTPlayerViewModel {
                         break
                     }
                     let cacheAdmissionStart = DispatchTime.now()
-                    guard await waitForCacheCapacity(fallbackByteCount) else { break }
+                    guard await waitForCacheCapacity(fallbackByteCount) else {
+                        if sourceSeekGeneration.withLock { $0 } != self.seekGeneration { continue }
+                        break
+                    }
+                    guard sourceSeekGeneration.withLock { $0 } == self.seekGeneration else { continue }
                     let cacheAdmissionMilliseconds = Double(
                         DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
                     ) / 1_000_000.0
@@ -1248,9 +1265,9 @@ extension VTPlayerViewModel {
             while !Task.isCancelled {
                 guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 200_000_000)
-                guard !self.isPaused, let player = self.player else { continue }
+                guard !self.isPaused, let audioTime = self.enhancedAudioPlayer?.currentTime else { continue }
                 guard !self.isBuffering else { continue }
-                let currentSecs = CMTimeGetSeconds(player.currentTime())
+                let currentSecs = CMTimeGetSeconds(audioTime)
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
                 // Keep the audio clock independent from the processed-frame
@@ -1261,7 +1278,7 @@ extension VTPlayerViewModel {
                 self.isBuffering = false
 
                 // Record desync for diagnostics without interrupting audio.
-                if latency > self.audioSyncLatencyThreshold {
+                if latency.isFinite && abs(latency) > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {
                     self.audioSyncLatency = 0

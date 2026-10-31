@@ -44,11 +44,17 @@ struct EnhancedAudioOperationGate {
 final class EnhancedAudioPlayer {
     private var player: AVPlayer?
     private var started = false
+    private var anchorInProgress = false
     private var paused = false
     private var playbackRate = 1.0
     private var volume: Float = 1.0
     private var operationGate = EnhancedAudioOperationGate()
     private var latestRenderedPTS: CMTime = .invalid
+
+    var currentTime: CMTime? {
+        guard started, !anchorInProgress, !paused, let player else { return nil }
+        return player.currentTime()
+    }
 
     func prepare(url: URL, initialRate: Double) async -> Bool {
         let asset = AVURLAsset(url: url)
@@ -77,6 +83,7 @@ final class EnhancedAudioPlayer {
               let operation = operationGate.beginFrameAnchor() else { return }
 
         started = true
+        anchorInProgress = true
         let seconds = CMTimeGetSeconds(pts)
         let anchor = seconds.isFinite ? max(0, seconds) : 0
         player.seek(
@@ -92,6 +99,7 @@ final class EnhancedAudioPlayer {
                       !self.paused else { return }
                 guard completed, player.status == .readyToPlay else {
                     self.started = false
+                    self.anchorInProgress = false
                     self.operationGate.armFrameAnchor(shouldPlay: true)
                     return
                 }
@@ -103,6 +111,7 @@ final class EnhancedAudioPlayer {
                     time: self.latestRenderedPTS,
                     atHostTime: CMClockGetTime(CMClockGetHostTimeClock())
                 )
+                self.anchorInProgress = false
             }
         }
     }
@@ -111,6 +120,7 @@ final class EnhancedAudioPlayer {
         paused = true
         player?.pause()
         started = false
+        anchorInProgress = false
         operationGate.armFrameAnchor(shouldPlay: false)
     }
 
@@ -120,6 +130,7 @@ final class EnhancedAudioPlayer {
     func awaitRenderedFrameAnchor(shouldPlay: Bool) {
         player?.pause()
         started = false
+        anchorInProgress = false
         paused = !shouldPlay
         operationGate.armFrameAnchor(shouldPlay: shouldPlay)
     }
@@ -131,7 +142,7 @@ final class EnhancedAudioPlayer {
 
     func setRate(_ rate: Double) {
         playbackRate = min(2.0, max(0.5, rate))
-        if let player, started, !paused {
+        if let player, started, !anchorInProgress, !paused {
             player.rate = Float(playbackRate)
         }
     }
@@ -149,6 +160,7 @@ final class EnhancedAudioPlayer {
         player?.replaceCurrentItem(with: nil)
         player = nil
         started = false
+        anchorInProgress = false
         paused = true
     }
 }
