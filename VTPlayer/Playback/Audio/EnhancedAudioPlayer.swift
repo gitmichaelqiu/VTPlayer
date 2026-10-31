@@ -50,13 +50,15 @@ final class EnhancedAudioPlayer {
     private var volume: Float = 1.0
     private var operationGate = EnhancedAudioOperationGate()
     private var latestRenderedPTS: CMTime = .invalid
+    private weak var referencePlayer: AVPlayer?
+    private var nextSyncCheck = 0.0
 
     var currentTime: CMTime? {
         guard started, !anchorInProgress, !paused, let player else { return nil }
         return player.currentTime()
     }
 
-    func prepare(url: URL, initialRate: Double) async -> Bool {
+    func prepare(url: URL, initialRate: Double, referencePlayer: AVPlayer) async -> Bool {
         let asset = AVURLAsset(url: url)
         guard let audioTracks = try? await asset.loadTracks(withMediaType: .audio),
               !audioTracks.isEmpty else { return false }
@@ -69,6 +71,7 @@ final class EnhancedAudioPlayer {
         player.automaticallyWaitsToMinimizeStalling = false
         player.volume = volume
         self.player = player
+        self.referencePlayer = referencePlayer
         started = false
         paused = false
         operationGate.armFrameAnchor(shouldPlay: true)
@@ -79,6 +82,18 @@ final class EnhancedAudioPlayer {
     func frameRendered(at pts: CMTime) {
         guard pts.isValid, pts.isNumeric else { return }
         latestRenderedPTS = pts
+        if started, !anchorInProgress, !paused, let player, let referencePlayer {
+            let now = CACurrentMediaTime()
+            if now >= nextSyncCheck {
+                nextSyncCheck = now + 1
+                let referenceTime = referencePlayer.currentTime()
+                let difference = CMTimeGetSeconds(CMTimeSubtract(player.currentTime(), referenceTime))
+                if referencePlayer.rate != 0, difference.isFinite, abs(difference) > 0.12 {
+                    player.setRate(Float(playbackRate), time: referenceTime,
+                                   atHostTime: CMClockGetTime(CMClockGetHostTimeClock()))
+                }
+            }
+        }
         guard let player, player.status == .readyToPlay, !started, !paused,
               let operation = operationGate.beginFrameAnchor() else { return }
 
@@ -103,12 +118,11 @@ final class EnhancedAudioPlayer {
                     self.operationGate.armFrameAnchor(shouldPlay: true)
                     return
                 }
-                // The video can advance while the initial seek is pending.
-                // Start from the latest displayed frame, not the stale one
-                // that initiated the seek.
+                // The transport can advance while the audio seek is pending.
+                let referenceTime = self.referencePlayer?.currentTime() ?? self.latestRenderedPTS
                 player.setRate(
                     Float(self.playbackRate),
-                    time: self.latestRenderedPTS,
+                    time: referenceTime.isNumeric ? referenceTime : self.latestRenderedPTS,
                     atHostTime: CMClockGetTime(CMClockGetHostTimeClock())
                 )
                 self.anchorInProgress = false
@@ -159,6 +173,7 @@ final class EnhancedAudioPlayer {
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
+        referencePlayer = nil
         started = false
         anchorInProgress = false
         paused = true

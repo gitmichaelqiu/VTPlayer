@@ -456,7 +456,7 @@ extension VTPlayerViewModel {
                     self.isBuffering = true
                     waitingForFramePreroll = true
                     let audioPlayer = EnhancedAudioPlayer()
-                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed, referencePlayer: player) {
                         guard isCurrentPipeline() else {
                             audioPlayer.stop()
                             await coordinator.endSession()
@@ -476,7 +476,7 @@ extension VTPlayerViewModel {
                         self.renderer.render(pixelBuffer: firstFrame.buffer)
                     }
                     let audioPlayer = EnhancedAudioPlayer()
-                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed, referencePlayer: player) {
                         guard isCurrentPipeline() else {
                             audioPlayer.stop()
                             await coordinator.endSession()
