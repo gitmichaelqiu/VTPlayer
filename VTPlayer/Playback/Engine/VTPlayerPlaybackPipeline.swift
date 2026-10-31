@@ -524,22 +524,27 @@ extension VTPlayerViewModel {
             var sourceFrameOrdinal = 0
             var combinedProcessFallbackAttempted = false
             var pausedPreparationFramesRemaining = shouldResumePlayback ? 0 : self.initialPrerollFrameCount
+            var prerollFrameBytes = 0
             defer { prefetchedFrameTask?.cancel() }
 
             @MainActor
             func resumeAfterFramePrerollIfReady(force: Bool = false) {
                 guard let player = self.player else { return }
                 #if os(macOS)
+                let prerollTarget = usesLiveDedicatedPresentation && shouldResumePlayback
+                    ? min(self.bufferedFrameLimit, max(1, self.frameCacheMemoryBudget / max(1, prerollFrameBytes)), max(self.initialPrerollFrameCount, Int(ceil(targetFrameRate * 0.5))))
+                    : self.initialPrerollFrameCount
                 let cachedFrameCount = self.fullCachePresentationQueue?.snapshot().frameCount ??
                     self.lockCache {
                         max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                     }
                 #else
+                let prerollTarget = self.initialPrerollFrameCount
                 let cachedFrameCount = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
                 #endif
-                guard cachedFrameCount >= self.initialPrerollFrameCount || (force && cachedFrameCount > 0) else {
+                guard cachedFrameCount >= prerollTarget || (force && cachedFrameCount > 0) else {
                     return
                 }
                 if !shouldResumePlayback {
@@ -591,6 +596,7 @@ extension VTPlayerViewModel {
                     return true
                 }
                 let byteCount = CVPixelBufferGetDataSize(frame.buffer)
+                prerollFrameBytes = max(prerollFrameBytes, byteCount)
                 guard byteCount <= self.frameCacheMemoryBudget else {
                     self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
                     return false
