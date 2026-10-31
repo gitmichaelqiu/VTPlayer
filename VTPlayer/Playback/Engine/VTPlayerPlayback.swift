@@ -174,6 +174,7 @@ extension VTPlayerViewModel {
 
         self.isPlaying = true
         self.isPaused = false
+        resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
 
         #if os(macOS)
         renderer.setRenderingActive(true)
