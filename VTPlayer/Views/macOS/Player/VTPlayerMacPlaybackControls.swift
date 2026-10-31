@@ -189,7 +189,7 @@ private struct MacVolumeControl: View {
                 systemImage: volumeSymbolName,
                 value: viewModel.volume == 1
                     ? nil
-                    : "\(Int((viewModel.volume * 100).rounded()))%",
+                    : viewModel.volume.formatted(.percent.precision(.fractionLength(0))),
                 isActive: viewModel.volume != 1
             )
         }

@@ -28,11 +28,15 @@ private struct EnhancedCachePreparationIndicator: View {
                         .frame(maxWidth: .infinity)
                     let writtenSize = ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
                     let estimatedSize = ByteCountFormatter.string(fromByteCount: estimatedTotalBytes, countStyle: .file)
-                    Text("\(Int((progress * 100).rounded()))% · \(writtenSize) of ~\(estimatedSize)")
+                    let progressPercentage = progress.formatted(.percent.precision(.fractionLength(0)))
+                    Text(String(
+                        localized: "%@ · %@ of ~%@",
+                        defaultValue: "\(progressPercentage) · \(writtenSize) of ~\(estimatedSize)"
+                    ))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .accessibilityLabel(preparationProgressAccessibilityLabel(
-                            progress: progress,
+                            progressPercentage: progressPercentage,
                             writtenSize: writtenSize,
                             estimatedSize: estimatedSize,
                             estimatedRemainingSeconds: estimatedRemainingSeconds
@@ -125,15 +129,20 @@ private struct EnhancedCachePreparationIndicator: View {
     }
 
     private func preparationProgressAccessibilityLabel(
-        progress: Double,
+        progressPercentage: String,
         writtenSize: String,
         estimatedSize: String,
         estimatedRemainingSeconds: Double?
     ) -> String {
-        let percent = Int((progress * 100).rounded())
-        let size = "\(percent) percent complete, \(writtenSize) written of an estimated \(estimatedSize)"
+        let size = String(
+            localized: "%@ complete, %@ written of an estimated %@",
+            defaultValue: "\(progressPercentage) complete, \(writtenSize) written of an estimated \(estimatedSize)"
+        )
         guard let estimatedRemainingSeconds else { return size }
-        return "\(size), about \(remainingTimeLabel(estimatedRemainingSeconds)) remaining"
+        return String(
+            localized: "%@ complete, %@ written of an estimated %@, about %@ remaining",
+            defaultValue: "\(progressPercentage) complete, \(writtenSize) written of an estimated \(estimatedSize), about \(remainingTimeLabel(estimatedRemainingSeconds)) remaining"
+        )
     }
 
 }

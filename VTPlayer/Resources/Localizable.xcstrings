@@ -7,44 +7,50 @@
     "%lld" : {
       "shouldTranslate" : false
     },
-    "%lld percent complete, %@ written of an estimated %@" : {
+    "%@ · %@ of ~%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld percent complete, %2$@ written of an estimated %3$@"
+            "value" : "%1$@ · %2$@ of ~%3$@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld% 已完成，已写入 %2$@（预计共 %3$@）"
+            "value" : "%1$@ · 已写入 %2$@ / 预计共 %3$@"
           }
         }
       }
     },
-    "%lld%%" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld%%"
-          }
-        }
-      }
-    },
-    "%lld%% · %@ of ~%@" : {
+    "%@ complete, %@ written of an estimated %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld%% · %2$@ of ~%3$@"
+            "value" : "%1$@ complete, %2$@ written of an estimated %3$@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld%% · 已写入 %2$@ / 预计共 %3$@"
+            "value" : "%1$@ 已完成，已写入 %2$@（预计共 %3$@）"
+          }
+        }
+      }
+    },
+    "%@ complete, %@ written of an estimated %@, about %@ remaining" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ complete, %2$@ written of an estimated %3$@, about %4$@ remaining"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 已完成，已写入 %2$@（预计共 %3$@），还剩约 %4$@"
           }
         }
       }
