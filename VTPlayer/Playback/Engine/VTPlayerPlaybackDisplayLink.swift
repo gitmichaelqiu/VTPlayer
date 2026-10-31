@@ -212,10 +212,10 @@ final class MacDisplayTickDriver: @unchecked Sendable {
     }
 }
 
-nonisolated final class MacDedicatedMetalDisplayTickDriver: @unchecked Sendable {
+nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked Sendable {
     private struct State: @unchecked Sendable {
         var isRunning = false
-        var displayLink: CVDisplayLink?
+        var displayLink: CADisplayLink?
         var metrics = MacDisplayTickDriverSnapshot()
         var previousCallbackHostTime: CFTimeInterval?
         var lastRenderedPTS: CMTime
@@ -241,6 +241,8 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: @unchecked Sendable 
     private let playbackRate: Double
     private let catchesUpInterpolation: Bool
     private let state: Mutex<State>
+    private let tickQueue = DispatchQueue(label: "VTPlayer.presentation", qos: .userInteractive)
+    private let tickPending = Mutex(false)
 
     @MainActor
     init(
@@ -270,35 +272,19 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: @unchecked Sendable 
             lastUIUpdateHostTime: self.anchorHostTime,
             fpsWindowStartHostTime: self.anchorHostTime
         ))
+        super.init()
     }
 
     @MainActor
     func start() -> Bool {
         guard !state.withLock({ $0.isRunning }) else { return true }
-        var displayLink: CVDisplayLink?
-        let result: CVReturn
-        if let displayID {
-            result = CVDisplayLinkCreateWithCGDisplay(displayID, &displayLink)
-        } else {
-            result = CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
-        }
-        guard result == kCVReturnSuccess, let displayLink,
-              CVDisplayLinkSetOutputCallback(
-                displayLink,
-                Self.displayLinkCallback,
-                Unmanaged.passUnretained(self).toOpaque()
-              ) == kCVReturnSuccess else { return false }
+        guard let screen = viewModel?.renderer.window?.screen ?? NSScreen.main else { return false }
+        let displayLink = screen.displayLink(target: self, selector: #selector(displayLinkCallback(_:)))
         state.withLock { state in
             state.isRunning = true
             state.displayLink = displayLink
         }
-        guard CVDisplayLinkStart(displayLink) == kCVReturnSuccess else {
-            state.withLock { state in
-                state.isRunning = false
-                state.displayLink = nil
-            }
-            return false
-        }
+        displayLink.add(to: .main, forMode: .common)
         return true
     }
 
@@ -310,7 +296,7 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: @unchecked Sendable 
             return state.displayLink
         }
         if let displayLink {
-            CVDisplayLinkStop(displayLink)
+            displayLink.invalidate()
         }
     }
 
@@ -430,19 +416,19 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: @unchecked Sendable 
         }
     }
 
-    private static let displayLinkCallback: CVDisplayLinkOutputCallback = {
-        _, _, outputTime, _, _, userInfo in
-        guard let userInfo else { return kCVReturnError }
-        let driver = Unmanaged<MacDedicatedMetalDisplayTickDriver>
-            .fromOpaque(userInfo)
-            .takeUnretainedValue()
-        let timestamp = outputTime.pointee
-        let refreshInterval = timestamp.videoTimeScale > 0
-            ? Double(timestamp.videoRefreshPeriod) / Double(timestamp.videoTimeScale)
-            : 0
-        let targetHostTime = CACurrentMediaTime() + max(0, refreshInterval)
-        driver.displayLinkTick(targetHostTime: targetHostTime)
-        return kCVReturnSuccess
+    @objc @MainActor private func displayLinkCallback(_ link: CADisplayLink) {
+        let shouldSchedule = tickPending.withLock { pending in
+            guard !pending else { return false }
+            pending = true
+            return true
+        }
+        guard shouldSchedule else { return }
+        let target = link.targetTimestamp
+        tickQueue.async { [weak self] in
+            guard let self else { return }
+            self.displayLinkTick(targetHostTime: target)
+            self.tickPending.withLock { $0 = false }
+        }
     }
 
     nonisolated func consumeSnapshot() -> MacDisplayTickDriverSnapshot {
@@ -781,7 +767,7 @@ extension VTPlayerViewModel {
                let encoder = renderer.makeFullCacheMetalEncoder(),
                let player,
                !usingKnownFallback {
-                // The CVDisplayLink timestamp is the sole presentation clock.
+                // The display-link timestamp is the sole presentation clock.
                 // Layer sync otherwise caps external drawable acquisition at
                 // 60 Hz even when the attached display is running at 120 Hz.
                 metalLayer.displaySyncEnabled = false
@@ -840,7 +826,7 @@ extension VTPlayerViewModel {
                         self.startDisplayLinkIfNeeded()
                     }
                     NSLog(
-                        "RENDER: scheduling=dedicatedCVDisplayLink requestedHz=%d offMain=true",
+                        "RENDER: scheduling=dedicatedScreenDisplayLink requestedHz=%d offMain=true",
                         maximumFramesPerSecond
                     )
                     return
@@ -848,7 +834,7 @@ extension VTPlayerViewModel {
                 macDedicatedMetalDisplayTickDriver = nil
                 dedicatedPresentationFallbackURL = videoURL
                 dedicatedPresentationFallbackConfiguration = appliedPipelineConfiguration
-                dedicatedPresentationFallbackSummary = "CVDisplayLink failed to start"
+                dedicatedPresentationFallbackSummary = "display link failed to start"
                 NSLog("RENDER: dedicated full-cache display link failed to start; using CAMetalDisplayLink")
                 renderer.setExternalDisplayScheduling(false)
                 metalLayer.displaySyncEnabled = true

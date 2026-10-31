@@ -1,7 +1,8 @@
 import Foundation
 
 #if os(macOS)
-import CoreVideo
+import AppKit
+import QuartzCore
 import Synchronization
 import os
 
@@ -46,42 +47,33 @@ private struct PhysicalDisplayCadenceState: Sendable {
     var intervalCount = 0
 }
 
-final class MacPhysicalDisplayCadenceMonitor: @unchecked Sendable {
+@MainActor
+final class MacPhysicalDisplayCadenceMonitor: NSObject {
     private let state = Mutex(PhysicalDisplayCadenceState())
-    private var displayLink: CVDisplayLink?
+    private var displayLink: CADisplayLink?
+    private let screen: NSScreen
 
     init?(displayID: CGDirectDisplayID?) {
-        var link: CVDisplayLink?
-        let result: CVReturn
-        if let displayID {
-            result = CVDisplayLinkCreateWithCGDisplay(displayID, &link)
-        } else {
-            result = CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        }
-        guard result == kCVReturnSuccess, let link else { return nil }
-        guard CVDisplayLinkSetOutputCallback(
-            link,
-            Self.callback,
-            Unmanaged.passUnretained(self).toOpaque()
-        ) == kCVReturnSuccess else {
-            return nil
-        }
-        displayLink = link
-    }
-
-    deinit {
-        stop()
+        let screen = NSScreen.screens.first { screen in
+            guard let displayID,
+                  let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return false }
+            return CGDirectDisplayID(truncating: number) == displayID
+        } ?? NSScreen.main
+        guard let screen else { return nil }
+        self.screen = screen
+        super.init()
     }
 
     func start() {
-        guard let displayLink else { return }
-        CVDisplayLinkStart(displayLink)
+        guard displayLink == nil else { return }
+        let link = screen.displayLink(target: self, selector: #selector(tick(_:)))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     func stop() {
-        guard let displayLink else { return }
-        CVDisplayLinkStop(displayLink)
-        self.displayLink = nil
+        displayLink?.invalidate()
+        displayLink = nil
     }
 
     func consumeSnapshot() -> PhysicalDisplayCadenceSnapshot {
@@ -100,24 +92,16 @@ final class MacPhysicalDisplayCadenceMonitor: @unchecked Sendable {
         }
     }
 
-    private static let callback: CVDisplayLinkOutputCallback = {
-        _, now, _, _, _, userInfo in
-        guard let userInfo else { return kCVReturnError }
-        let monitor = Unmanaged<MacPhysicalDisplayCadenceMonitor>
-            .fromOpaque(userInfo)
-            .takeUnretainedValue()
-        let timeStamp = now.pointee
-        guard timeStamp.videoTimeScale > 0 else { return kCVReturnSuccess }
-        let seconds = Double(timeStamp.videoTime) / Double(timeStamp.videoTimeScale)
-        monitor.state.withLock { state in
+    @objc private func tick(_ link: CADisplayLink) {
+        let seconds = link.timestamp
+        state.withLock { state in
             state.callbacks += 1
-            if let previousSeconds = state.previousSeconds, seconds >= previousSeconds {
-                state.intervalSeconds += seconds - previousSeconds
+            if let previous = state.previousSeconds, seconds >= previous {
+                state.intervalSeconds += seconds - previous
                 state.intervalCount += 1
             }
             state.previousSeconds = seconds
         }
-        return kCVReturnSuccess
     }
 }
 #endif
