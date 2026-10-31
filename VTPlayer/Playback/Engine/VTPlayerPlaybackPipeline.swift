@@ -119,6 +119,11 @@ extension VTPlayerViewModel {
                 frameInterpolationLevel: configuration.frameInterpolationLevel,
                 screenMaximumFramesPerSecond: screenMaximumFrameRate
             )
+        NSLog(
+            "RENDER: live scheduler eligibility sourceFPS=%.3f fi=%d screenMaxHz=%d targetFPS=%.3f dedicated=%@",
+            sourceFPS, configuration.frameInterpolationLevel, screenMaximumFrameRate,
+            targetFrameRate, usesLiveDedicatedPresentation.description
+        )
         if usesLiveDedicatedPresentation {
             fullCachePresentationQueue = EnhancedPresentationFrameQueue(
                 capacityBytes: frameCacheMemoryBudget,
