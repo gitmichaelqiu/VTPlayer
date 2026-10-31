@@ -3,6 +3,7 @@
 import argparse
 import datetime
 import json
+import math
 import os
 import platform
 import re
@@ -27,7 +28,7 @@ def command(*args):
 def describe(values):
     values = sorted(values)
     return {'count': len(values), 'median': statistics.median(values), 'min': values[0],
-            'max': values[-1], 'p95': values[min(len(values) - 1, int((len(values) - 1) * .95))]}
+            'max': values[-1], 'p95': values[math.ceil(len(values) * .95) - 1]}
 
 
 def main():
