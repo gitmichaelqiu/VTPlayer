@@ -711,6 +711,13 @@ extension VTPlayerViewModel {
             driverSnapshot.encodingFailures
         )
         NSLog(
+            "PRODUCER-GAPS: samples=%d totalMs=%.2f maxMs=%.2f deliveryTotalMs=%.2f",
+            producerBetweenGroupsSampleCount,
+            producerBetweenGroupsMilliseconds,
+            producerBetweenGroupsMaximumMilliseconds,
+            producerDeliveryMilliseconds
+        )
+        NSLog(
             "RENDER-CADENCE: physicalHz=%.1f callbacks=%d driverHz=%.1f callbackIntervalMs=%.2f scheduledHz=%.1f coalesced=%d mainQueueDelayMs=%.2f deadlineMarginMs=%.2f submitHz=%.1f actualHz=%.1f actualIntervalMs=%.2f intervalP50Ms=%.2f intervalP95Ms=%.2f intervalStdDevMs=%.2f maxGapMs=%.2f minRefreshMs=%.2f maxRefreshMs=%.2f displayModeHz=%.1f",
             physicalCadence?.framesPerSecond ?? 0,
             physicalCadence?.callbacks ?? 0,

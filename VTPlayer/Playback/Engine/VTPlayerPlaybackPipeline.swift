@@ -525,6 +525,7 @@ extension VTPlayerViewModel {
             var combinedProcessFallbackAttempted = false
             var pausedPreparationFramesRemaining = shouldResumePlayback ? 0 : self.initialPrerollFrameCount
             var prerollFrameBytes = 0
+            var previousProcessEnd: UInt64?
             defer { prefetchedFrameTask?.cancel() }
 
             @MainActor
@@ -1010,6 +1011,7 @@ extension VTPlayerViewModel {
                 sourceSeekGeneration.withLock { $0 = self.seekGeneration }
 
                 if self.isPaused && !self.isBuffering && pausedPreparationFramesRemaining == 0 {
+                    previousProcessEnd = nil
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }
@@ -1143,6 +1145,12 @@ extension VTPlayerViewModel {
 
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()
+                if let previousProcessEnd, processStart.uptimeNanoseconds >= previousProcessEnd {
+                    let gap = Double(processStart.uptimeNanoseconds - previousProcessEnd) / 1_000_000
+                    self.producerBetweenGroupsMilliseconds += gap
+                    self.producerBetweenGroupsMaximumMilliseconds = max(self.producerBetweenGroupsMaximumMilliseconds, gap)
+                    self.producerBetweenGroupsSampleCount += 1
+                }
                 do {
                     let streamedFrameCount = Mutex(0)
                     let streamedAdmissionNanoseconds = Mutex<UInt64>(0)
@@ -1163,11 +1171,13 @@ extension VTPlayerViewModel {
                             CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) > 0
                     }
                     let processEnd = DispatchTime.now()
+                    previousProcessEnd = processEnd.uptimeNanoseconds
 
                     guard gen == self.playbackGeneration else { break }
 
                     let processNanoseconds = processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds
                     let admissionNanoseconds = streamedAdmissionNanoseconds.withLock { $0 }
+                    self.producerDeliveryMilliseconds += Double(admissionNanoseconds) / 1_000_000.0
                     let processingMilliseconds = Double(processNanoseconds - min(processNanoseconds, admissionNanoseconds)) / 1_000_000.0
                     self.publishProcessingDiagnostics(processingMilliseconds)
                     let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0

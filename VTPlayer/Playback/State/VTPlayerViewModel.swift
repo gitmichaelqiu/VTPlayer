@@ -770,6 +770,10 @@ final class VTPlayerViewModel {
     @ObservationIgnored var producerCacheAdmissionMilliseconds = 0.0
     @ObservationIgnored var producerCacheInsertionMilliseconds = 0.0
     @ObservationIgnored var producerTimingSampleCount = 0
+    @ObservationIgnored var producerBetweenGroupsMilliseconds = 0.0
+    @ObservationIgnored var producerBetweenGroupsMaximumMilliseconds = 0.0
+    @ObservationIgnored var producerBetweenGroupsSampleCount = 0
+    @ObservationIgnored var producerDeliveryMilliseconds = 0.0
     @ObservationIgnored var fiProcessingMilliseconds = 0.0
     @ObservationIgnored var fiProcessingMaximumMilliseconds = 0.0
     @ObservationIgnored var fiProcessingSampleCount = 0
@@ -967,6 +971,10 @@ final class VTPlayerViewModel {
         producerCacheAdmissionMilliseconds = 0
         producerCacheInsertionMilliseconds = 0
         producerTimingSampleCount = 0
+        producerBetweenGroupsMilliseconds = 0
+        producerBetweenGroupsMaximumMilliseconds = 0
+        producerBetweenGroupsSampleCount = 0
+        producerDeliveryMilliseconds = 0
         fiProcessingMilliseconds = 0
         fiProcessingMaximumMilliseconds = 0
         fiProcessingSampleCount = 0
