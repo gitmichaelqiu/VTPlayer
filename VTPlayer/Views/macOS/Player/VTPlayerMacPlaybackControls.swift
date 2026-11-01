@@ -28,7 +28,6 @@ extension VTPlayerView {
         .keyboardShortcut(.space, modifiers: [])
         .disabled(viewModel.playbackPhase == .loading || viewModel.enhancedCachePreparationState == .prerolling)
         .accessibilityLabel(playPauseButtonLabel)
-        .help(playPauseButtonHelp)
     }
 
     private var playPauseButtonLabel: String {
@@ -36,18 +35,6 @@ extension VTPlayerView {
             return "Pause video"
         }
         return "Play video"
-    }
-
-    private var playPauseButtonHelp: String {
-        if viewModel.isPlaying && !viewModel.isPaused {
-            return "Pause playback"
-        }
-        if viewModel.isPreparingEnhancedCache {
-            return "Enhanced playback is preparing. You can keep watching while it finishes."
-        }
-        return viewModel.isPipelineActive
-            ? "Start enhanced playback"
-            : "Play video with native presentation"
     }
 
     @ViewBuilder
@@ -72,7 +59,6 @@ extension VTPlayerView {
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.plain)
-                .help("Dismiss message")
                 .accessibilityLabel("Dismiss message")
             }
             .padding(.horizontal, 14)
@@ -100,7 +86,6 @@ extension VTPlayerView {
             )
         }
         .buttonStyle(.plain)
-        .help("Adjust playback speed (0.5x - 2x)")
         .popover(isPresented: $showPlaybackSpeedPopover, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Speed: \(String(format: "%.2fx", viewModel.playbackSpeed))")
@@ -172,7 +157,6 @@ extension VTPlayerView {
         }
         .buttonStyle(.glass)
         .keyboardShortcut("f", modifiers: [])
-        .help(viewModel.isFullScreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)")
         #else
         EmptyView()
         #endif
@@ -193,7 +177,6 @@ private struct MacVolumeControl: View {
             )
         }
         .buttonStyle(.plain)
-        .help("Adjust volume (0–100 percent)")
         .popover(isPresented: $showVolumePopover, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(String(localized: "Volume: %@", defaultValue: "Volume: \(viewModel.volume.formatted(.percent.precision(.fractionLength(0))))", comment: "Current volume"))

@@ -193,7 +193,6 @@ extension VTPlayerView {
         .pickerStyle(.menu)
         .menuStyle(.borderlessButton)
         .foregroundStyle(.secondary)
-        .help("Sort recent videos")
     }
 
     var deleteHistoryButton: some View {
@@ -205,7 +204,6 @@ extension VTPlayerView {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
-        .help("Clear playback history")
         .disabled(viewModel.recentVideos.isEmpty)
     }
     

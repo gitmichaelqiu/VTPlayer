@@ -197,26 +197,6 @@
         }
       }
     },
-    "Adjust playback speed (0.5x - 2x)" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整播放速度"
-          }
-        }
-      }
-    },
-    "Adjust volume (0–100 percent)" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整音量"
-          }
-        }
-      }
-    },
     "Adjustments" : {
       "localizations" : {
         "zh-Hans" : {
@@ -443,16 +423,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除历史记录"
-          }
-        }
-      }
-    },
-    "Clear playback history" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除播放历史记录"
           }
         }
       }
@@ -734,32 +704,12 @@
         }
       }
     },
-    "Enter Fullscreen (F)" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进入全屏（F）"
-          }
-        }
-      }
-    },
     "Error" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "错误"
-          }
-        }
-      }
-    },
-    "Exit Fullscreen (F)" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出全屏（F）"
           }
         }
       }
@@ -1683,16 +1633,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "排序方式"
-          }
-        }
-      }
-    },
-    "Sort recent videos" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排序最近视频"
           }
         }
       }

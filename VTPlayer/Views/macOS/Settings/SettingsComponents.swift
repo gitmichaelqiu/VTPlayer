@@ -444,7 +444,6 @@ struct SliderSettingsRow<V>: View where V: BinaryFloatingPoint, V.Stride: Binary
                         resetTask = nil
                     }
                 }
-                .help("Reset to default")
                 .disabled(abs(value - defaultValue) < 0.001)
             }
 
