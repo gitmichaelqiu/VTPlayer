@@ -443,16 +443,6 @@
         }
       }
     },
-    "Control apps and docks across spaces." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "控制每个桌面的 App 和 Dock。"
-          }
-        }
-      }
-    },
     "Control which app and dock to show in each space." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1347,16 +1337,6 @@
         }
       }
     },
-    "Rename and organize your desktop spaces." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名并整理你的桌面空间。"
-          }
-        }
-      }
-    },
     "Rename File" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1423,16 +1403,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从保存的位置继续播放新视频。"
-          }
-        }
-      }
-    },
-    "Right-click with the Option key." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用 Option 键模拟右键。"
           }
         }
       }
