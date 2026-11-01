@@ -121,7 +121,7 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
         ))
     }
 
-    func testDedicatedFullCacheSchedulerFallsBackWhenStartupCannotPresent() {
+    func testDedicatedSchedulerFallsBackWhenItCannotSubmit() {
         XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
             callbacks: 0,
             queuedFrames: 0,
@@ -140,7 +140,7 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
             submittedFrames: 0,
             presentedFrames: 0
         ))
-        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
             callbacks: 20,
             queuedFrames: 12,
             submittedFrames: 8,

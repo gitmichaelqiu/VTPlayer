@@ -49,10 +49,9 @@ struct EnhancedDisplaySchedulingPolicy {
         callbacks: Int,
         queuedFrames: Int,
         submittedFrames: Int,
-        presentedFrames: Int
+        presentedFrames _: Int
     ) -> Bool {
-        callbacks == 0 ||
-            (queuedFrames > 0 && (submittedFrames == 0 || presentedFrames == 0))
+        callbacks == 0 || (queuedFrames > 0 && submittedFrames == 0)
     }
 }
 
@@ -711,11 +710,12 @@ extension VTPlayerViewModel {
             driverSnapshot.encodingFailures
         )
         NSLog(
-            "PRODUCER-GAPS: samples=%d totalMs=%.2f maxMs=%.2f deliveryTotalMs=%.2f",
+            "PRODUCER-GAPS: samples=%d totalMs=%.2f maxMs=%.2f deliveryTotalMs=%.2f admissionExecutionTotalMs=%.2f",
             producerBetweenGroupsSampleCount,
             producerBetweenGroupsMilliseconds,
             producerBetweenGroupsMaximumMilliseconds,
-            producerDeliveryMilliseconds
+            producerDeliveryMilliseconds,
+            producerAdmissionExecutionMilliseconds
         )
         NSLog(
             "RENDER-CADENCE: physicalHz=%.1f callbacks=%d driverHz=%.1f callbackIntervalMs=%.2f scheduledHz=%.1f coalesced=%d mainQueueDelayMs=%.2f deadlineMarginMs=%.2f submitHz=%.1f actualHz=%.1f actualIntervalMs=%.2f intervalP50Ms=%.2f intervalP95Ms=%.2f intervalStdDevMs=%.2f maxGapMs=%.2f minRefreshMs=%.2f maxRefreshMs=%.2f displayModeHz=%.1f",

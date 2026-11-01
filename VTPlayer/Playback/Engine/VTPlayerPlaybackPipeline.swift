@@ -591,6 +591,12 @@ extension VTPlayerViewModel {
             }
 
             let admitStreamedFrame: @MainActor @Sendable (VTFrame) async -> Bool = { frame in
+                let executionStart = DispatchTime.now().uptimeNanoseconds
+                defer {
+                    self.producerAdmissionExecutionMilliseconds += Double(
+                        DispatchTime.now().uptimeNanoseconds - executionStart
+                    ) / 1_000_000.0
+                }
                 guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { return false }
                 if self.lastRenderedPTS.isValid,
                    CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) <= 0 {
