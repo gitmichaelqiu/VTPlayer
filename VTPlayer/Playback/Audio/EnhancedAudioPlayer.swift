@@ -1,6 +1,20 @@
 import AVFoundation
 import Foundation
 
+enum EnhancedAudioTiming {
+    static let videoLeadSeconds = 0.04
+
+    static func audioTime(for referenceTime: CMTime) -> CMTime {
+        let seconds = CMTimeGetSeconds(referenceTime)
+        guard seconds.isFinite else { return .invalid }
+        return CMTime(seconds: max(0, seconds - videoLeadSeconds), preferredTimescale: 600)
+    }
+
+    static func needsCorrection(difference: Double) -> Bool {
+        difference.isFinite && (difference > 0.04 || difference < -0.07)
+    }
+}
+
 struct EnhancedAudioOperationGate {
     private(set) var generation: UInt64 = 0
     private(set) var isAwaitingFrameAnchor = false
@@ -86,9 +100,11 @@ final class EnhancedAudioPlayer {
             let now = CACurrentMediaTime()
             if now >= nextSyncCheck {
                 nextSyncCheck = now + 1
-                let referenceTime = synchronizeToFrame ? pts : referencePlayer.currentTime()
+                let referenceTime = EnhancedAudioTiming.audioTime(
+                    for: synchronizeToFrame ? pts : referencePlayer.currentTime()
+                )
                 let difference = CMTimeGetSeconds(CMTimeSubtract(player.currentTime(), referenceTime))
-                if referencePlayer.rate != 0, difference.isFinite, abs(difference) > 0.12 {
+                if referencePlayer.rate != 0, EnhancedAudioTiming.needsCorrection(difference: difference) {
                     player.setRate(Float(playbackRate), time: referenceTime,
                                    atHostTime: CMClockGetTime(CMClockGetHostTimeClock()))
                 }
@@ -119,7 +135,7 @@ final class EnhancedAudioPlayer {
                     return
                 }
                 // The transport can advance while the audio seek is pending.
-                let referenceTime = self.referencePlayer?.currentTime() ?? self.latestRenderedPTS
+                let referenceTime = EnhancedAudioTiming.audioTime(for: self.latestRenderedPTS)
                 player.setRate(
                     Float(self.playbackRate),
                     time: referenceTime.isNumeric ? referenceTime : self.latestRenderedPTS,

@@ -3,6 +3,15 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedAudioOperationGateTests: XCTestCase {
+    func testAudioAnchorAllowsVideoToLeadWithoutSeekingBeforeStart() {
+        XCTAssertEqual(CMTimeGetSeconds(EnhancedAudioTiming.audioTime(for: CMTime(seconds: 2, preferredTimescale: 600))), 1.96, accuracy: 0.001)
+        XCTAssertEqual(CMTimeGetSeconds(EnhancedAudioTiming.audioTime(for: .zero)), 0, accuracy: 0.001)
+        XCTAssertFalse(EnhancedAudioTiming.audioTime(for: .invalid).isValid)
+        XCTAssertTrue(EnhancedAudioTiming.needsCorrection(difference: 0.05))
+        XCTAssertFalse(EnhancedAudioTiming.needsCorrection(difference: -0.06))
+        XCTAssertTrue(EnhancedAudioTiming.needsCorrection(difference: -0.08))
+        XCTAssertFalse(EnhancedAudioTiming.needsCorrection(difference: .nan))
+    }
     func testStopInvalidatesAnInFlightAnchor() {
         var gate = EnhancedAudioOperationGate()
         gate.armFrameAnchor(shouldPlay: true)
