@@ -696,6 +696,21 @@ extension VTPlayerViewModel {
             queue.lateInterpolatedDrops
         )
         NSLog(
+            "PRODUCER: timingSamples=%d decodeWaitTotalMs=%.2f admissionWaitTotalMs=%.2f insertionTotalMs=%.2f processSamples=%d processTotalMs=%.2f processMaxMs=%.2f deadlineMisses=%d outputShortfalls=%d emptyCallbacks=%d drawableFailures=%d encodeFailures=%d",
+            producerTimingSampleCount,
+            producerDecodeWaitMilliseconds,
+            producerCacheAdmissionMilliseconds,
+            producerCacheInsertionMilliseconds,
+            fiProcessingSampleCount,
+            fiProcessingMilliseconds,
+            fiProcessingMaximumMilliseconds,
+            fiDeadlineMissCount,
+            fiOutputShortfallCount,
+            driverSnapshot.emptyQueueCallbacks,
+            driverSnapshot.drawableAcquisitionFailures,
+            driverSnapshot.encodingFailures
+        )
+        NSLog(
             "RENDER-CADENCE: physicalHz=%.1f callbacks=%d driverHz=%.1f callbackIntervalMs=%.2f scheduledHz=%.1f coalesced=%d mainQueueDelayMs=%.2f deadlineMarginMs=%.2f submitHz=%.1f actualHz=%.1f actualIntervalMs=%.2f intervalP50Ms=%.2f intervalP95Ms=%.2f intervalStdDevMs=%.2f maxGapMs=%.2f minRefreshMs=%.2f maxRefreshMs=%.2f displayModeHz=%.1f",
             physicalCadence?.framesPerSecond ?? 0,
             physicalCadence?.callbacks ?? 0,
@@ -745,6 +760,8 @@ extension VTPlayerViewModel {
             scheduling.displaySyncEnabled.description,
             rendererPerformance.encodedFrames
         )
+        resetProducerTiming()
+        producedFramesCount = 0
         diagTimer = now
     }
     #endif

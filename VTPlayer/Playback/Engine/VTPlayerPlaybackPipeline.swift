@@ -1145,8 +1145,12 @@ extension VTPlayerViewModel {
                 let processStart = DispatchTime.now()
                 do {
                     let streamedFrameCount = Mutex(0)
+                    let streamedAdmissionNanoseconds = Mutex<UInt64>(0)
                     let processedFrames = try await coordinator.processFrame(vtFrame) { frame in
+                        let admissionStart = DispatchTime.now().uptimeNanoseconds
                         let admitted = await admitStreamedFrame(frame)
+                        let admissionEnd = DispatchTime.now().uptimeNanoseconds
+                        streamedAdmissionNanoseconds.withLock { $0 += admissionEnd - admissionStart }
                         if admitted {
                             streamedFrameCount.withLock { $0 += 1 }
                         }
@@ -1162,10 +1166,10 @@ extension VTPlayerViewModel {
 
                     guard gen == self.playbackGeneration else { break }
 
-                    self.publishProcessingDiagnostics(
-                        Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-                    )
-                    let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
+                    let processNanoseconds = processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds
+                    let admissionNanoseconds = streamedAdmissionNanoseconds.withLock { $0 }
+                    let processingMilliseconds = Double(processNanoseconds - min(processNanoseconds, admissionNanoseconds)) / 1_000_000.0
+                    self.publishProcessingDiagnostics(processingMilliseconds)
                     let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
                     let outputFrameCount = admittedStreamedFrameCount + outputFrames.count
                     self.recordFIProcessingTiming(
