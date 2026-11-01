@@ -1557,16 +1557,6 @@
         }
       }
     },
-    "Retry enhanced playback" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重试增强播放"
-          }
-        }
-      }
-    },
     "Right-click with the Option key." : {
       "localizations" : {
         "zh-Hans" : {

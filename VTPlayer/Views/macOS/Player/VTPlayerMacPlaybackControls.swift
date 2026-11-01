@@ -65,7 +65,6 @@ extension VTPlayerView {
                     viewModel.retryEnhancedPlayback()
                 }
                 .controlSize(.small)
-                .help("Retry enhanced playback")
                 Button {
                     viewModel.dismissPlaybackNotice()
                 } label: {
