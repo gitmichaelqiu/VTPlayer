@@ -22,6 +22,7 @@ extension VTPlayerView {
 
                         VStack(spacing: 0) {
                             aboutLinkRow(title: "Report an issue", systemImage: "exclamationmark.bubble", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
+                            aboutLinkRow(title: "VTPlayer's website", systemImage: "globe", url: "https://vtplayer.mqiu.dev/")
                             aboutLinkRow(title: "VTPlayer's GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gitmichaelqiu/VTPlayer")
                             aboutLinkRow(title: "Author's website", systemImage: "globe", url: "https://mqiu.dev")
                             aboutLinkRow(title: "Author's GitHub", systemImage: "person.crop.circle", url: "https://github.com/gitmichaelqiu")

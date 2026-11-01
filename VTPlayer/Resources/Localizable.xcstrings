@@ -1894,6 +1894,16 @@
         }
       }
     },
+    "VTPlayer's website" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VTPlayer 的网站"
+          }
+        }
+      }
+    },
     "Watch Original Video" : {
       "localizations" : {
         "zh-Hans" : {
