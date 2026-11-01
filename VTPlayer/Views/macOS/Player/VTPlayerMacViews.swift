@@ -126,7 +126,6 @@ extension VTPlayerView {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, -8)
-        .help(url.path)
         .transition(.asymmetric(
             insertion: .move(edge: .top).combined(with: .opacity),
             removal: .opacity
