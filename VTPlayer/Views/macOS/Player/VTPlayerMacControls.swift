@@ -108,7 +108,7 @@ extension VTPlayerView {
                     let isActive = scale > 0
                     enhancementControlLabel(
                         isActive
-                            ? String(format: String(localized: isQL ? "Quality player scale %@" : "Low Latency player scale %@"), "\(scaleLabel)x")
+                            ? String(format: String(localized: isQL ? "Quality %@" : "Low Latency %@"), "\(scaleLabel)x")
                             : "\(String(localized: "Super Res")): \(String(localized: "Off"))",
                         isActive: isActive
                     )
