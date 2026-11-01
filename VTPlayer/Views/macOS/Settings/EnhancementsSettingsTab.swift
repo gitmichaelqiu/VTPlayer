@@ -42,7 +42,7 @@ struct EnhancementsSettingsTab: View {
 
                     SliderSettingsRow(
                         "Enhanced frame disk cache",
-                        helperText: "Maximum space for high-quality HEVC-compressed enhanced playback. The cache may be lossy; your source file is never changed.",
+                        helperText: "Maximum space cached enhanced frames.",
                         value: Binding(
                             get: { Double(min(max(enhancedFrameCacheDiskGB, 2), 200)) },
                             set: { enhancedFrameCacheDiskGB = Int($0.rounded()) }
@@ -86,7 +86,6 @@ struct EnhancementsSettingsTab: View {
                 SettingsSection("Postprocessing") {
                     SliderSettingsRow(
                         "Motion Blur",
-                        helperText: "Apply motion blur.",
                         value: Binding(
                             get: { Double(defaultMBLevel) },
                             set: { defaultMBLevel = Int($0) }
@@ -101,7 +100,6 @@ struct EnhancementsSettingsTab: View {
 
                     SliderSettingsRow(
                         "Denoise",
-                        helperText: "Reduce video noise.",
                         value: $defaultDNLevel,
                         range: 0.0...1.0,
                         defaultValue: 0.0,
@@ -124,7 +122,6 @@ struct EnhancementsSettingsTab: View {
 
                         SliderSettingsRow(
                             "HDR Boost",
-                            helperText: "Expand luminance for HDR displays.",
                             value: $defaultHDRBoost,
                             range: 0.0...2.0,
                             defaultValue: 0.0,
@@ -137,7 +134,6 @@ struct EnhancementsSettingsTab: View {
 
                             SliderSettingsRow(
                                 "HDR Colorfulness",
-                                helperText: "Adjust HDR color intensity.",
                                 value: $defaultHDRColorfulness,
                                 range: 0.0...1.0,
                                 defaultValue: 0.0,
