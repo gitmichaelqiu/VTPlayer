@@ -1200,6 +1200,24 @@ extension VTPlayerViewModel {
                         continue
                     }
 
+                    #if os(macOS)
+                    if usesLiveDedicatedPresentation {
+                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
+                        var admittedAll = true
+                        for frame in outputFrames {
+                            guard await admitStreamedFrame(frame) else {
+                                admittedAll = false
+                                break
+                            }
+                        }
+                        if !admittedAll {
+                            if sourceSeekGeneration.withLock({ $0 }) != self.seekGeneration { continue }
+                            break
+                        }
+                        continue
+                    }
+                    #endif
+
                     let outputByteCount = outputFrames.reduce(into: 0) { total, frame in
                         total += CVPixelBufferGetDataSize(frame.buffer)
                     }
@@ -1251,6 +1269,16 @@ extension VTPlayerViewModel {
                         break
                     }
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
+                    #if os(macOS)
+                    if usesLiveDedicatedPresentation {
+                        guard await admitStreamedFrame(vtFrame) else {
+                            if sourceSeekGeneration.withLock({ $0 }) != self.seekGeneration { continue }
+                            break
+                        }
+                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
+                        continue
+                    }
+                    #endif
                     let fallbackByteCount = CVPixelBufferGetDataSize(vtFrame.buffer)
                     guard fallbackByteCount <= self.frameCacheMemoryBudget else {
                         self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
