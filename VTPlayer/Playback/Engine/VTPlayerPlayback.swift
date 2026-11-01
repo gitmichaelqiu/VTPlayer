@@ -303,8 +303,12 @@ extension VTPlayerViewModel {
             enhancedCachePreparationState = .ready
         }
         livePresentationGateValidated = false
+        let pausedFrame = macDedicatedMetalDisplayTickDriver?.lastRenderedFrame()
         renderer.setRenderingActive(false)
         stopDisplayLinkIfNeeded()
+        if let pausedFrame {
+            renderer.render(pixelBuffer: pausedFrame.buffer, isInterpolated: pausedFrame.isInterpolated)
+        }
         #else
         if let link = displayLink {
             link.invalidate()

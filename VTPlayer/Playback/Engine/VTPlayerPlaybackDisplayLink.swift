@@ -220,6 +220,7 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
         var metrics = MacDisplayTickDriverSnapshot()
         var previousCallbackHostTime: CFTimeInterval?
         var lastRenderedPTS: CMTime
+        var lastRenderedFrame: VTFrame?
         var didPresentFirstFrame = false
         var lastUIUpdateHostTime: CFTimeInterval
         var pendingCallbacks = 0
@@ -375,6 +376,7 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
 
             let frame = selection.frame
             state.lastRenderedPTS = frame.presentationTimeStamp
+            state.lastRenderedFrame = frame
             state.metrics.renderedFrames += 1
             state.metrics.droppedInterpolatedFrames += selection.droppedInterpolatedFrames
             state.pendingPresented += 1
@@ -430,6 +432,10 @@ nonisolated final class MacDedicatedMetalDisplayTickDriver: NSObject, @unchecked
                 }
             }
         }
+    }
+
+    func lastRenderedFrame() -> VTFrame? {
+        state.withLock { $0.lastRenderedFrame }
     }
 
     @objc private func displayLinkCallback(_ link: CADisplayLink) {
