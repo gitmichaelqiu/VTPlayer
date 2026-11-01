@@ -192,6 +192,15 @@ public actor VTFrameProcessorCoordinator {
     // as many pixels and cannot sustain the generated-frame cadence.
     var temporalFirstForSRInterpolation = false
 
+    #if DEBUG && os(macOS)
+    var spatialFirstForDiagnostics = false
+
+    func selectSpatialFirstForDiagnostics() {
+        precondition(!isSessionActive)
+        spatialFirstForDiagnostics = true
+    }
+    #endif
+
     // Bicubic upscale for interpolated frames in temporal-first mode.
     // LL SR is trained on real video and produces softer output on
     // synthetically interpolated frames.
@@ -223,6 +232,10 @@ public actor VTFrameProcessorCoordinator {
         self.motionBlurStrength = motionBlurStrength
         self.denoiseStrength = denoiseStrength
         self.qualityPrioritization = qualityPrioritization
+        #if DEBUG && os(macOS)
+        self.spatialFirstForDiagnostics = superResolutionLevel == 2 && frameInterpolationLevel == 2 &&
+            ProcessInfo.processInfo.environment["VTPLAYER_SRFI_SPATIAL_FIRST"] == "1"
+        #endif
     }
 
 }

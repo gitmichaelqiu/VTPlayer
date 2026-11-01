@@ -136,7 +136,12 @@ extension VTFrameProcessorCoordinator {
         let hasQualitySR = qualitySuperResolutionScaleFactor > 0
         let hasLLSR = superResolutionLevel > 0
         #if os(macOS)
-        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !preferSequentialSRFI
+        #if DEBUG
+        let spatialFirst = spatialFirstForDiagnostics
+        #else
+        let spatialFirst = false
+        #endif
+        let inCombinedMode = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !preferSequentialSRFI && !spatialFirst
         #else
         // iOS uses the stable sequential spatial-then-temporal path. The
         // combined spatial FI processor is the branch that rejects SR2+FI2
@@ -153,12 +158,17 @@ extension VTFrameProcessorCoordinator {
         #if os(macOS)
         let useTemporalFirstForSRInterpolation =
             ((superResolutionLevel > 0 && !inCombinedMode) || qualitySuperResolutionScaleFactor == 4) &&
-            frameInterpolationLevel > 0
+            frameInterpolationLevel > 0 && !spatialFirst
         #else
         let useTemporalFirstForSRInterpolation =
             qualitySuperResolutionScaleFactor == 4 && frameInterpolationLevel > 0
         #endif
         self.temporalFirstForSRInterpolation = useTemporalFirstForSRInterpolation
+        #if DEBUG && os(macOS)
+        if spatialFirst {
+            NSLog("SRFI_DIAGNOSTIC: spatial-first enabled")
+        }
+        #endif
 
         let needsSpatial = hasQualitySR || (hasLLSR && (!inCombinedMode || useTemporalFirstForSRInterpolation))
 
