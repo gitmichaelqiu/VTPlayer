@@ -94,7 +94,6 @@ extension VTPlayerView {
                     Image(systemName: "sparkles")
                 }
                 .toggleStyle(.button)
-                .help(viewModel.processingEnhancementsEnabled ? "Turn enhancements off" : "Turn enhancements on")
                 .accessibilityLabel("Enhancements")
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(spacing: 8) {
@@ -116,7 +115,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Super Resolution — increases spatial resolution using neural upscaling")
                 .popover(isPresented: $showSuperResolutionPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Super Resolution")
@@ -167,7 +165,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Frame Interpolation — increases video frame rate for fluid movement")
                 .popover(isPresented: $showFrameInterpolationPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Frame Interpolation")
@@ -200,7 +197,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
                 .popover(isPresented: $showMotionBlurPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : String(localized: "Off"))")
@@ -235,7 +231,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Denoise — filters compression noise and high-frequency grain")
                 .popover(isPresented: $showDenoisePopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))")

@@ -333,12 +333,10 @@ struct VTPlayerView: View {
                             Button(action: { showFileImporter = true }) {
                                 Label("Open Video", systemImage: "plus")
                             }
-                            .help("Open a local video file")
                             
                             Button(action: { viewModel.showSidebar.toggle() }) {
                                 Label("Toggle Sidebar", systemImage: "sidebar.right")
                             }
-                            .help("Toggle diagnostics and metadata sidebar panel")
                         }
                     }
             }
@@ -357,12 +355,10 @@ struct VTPlayerView: View {
                         Button(action: { showFileImporter = true }) {
                             Label("Open Video", systemImage: "plus")
                         }
-                        .help("Open a local video file")
                         
                         Button(action: { viewModel.showSidebar.toggle() }) {
                             Label("Toggle Sidebar", systemImage: "sidebar.right")
                         }
-                        .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
                 .macWindowToolbarFullScreenVisibility()

@@ -4,9 +4,6 @@
     "" : {
       "shouldTranslate" : false
     },
-    "%lld" : {
-      "shouldTranslate" : false
-    },
     "%@ · %@ of ~%@" : {
       "localizations" : {
         "en" : {
@@ -54,6 +51,9 @@
           }
         }
       }
+    },
+    "%lld" : {
+      "shouldTranslate" : false
     },
     "© %@ Michael Yicheng Qiu" : {
       "localizations" : {
@@ -187,16 +187,6 @@
         }
       }
     },
-    "Adjust HDR color intensity." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调整 HDR 色彩强度。"
-          }
-        }
-      }
-    },
     "Adjustments" : {
       "localizations" : {
         "zh-Hans" : {
@@ -223,16 +213,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已应用增强"
-          }
-        }
-      }
-    },
-    "Apply motion blur." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用运动模糊。"
           }
         }
       }
@@ -313,16 +293,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消"
-          }
-        }
-      }
-    },
-    "Cancel this setup step. The original video is unchanged." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取消此准备步骤。原始视频不会受到影响。"
           }
         }
       }
@@ -573,16 +543,6 @@
         }
       }
     },
-    "Denoise — filters compression noise and high-frequency grain" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "降噪 — 过滤压缩噪点和高频颗粒"
-          }
-        }
-      }
-    },
     "Denoise: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -694,6 +654,16 @@
         }
       }
     },
+    "Enhancements" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "增强"
+          }
+        }
+      }
+    },
     "Enter a new name for the video file." : {
       "localizations" : {
         "zh-Hans" : {
@@ -720,16 +690,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "退出播放器"
-          }
-        }
-      }
-    },
-    "Expand luminance for HDR displays." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为 HDR 显示器扩展亮度。"
           }
         }
       }
@@ -790,16 +750,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "帧生成"
-          }
-        }
-      }
-    },
-    "Frame Interpolation — increases video frame rate for fluid movement" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "帧生成 — 提升视频帧率，使运动更加流畅"
           }
         }
       }
@@ -954,12 +904,12 @@
         }
       }
     },
-    "Maximum space for high-quality HEVC-compressed enhanced playback. The cache may be lossy; your source file is never changed." : {
+    "Maximum space cached enhanced frames." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用于存储高画质 HEVC 压缩增强帧的最大空间。缓存可能有损；源文件不会被修改。"
+            "value" : "最大增强帧占用空间。"
           }
         }
       }
@@ -1010,16 +960,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "运动模糊"
-          }
-        }
-      }
-    },
-    "Motion Blur — simulates natural motion blur on upscaled/interpolated frames" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "运动模糊 — 为超分辨率或插帧后的画面模拟自然运动模糊"
           }
         }
       }
@@ -1144,32 +1084,12 @@
         }
       }
     },
-    "Open a local video file" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开本地视频文件"
-          }
-        }
-      }
-    },
     "Open a video to enhance." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开一个视频以增强。"
-          }
-        }
-      }
-    },
-    "Open from Photos Library..." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从照片图库打开…"
           }
         }
       }
@@ -1387,16 +1307,6 @@
         }
       }
     },
-    "Reduce video noise." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "降低视频噪点。"
-          }
-        }
-      }
-    },
     "Remove" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1607,16 +1517,6 @@
         }
       }
     },
-    "Show or hide file extensions." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示或隐藏文件扩展名。"
-          }
-        }
-      }
-    },
     "Sort" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1737,16 +1637,6 @@
         }
       }
     },
-    "Super Resolution — increases spatial resolution using neural upscaling" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超分辨率 — 使用神经网络上采样提升空间分辨率"
-          }
-        }
-      }
-    },
     "Super Resolution Specs" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1803,16 +1693,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这将清除最近播放历史记录，视频文件将保持安全。"
-          }
-        }
-      }
-    },
-    "Toggle diagnostics and metadata sidebar panel" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换诊断与元数据边栏面板"
           }
         }
       }
@@ -1893,16 +1773,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更新"
-          }
-        }
-      }
-    },
-    "Use dark styling during playback." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放时使用深色样式。"
           }
         }
       }
