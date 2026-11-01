@@ -1,6 +1,9 @@
 import AVFoundation
 import CoreMedia
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 extension VTPlayerViewModel {
     #if os(macOS)
@@ -728,6 +731,7 @@ extension VTPlayerViewModel {
             var presentationWindowStart = DispatchTime.now()
             var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
             var failureTracker = EnhancedPresentationFailureTracker()
+            var retriedLivePresentation = false
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !Task.isCancelled,
@@ -743,6 +747,13 @@ extension VTPlayerViewModel {
                     return
                 }
                 let now = DispatchTime.now()
+                if let window = self.renderer.window,
+                   !window.occlusionState.contains(.visible) {
+                    failureTracker = EnhancedPresentationFailureTracker()
+                    presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
+                    presentationWindowStart = now
+                    continue
+                }
                 let elapsed = self.elapsedUptimeSeconds(since: presentationWindowStart, until: now)
                 guard elapsed >= EnhancedPresentationFailureTracker.windowSeconds else { continue }
 
@@ -791,6 +802,20 @@ extension VTPlayerViewModel {
                     if !shouldRecover {
                         presentationFrameBaseline = totalPresentedFrames
                         presentationWindowStart = now
+                        continue
+                    }
+                    if !retriedLivePresentation,
+                       self.preparedEnhancedFrameCacheMode != .full,
+                       self.macDedicatedMetalDisplayTickDriver != nil,
+                       let player = self.player {
+                        retriedLivePresentation = true
+                        self.stopDisplayLinkIfNeeded()
+                        self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
+                        self.startDisplayLinkIfNeeded()
+                        failureTracker = EnhancedPresentationFailureTracker()
+                        presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
+                        presentationWindowStart = DispatchTime.now()
+                        NSLog("RENDER: retrying live presentation before cache fallback")
                         continue
                     }
                     self.enhancedPresentationMonitorTask = nil
