@@ -343,8 +343,8 @@
 				"GENERATE_INFOPLIST_FILE[sdk=iphoneos*]" = NO;
 				"GENERATE_INFOPLIST_FILE[sdk=iphonesimulator*]" = NO;
 				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
-				"INFOPLIST_FILE[sdk=iphoneos*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
-				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=iphoneos*]" = "VTPlayer-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "VTPlayer-iOS-Info.plist";
 				"INFOPLIST_FILE[sdk=macosx*]" = "VTPlayer-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
@@ -398,8 +398,8 @@
 				"GENERATE_INFOPLIST_FILE[sdk=iphoneos*]" = NO;
 				"GENERATE_INFOPLIST_FILE[sdk=iphonesimulator*]" = NO;
 				"GENERATE_INFOPLIST_FILE[sdk=macosx*]" = NO;
-				"INFOPLIST_FILE[sdk=iphoneos*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
-				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "VTPlayer/VTPlayer-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=iphoneos*]" = "VTPlayer-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "VTPlayer-iOS-Info.plist";
 				"INFOPLIST_FILE[sdk=macosx*]" = "VTPlayer-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = VTPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
