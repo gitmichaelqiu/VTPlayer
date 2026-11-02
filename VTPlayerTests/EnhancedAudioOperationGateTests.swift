@@ -3,6 +3,15 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedAudioOperationGateTests: XCTestCase {
+    func testAudioAnchorAllowsVideoToLeadWithoutSeekingBeforeStart() {
+        XCTAssertEqual(CMTimeGetSeconds(EnhancedAudioTiming.audioTime(for: CMTime(seconds: 2, preferredTimescale: 600))), 1.96, accuracy: 0.001)
+        XCTAssertEqual(CMTimeGetSeconds(EnhancedAudioTiming.audioTime(for: .zero)), 0, accuracy: 0.001)
+        XCTAssertFalse(EnhancedAudioTiming.audioTime(for: .invalid).isValid)
+        XCTAssertTrue(EnhancedAudioTiming.needsCorrection(difference: 0.05))
+        XCTAssertFalse(EnhancedAudioTiming.needsCorrection(difference: -0.06))
+        XCTAssertTrue(EnhancedAudioTiming.needsCorrection(difference: -0.08))
+        XCTAssertFalse(EnhancedAudioTiming.needsCorrection(difference: .nan))
+    }
     func testStopInvalidatesAnInFlightAnchor() {
         var gate = EnhancedAudioOperationGate()
         gate.armFrameAnchor(shouldPlay: true)
@@ -89,8 +98,10 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
         let presentation = RendererPresentationPerformanceSnapshot(
             presentedFrames: 1,
             droppedPresentations: 0,
+            duplicatePresentations: 0,
             intervalSamples: 0,
-            totalIntervalNanoseconds: 0
+            totalIntervalNanoseconds: 0,
+            intervalsNanoseconds: []
         )
         let snapshot = aggregate.consumeSnapshot(
             completedGPU: completedGPU,
@@ -110,8 +121,10 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
         ), presentation: RendererPresentationPerformanceSnapshot(
             presentedFrames: 0,
             droppedPresentations: 0,
+            duplicatePresentations: 0,
             intervalSamples: 0,
-            totalIntervalNanoseconds: 0
+            totalIntervalNanoseconds: 0,
+            intervalsNanoseconds: []
         )), RendererPerformanceSnapshot(
             drawAttempts: 0,
             drawableAcquisitions: 0,
@@ -123,8 +136,10 @@ final class EnhancedAudioOperationGateTests: XCTestCase {
             totalGPUNanoseconds: 0,
             presentedFrames: 0,
             droppedPresentations: 0,
+            duplicatePresentations: 0,
             presentationIntervalSamples: 0,
-            totalPresentationIntervalNanoseconds: 0
+            totalPresentationIntervalNanoseconds: 0,
+            presentationIntervalsNanoseconds: []
         ))
     }
 }

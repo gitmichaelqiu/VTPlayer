@@ -47,7 +47,7 @@ extension VTFrameProcessorCoordinator {
         instance: StageInstance,
         inputFrames: [VTFrame],
         colorSource: CVPixelBuffer? = nil,
-        onOutput: (@MainActor @Sendable (VTFrame) async throws -> Void)? = nil
+        onOutput: (@Sendable (VTFrame) async throws -> Void)? = nil
     ) async throws -> [VTFrame] {
         guard let pool = instance.pixelBufferPool,
               let frame = inputFrames.first else { return inputFrames }
@@ -80,7 +80,8 @@ extension VTFrameProcessorCoordinator {
         prevSourceFP = historyToUse[1]
 
         #if os(macOS)
-        let isCombined = superResolutionLevel == 2 && frameInterpolationLevel == 2 && !temporalFirstForSRInterpolation
+        let isCombined = superResolutionLevel == 2 && frameInterpolationLevel == 2 &&
+            !temporalFirstForSRInterpolation && stages[.spatial] == nil
         if isCombined {
             // Combined 2x spatial + 2x temporal
             var buf1: CVPixelBuffer?
@@ -203,7 +204,7 @@ extension VTFrameProcessorCoordinator {
     func emitStreamedTemporalOutput(
         _ frame: VTFrame,
         colorSource: CVPixelBuffer,
-        onOutput: @MainActor @Sendable (VTFrame) async throws -> Void
+        onOutput: @Sendable (VTFrame) async throws -> Void
     ) async throws {
         var outputFrames = [frame]
         if let spatialInstance = stages[.spatial] {
@@ -220,6 +221,9 @@ extension VTFrameProcessorCoordinator {
 
         // Process each frame through spatial upscaling
         var outputFrames: [VTFrame] = []
+        // In temporal-first mode, the shared rings contain source frames only.
+        var previousQualitySource = frameHistory.dropFirst().first
+        var previousQualityOutput = outputHistory.first
 
         for f in inputFrames {
             var currentBuffer = f.buffer
@@ -237,8 +241,12 @@ extension VTFrameProcessorCoordinator {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create spatial frames"])
                 }
-                let prevFP = frameHistory.dropFirst().first
-                let prevOutFP = outputHistory.first
+                let sourcePixelFormat = CVPixelBufferGetPixelFormatType(currentBuffer)
+                let hasCompatibleQualityHistory =
+                    previousQualitySource.map { CVPixelBufferGetPixelFormatType($0.buffer) == sourcePixelFormat } == true &&
+                    previousQualityOutput.map { CVPixelBufferGetPixelFormatType($0.buffer) == sourcePixelFormat } == true
+                let prevFP = hasCompatibleQualityHistory ? previousQualitySource : nil
+                let prevOutFP = hasCompatibleQualityHistory ? previousQualityOutput : nil
                 guard let params = VTSuperResolutionScalerParameters(
                     sourceFrame: sourceFP,
                     previousFrame: prevFP,
@@ -250,7 +258,18 @@ extension VTFrameProcessorCoordinator {
                     throw NSError(domain: "VTFrameProcessorCoordinator", code: -5,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to create Quality SR params"])
                 }
-                for try await _ in instance.processor.process(parameters: params) {}
+                // Quality SR has one destination; wait for its completion before using it.
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    instance.processor.process(parameters: params) { _, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
+                    }
+                }
+                previousQualitySource = sourceFP
+                previousQualityOutput = destFP
                 currentBuffer = outBuf1
             } else {
                 // In temporal-first mode, interpolated frames are synthetic

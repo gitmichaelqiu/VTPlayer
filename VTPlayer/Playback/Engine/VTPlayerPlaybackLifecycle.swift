@@ -9,11 +9,34 @@ import MediaPlayer
 
 extension VTPlayerViewModel {
     func stop() {
-        cancelEnhancedCachePreparation()
+        #if os(macOS)
+        if enhancementApplyTask != nil {
+            persistedPipelineConfiguration = draftPipelineConfiguration
+            persistedSharpness = sharpness
+            persistedHDRStrength = hdrStrength
+            persistedHDRColorfulness = hdrColorfulness
+        }
+        enhancementApplyTask?.cancel()
+        enhancementApplyTask = nil
+        #endif
+        cancelEnhancedCachePreparation(restorePreviousPlayback: false)
         stopEnhancedAudioPlayback()
         inactivityTask?.cancel()
         inactivityTask = nil
         #if os(macOS)
+        scrubPreviewTask?.cancel()
+        scrubPreviewTask = nil
+        enhancedPresentationMonitorGeneration &+= 1
+        enhancedPresentationMonitorTask?.cancel()
+        enhancedPresentationMonitorTask = nil
+        forceFullCachePreparation = false
+        nativeFallbackActive = false
+        livePresentationGateValidated = false
+        playbackIssue = nil
+        dismissPlaybackNotice()
+        suppressNativeTimeObserverDuringSeek = false
+        suppressRateObserver = false
+        transitionPlayback(to: .empty)
         pipelinePresentationReady = false
         renderer.setRenderingActive(false)
         setNativeVideoEnabled(false)
@@ -84,6 +107,9 @@ extension VTPlayerViewModel {
         self.duration = 0.0
         self.fps = 0.0
         self.displayRate1PercentLow = 0.0
+        #if os(macOS)
+        self.resetActualPresentedFrameMetrics()
+        #endif
         self.presentedFramesCount = 0
         self.diagnosticPresentedFramesCount = 0
         self.diagnosticPresentedInterpolatedCount = 0

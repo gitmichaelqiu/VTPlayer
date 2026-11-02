@@ -1,6 +1,20 @@
 import AVFoundation
 import Foundation
 
+enum EnhancedAudioTiming {
+    static let videoLeadSeconds = 0.04
+
+    static func audioTime(for referenceTime: CMTime) -> CMTime {
+        let seconds = CMTimeGetSeconds(referenceTime)
+        guard seconds.isFinite else { return .invalid }
+        return CMTime(seconds: max(0, seconds - videoLeadSeconds), preferredTimescale: 600)
+    }
+
+    static func needsCorrection(difference: Double) -> Bool {
+        difference.isFinite && (difference > 0.04 || difference < -0.07)
+    }
+}
+
 struct EnhancedAudioOperationGate {
     private(set) var generation: UInt64 = 0
     private(set) var isAwaitingFrameAnchor = false
@@ -44,12 +58,21 @@ struct EnhancedAudioOperationGate {
 final class EnhancedAudioPlayer {
     private var player: AVPlayer?
     private var started = false
+    private var anchorInProgress = false
     private var paused = false
     private var playbackRate = 1.0
     private var volume: Float = 1.0
     private var operationGate = EnhancedAudioOperationGate()
+    private var latestRenderedPTS: CMTime = .invalid
+    private weak var referencePlayer: AVPlayer?
+    private var nextSyncCheck = 0.0
 
-    func prepare(url: URL, initialRate: Double) async -> Bool {
+    var currentTime: CMTime? {
+        guard started, !anchorInProgress, !paused, let player else { return nil }
+        return player.currentTime()
+    }
+
+    func prepare(url: URL, initialRate: Double, referencePlayer: AVPlayer) async -> Bool {
         let asset = AVURLAsset(url: url)
         guard let audioTracks = try? await asset.loadTracks(withMediaType: .audio),
               !audioTracks.isEmpty else { return false }
@@ -62,6 +85,7 @@ final class EnhancedAudioPlayer {
         player.automaticallyWaitsToMinimizeStalling = false
         player.volume = volume
         self.player = player
+        self.referencePlayer = referencePlayer
         started = false
         paused = false
         operationGate.armFrameAnchor(shouldPlay: true)
@@ -69,26 +93,55 @@ final class EnhancedAudioPlayer {
         return true
     }
 
-    func frameRendered(at pts: CMTime) {
-        guard let player, !started, !paused,
+    func frameRendered(at pts: CMTime, synchronizeToFrame: Bool = false) {
+        guard pts.isValid, pts.isNumeric else { return }
+        latestRenderedPTS = pts
+        if started, !anchorInProgress, !paused, let player, let referencePlayer {
+            let now = CACurrentMediaTime()
+            if now >= nextSyncCheck {
+                nextSyncCheck = now + 1
+                let referenceTime = EnhancedAudioTiming.audioTime(
+                    for: synchronizeToFrame ? pts : referencePlayer.currentTime()
+                )
+                let difference = CMTimeGetSeconds(CMTimeSubtract(player.currentTime(), referenceTime))
+                if referencePlayer.rate != 0, EnhancedAudioTiming.needsCorrection(difference: difference) {
+                    player.setRate(Float(playbackRate), time: referenceTime,
+                                   atHostTime: CMClockGetTime(CMClockGetHostTimeClock()))
+                }
+            }
+        }
+        guard let player, player.status == .readyToPlay, !started, !paused,
               let operation = operationGate.beginFrameAnchor() else { return }
 
         started = true
+        anchorInProgress = true
         let seconds = CMTimeGetSeconds(pts)
         let anchor = seconds.isFinite ? max(0, seconds) : 0
         player.seek(
             to: CMTime(seconds: anchor, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
-        ) { [weak self, weak player] _ in
+        ) { [weak self, weak player] completed in
             guard let self, let player else { return }
             Task { @MainActor in
                 guard self.player === player,
                       self.operationGate.accepts(operation),
                       self.started,
                       !self.paused else { return }
-                player.rate = Float(self.playbackRate)
-                player.play()
+                guard completed, player.status == .readyToPlay else {
+                    self.started = false
+                    self.anchorInProgress = false
+                    self.operationGate.armFrameAnchor(shouldPlay: true)
+                    return
+                }
+                // The transport can advance while the audio seek is pending.
+                let referenceTime = EnhancedAudioTiming.audioTime(for: self.latestRenderedPTS)
+                player.setRate(
+                    Float(self.playbackRate),
+                    time: referenceTime.isNumeric ? referenceTime : self.latestRenderedPTS,
+                    atHostTime: CMClockGetTime(CMClockGetHostTimeClock())
+                )
+                self.anchorInProgress = false
             }
         }
     }
@@ -96,6 +149,9 @@ final class EnhancedAudioPlayer {
     func pause() {
         paused = true
         player?.pause()
+        started = false
+        anchorInProgress = false
+        operationGate.armFrameAnchor(shouldPlay: false)
     }
 
     /// Stops the independent audio clock until the display path presents a
@@ -104,6 +160,7 @@ final class EnhancedAudioPlayer {
     func awaitRenderedFrameAnchor(shouldPlay: Bool) {
         player?.pause()
         started = false
+        anchorInProgress = false
         paused = !shouldPlay
         operationGate.armFrameAnchor(shouldPlay: shouldPlay)
     }
@@ -115,21 +172,16 @@ final class EnhancedAudioPlayer {
 
     func setRate(_ rate: Double) {
         playbackRate = min(2.0, max(0.5, rate))
-        if let player, started, !paused {
+        if let player, started, !anchorInProgress, !paused {
             player.rate = Float(playbackRate)
         }
     }
 
     func resume() {
         paused = false
-        guard started, let player else {
-            if !operationGate.isAwaitingFrameAnchor {
-                operationGate.armFrameAnchor(shouldPlay: true)
-            }
-            return
+        if !started && !operationGate.isAwaitingFrameAnchor {
+            operationGate.armFrameAnchor(shouldPlay: true)
         }
-        player.rate = Float(playbackRate)
-        player.play()
     }
 
     func stop() {
@@ -137,7 +189,9 @@ final class EnhancedAudioPlayer {
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
+        referencePlayer = nil
         started = false
+        anchorInProgress = false
         paused = true
     }
 }

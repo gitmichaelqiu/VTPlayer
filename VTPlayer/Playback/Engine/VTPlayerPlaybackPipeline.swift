@@ -3,9 +3,20 @@ import AVFoundation
 import VideoToolbox
 import CoreVideo
 import MetalKit
+import Synchronization
 #if os(iOS)
 import MediaPlayer
 #endif
+
+nonisolated enum PlaybackWarmupPolicy {
+    static func canSkipProcessing(_ configuration: AppliedPipelineConfiguration) -> Bool {
+        configuration.superResolutionLevel > 0 &&
+            configuration.qualitySuperResolutionScaleFactor == 0 &&
+            configuration.frameInterpolationLevel == 0 &&
+            configuration.denoiseStrength == 0 &&
+            configuration.motionBlurStrength == 0
+    }
+}
 
 @MainActor
 struct PlaybackPipelineSnapshot {
@@ -37,6 +48,8 @@ extension VTPlayerViewModel {
         pipelineRestartAnchorPTS = nil
         stopEnhancedAudioPlayback()
         #if os(macOS)
+        transitionPlayback(to: .prerollingEnhanced)
+        nativeFallbackActive = false
         stopDisplayLinkIfNeeded()
         pipelinePresentationReady = false
         renderer.setRenderingActive(true)
@@ -75,8 +88,23 @@ extension VTPlayerViewModel {
         let pipelineWidth = videoWidth
         let pipelineHeight = videoHeight
         let configuration = appliedPipelineConfiguration
+        #if os(macOS)
+        if configuration == .disabled {
+            preparedEnhancedFrameCacheKey = nil
+            preparedEnhancedFrameCacheMode = nil
+            enhancedCacheCoveragePercent = 0
+        }
+        #endif
         let preparedFrameCacheKey = preparedEnhancedFrameCacheKey
         let preparedFrameCacheMode = preparedEnhancedFrameCacheMode
+        #if os(macOS)
+        let usesPreparedEncodedCache = EnhancedFrameCachePlaybackPolicy.usesPrecomputedVideo(
+            cacheMode: preparedFrameCacheMode,
+            cacheFormatVersion: preparedFrameCacheKey?.cacheFormatVersion
+        )
+        #else
+        let usesPreparedEncodedCache = false
+        #endif
         let diskCache = enhancedFrameDiskCache
         let targetFrameRate = sourceFrameRate * (configuration.frameInterpolationLevel > 0 ? Double(configuration.frameInterpolationLevel) : 1.0)
         #if os(macOS)
@@ -84,6 +112,32 @@ extension VTPlayerViewModel {
         // renderer still encodes only when a frame is due, and macOS clamps
         // this request to the display's supported cadence.
         renderer.preferredFramesPerSecond = configuration.frameInterpolationLevel > 0 || sourceFrameRate >= 50 ? 120 : 60
+        let attachedScreenRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+        let screenMaximumFrameRate = attachedScreenRate > 0
+            ? attachedScreenRate : (NSScreen.main?.maximumFramesPerSecond ?? 0)
+        let usesLiveDedicatedPresentation = preparedFrameCacheMode != .full &&
+            MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+                sourceFramesPerSecond: sourceFPS,
+                frameInterpolationLevel: configuration.frameInterpolationLevel,
+                screenMaximumFramesPerSecond: screenMaximumFrameRate
+            )
+        NSLog(
+            "RENDER: live scheduler eligibility sourceFPS=%.3f fi=%d screenMaxHz=%d targetFPS=%.3f dedicated=%@",
+            sourceFPS, configuration.frameInterpolationLevel, screenMaximumFrameRate,
+            targetFrameRate, usesLiveDedicatedPresentation.description
+        )
+        if usesLiveDedicatedPresentation {
+            fullCachePresentationQueue = EnhancedPresentationFrameQueue(
+                capacityBytes: frameCacheMemoryBudget,
+                capacityFrames: max(initialPrerollFrameCount * 4, screenMaximumFrameRate),
+                generation: gen
+            )
+            NSLog(
+                "RENDER: live dedicated presentation targetFPS=%.3f screenMaxHz=%d",
+                targetFrameRate,
+                screenMaximumFrameRate
+            )
+        }
         #endif
         NSLog("PIPELINE: source=\(videoWidth)x\(videoHeight) input=\(pipelineWidth)x\(pipelineHeight) fi=\(configuration.frameInterpolationLevel)x sr=\(configuration.superResolutionLevel)x qsr=\(configuration.qualitySuperResolutionScaleFactor)x sourceFPS=\(String(format: "%.3f", sourceFrameRate)) targetFPS=\(String(format: "%.3f", targetFrameRate))")
 
@@ -118,6 +172,13 @@ extension VTPlayerViewModel {
         audioSyncLatency = 0
         fps = 0
         presentedFramesCount = 0
+        #if os(macOS)
+        // Presentation handlers complete asynchronously. Clear metrics at
+        // the start of every generation so the live gate only evaluates the
+        // current pipeline, never stale native or prior-pipeline drawables.
+        _ = renderer.consumePerformanceSnapshot()
+        resetActualPresentedFrameMetrics()
+        #endif
         displayRateSamples.removeAll(keepingCapacity: true)
         displayRate1PercentLow = 0
         fpsTimer = .now()
@@ -132,7 +193,7 @@ extension VTPlayerViewModel {
         // than native FI followed by SR on macOS. Prefer the temporal-first
         // sequential path for this quality-sensitive combination.
         let sequentialSRFIFallback = self.useSequentialSRFIFallback ||
-            (srLevel == 2 && fiLevel == 2)
+            configuration.requiresSequentialSRFIFallback
         #else
         let sequentialSRFIFallback = self.useSequentialSRFIFallback
         #endif
@@ -154,6 +215,7 @@ extension VTPlayerViewModel {
                 }
             }
             var pausedForInitialization = false
+            var consecutiveFrameReadFailures = 0
 
             @MainActor
             func isCurrentPipeline() -> Bool {
@@ -198,6 +260,7 @@ extension VTPlayerViewModel {
             // Check Quality SR model availability before starting (macOS only)
             var effectiveQualitySR = qualitySR
             var effectiveSRLevel = srLevel
+            var qualityModelFailureMessage: String?
 
             #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
             @MainActor func fallBackFromQualitySR(preserveSelection: Bool = false) {
@@ -219,7 +282,7 @@ extension VTPlayerViewModel {
                 self.superResolutionLevel = effectiveSRLevel
             }
 
-            if qualitySR > 0 {
+            if qualitySR > 0 && !usesPreparedEncodedCache {
                 var qlConfig: VTSuperResolutionScalerConfiguration? = nil
                 if #available(macOS 26.0, iOS 26.0, tvOS 26.0, visionOS 26.0, *),
                    VTSuperResolutionScalerConfiguration.isSupported {
@@ -250,18 +313,27 @@ extension VTPlayerViewModel {
                         self.retryAfterQualityModelDownload(generation: gen)
                         fallBackFromQualitySR(preserveSelection: true)
                     case .failed(let message):
-                        self.srInitializationError = "Quality SR model unavailable: \(message)"
-                        fallBackFromQualitySR()
+                        qualityModelFailureMessage = "Quality SR model unavailable: \(message)"
                     case .notChecked:
-                        fallBackFromQualitySR()
+                        qualityModelFailureMessage = "Quality SR model status could not be determined."
                     }
                 } else {
-                    fallBackFromQualitySR()
+                    qualityModelFailureMessage = "Quality SR is unavailable for this video on this device."
                 }
             }
 
+            if let qualityModelFailureMessage {
+                self.srInitializationError = qualityModelFailureMessage
+                #if os(macOS)
+                self.restoreNativePresentationAfterPipelineFailure(stage: .capabilities)
+                #else
+                self.stop()
+                #endif
+                return
+            }
+
             #if os(macOS)
-            if effectiveSRLevel > 0 {
+            if effectiveSRLevel > 0 && !usesPreparedEncodedCache {
                 let canStartPipeline = await VTFrameProcessorCoordinator
                     .canStartLowLatencyPipeline(width: pipelineWidth, height: pipelineHeight, scale: effectiveSRLevel)
                 guard isCurrentPipeline() else { return }
@@ -285,54 +357,66 @@ extension VTPlayerViewModel {
                 qualityPrioritization: qualPrior
             )
             guard isCurrentPipeline() else { return }
-            self.activeCoordinator = coordinator
+            if !usesPreparedEncodedCache {
+                self.activeCoordinator = coordinator
 
-            do {
-                if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
-                   self.srInitializationError == nil {
-                    self.srInitializationError = nil
-                }
-                try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
-            } catch {
-                guard isCurrentPipeline() else {
+                do {
+                    if (effectiveSRLevel > 0 || effectiveQualitySR > 0 || (srLevel == 0 && qualitySR == 0)),
+                       self.srInitializationError == nil {
+                        self.srInitializationError = nil
+                    }
+                    try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
+                } catch {
+                    guard isCurrentPipeline() else {
+                        await coordinator.endSession()
+                        return
+                    }
                     await coordinator.endSession()
-                    return
-                }
-                await coordinator.endSession()
 
-                // The combined processor is capability- and
-                // resolution-dependent. Keep SR enabled when it rejects the
-                // exact pixel-buffer requirements by retrying the established
-                // sequential temporal-first LL SR path.
-                if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !sequentialSRFIFallback {
-                    let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using sequential SR + FI."
-                    self.srInitializationError = message
-                    print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying sequential SR + FI.")
-                    self.useSequentialSRFIFallback = true
+                    // The combined processor is capability- and
+                    // resolution-dependent. Keep SR enabled when it rejects the
+                    // exact pixel-buffer requirements by retrying the established
+                    // sequential temporal-first LL SR path.
+                    if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 && !sequentialSRFIFallback {
+                        let message = "Combined 2x SR + 2x FI unavailable at \(pipelineWidth)x\(pipelineHeight); using sequential SR + FI."
+                        self.srInitializationError = message
+                        print("Failed to initialize combined SR/FI session: \(error.localizedDescription). Retrying sequential SR + FI.")
+                        self.useSequentialSRFIFallback = true
 
-                    coordinator = VTFrameProcessorCoordinator(
-                        superResolutionLevel: effectiveSRLevel,
-                        frameInterpolationLevel: fiLevel,
-                        useHighQualityDownsampling: highQuality,
-                        useRealTimePriority: realTime,
-                        preferSequentialSRFI: true,
-                        qualitySuperResolutionScaleFactor: effectiveQualitySR,
-                        motionBlurStrength: mbStrength,
-                        denoiseStrength: dnStrength,
-                        qualityPrioritization: qualPrior
-                    )
-                    self.activeCoordinator = coordinator
-                    do {
-                        try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
-                    } catch {
-                        guard isCurrentPipeline() else {
+                        coordinator = VTFrameProcessorCoordinator(
+                            superResolutionLevel: effectiveSRLevel,
+                            frameInterpolationLevel: fiLevel,
+                            useHighQualityDownsampling: highQuality,
+                            useRealTimePriority: realTime,
+                            preferSequentialSRFI: true,
+                            qualitySuperResolutionScaleFactor: effectiveQualitySR,
+                            motionBlurStrength: mbStrength,
+                            denoiseStrength: dnStrength,
+                            qualityPrioritization: qualPrior
+                        )
+                        self.activeCoordinator = coordinator
+                        do {
+                            try await coordinator.startSession(width: pipelineWidth, height: pipelineHeight)
+                        } catch {
+                            guard isCurrentPipeline() else {
+                                await coordinator.endSession()
+                                return
+                            }
+                            self.srInitializationError = "Sequential SR + FI fallback unavailable: \(error.localizedDescription)"
+                            print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
+                            self.activeCoordinator = nil
                             await coordinator.endSession()
+                            #if os(macOS)
+                            self.restoreNativePresentationAfterPipelineFailure()
+                            #else
+                            self.stop()
+                            #endif
                             return
                         }
-                        self.srInitializationError = "Sequential SR + FI fallback unavailable: \(error.localizedDescription)"
-                        print("Failed to initialize sequential SR/FI fallback session: \(error.localizedDescription)")
+                    } else {
+                        self.srInitializationError = error.localizedDescription
+                        print("Failed to initialize coordinator session: \(error.localizedDescription)")
                         self.activeCoordinator = nil
-                        await coordinator.endSession()
                         #if os(macOS)
                         self.restoreNativePresentationAfterPipelineFailure()
                         #else
@@ -340,16 +424,6 @@ extension VTPlayerViewModel {
                         #endif
                         return
                     }
-                } else {
-                    self.srInitializationError = error.localizedDescription
-                    print("Failed to initialize coordinator session: \(error.localizedDescription)")
-                    self.activeCoordinator = nil
-                    #if os(macOS)
-                    self.restoreNativePresentationAfterPipelineFailure()
-                    #else
-                    self.stop()
-                    #endif
-                    return
                 }
             }
 
@@ -389,7 +463,7 @@ extension VTPlayerViewModel {
                     self.isBuffering = true
                     waitingForFramePreroll = true
                     let audioPlayer = EnhancedAudioPlayer()
-                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed) {
+                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed, referencePlayer: player) {
                         guard isCurrentPipeline() else {
                             audioPlayer.stop()
                             await coordinator.endSession()
@@ -408,6 +482,18 @@ extension VTPlayerViewModel {
                         }
                         self.renderer.render(pixelBuffer: firstFrame.buffer)
                     }
+                    let audioPlayer = EnhancedAudioPlayer()
+                    if await audioPlayer.prepare(url: videoURL, initialRate: self.playbackSpeed, referencePlayer: player) {
+                        guard isCurrentPipeline() else {
+                            audioPlayer.stop()
+                            await coordinator.endSession()
+                            return
+                        }
+                        audioPlayer.setVolume(Float(self.volume))
+                        audioPlayer.pause()
+                        self.enhancedAudioPlayer = audioPlayer
+                        self.setPrimaryAudioMuted(true)
+                    }
                 }
             } else {
                 self.isInitializingPipeline = false
@@ -416,7 +502,12 @@ extension VTPlayerViewModel {
 
             // Create VTFrameSequence to decode frames faster-than-real-time
             var iteratorStartTime = self.lastPulledTime
-            let sourcePadding = await coordinator.sourceFramePadding()
+            let sourcePadding: (right: Int, bottom: Int)
+            if usesPreparedEncodedCache {
+                sourcePadding = (0, 0)
+            } else {
+                sourcePadding = await coordinator.sourceFramePadding()
+            }
             guard isCurrentPipeline() else {
                 await coordinator.endSession()
                 return
@@ -432,37 +523,57 @@ extension VTPlayerViewModel {
             var prefetchedFrameTask: Task<VTFrame?, Error>?
             var sourceFrameOrdinal = 0
             var combinedProcessFallbackAttempted = false
+            var pausedPreparationFramesRemaining = shouldResumePlayback ? 0 : self.initialPrerollFrameCount
+            var prerollFrameBytes = 0
+            var previousProcessEnd: UInt64?
             defer { prefetchedFrameTask?.cancel() }
 
             @MainActor
             func resumeAfterFramePrerollIfReady(force: Bool = false) {
-                guard waitingForFramePreroll, let player = self.player else { return }
+                guard let player = self.player else { return }
                 #if os(macOS)
+                let prerollTarget = usesLiveDedicatedPresentation && shouldResumePlayback
+                    ? min(self.bufferedFrameLimit, max(1, self.frameCacheMemoryBudget / max(1, prerollFrameBytes)), max(self.initialPrerollFrameCount, Int(ceil(targetFrameRate * 0.5))))
+                    : self.initialPrerollFrameCount
                 let cachedFrameCount = self.fullCachePresentationQueue?.snapshot().frameCount ??
                     self.lockCache {
                         max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                     }
                 #else
+                let prerollTarget = self.initialPrerollFrameCount
                 let cachedFrameCount = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
                 #endif
-                guard cachedFrameCount >= self.initialPrerollFrameCount || (force && cachedFrameCount > 0) else {
+                guard cachedFrameCount >= prerollTarget || (force && cachedFrameCount > 0) else {
                     return
                 }
+                if !shouldResumePlayback {
+                    self.isBuffering = false
+                    self.enhancedCachePreparationState = .ready
+                    #if os(macOS)
+                    self.transitionPlayback(to: .paused)
+                    #endif
+                    return
+                }
+                guard waitingForFramePreroll else { return }
                 waitingForFramePreroll = false
                 self.isBuffering = false
                 self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
                 player.rate = wasRate != 0 ? wasRate : Float(self.playbackSpeed)
                 #if os(macOS)
+                self.transitionPlayback(to: .playingEnhanced)
+                self.enhancedCachePreparationState = .ready
                 self.startDisplayLinkIfNeeded()
                 #endif
             }
 
+            let sourceSeekGeneration = Mutex(self.seekGeneration)
             @MainActor
             func waitForCacheCapacity(_ byteCount: Int) async -> Bool {
                 guard byteCount <= self.frameCacheMemoryBudget else { return false }
-                while !Task.isCancelled && gen == self.playbackGeneration {
+                while !Task.isCancelled && gen == self.playbackGeneration &&
+                    sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration {
                     let hasRoom = self.lockCache {
                         self.cacheCanAccept(byteCount)
                     }
@@ -479,15 +590,60 @@ extension VTPlayerViewModel {
                 return false
             }
 
-            @MainActor
-            func admitStreamedFrame(_ frame: VTFrame) async -> Bool {
+            let admitStreamedFrame: @MainActor @Sendable (VTFrame) async -> Bool = { frame in
+                let executionStart = DispatchTime.now().uptimeNanoseconds
+                defer {
+                    self.producerAdmissionExecutionMilliseconds += Double(
+                        DispatchTime.now().uptimeNanoseconds - executionStart
+                    ) / 1_000_000.0
+                }
+                guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { return false }
+                if self.lastRenderedPTS.isValid,
+                   CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) <= 0 {
+                    return true
+                }
                 let byteCount = CVPixelBufferGetDataSize(frame.buffer)
+                prerollFrameBytes = max(prerollFrameBytes, byteCount)
                 guard byteCount <= self.frameCacheMemoryBudget else {
                     self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
                     return false
                 }
+                #if os(macOS)
+                if usesLiveDedicatedPresentation,
+                   let presentationQueue = self.fullCachePresentationQueue {
+                    let admissionStart = DispatchTime.now()
+                    while !Task.isCancelled && gen == self.playbackGeneration &&
+                        sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration {
+                        switch presentationQueue.enqueueResult(
+                            contentsOf: [frame],
+                            generation: gen
+                        ) {
+                        case .enqueued:
+                            let admissionMilliseconds = Double(
+                                DispatchTime.now().uptimeNanoseconds - admissionStart.uptimeNanoseconds
+                            ) / 1_000_000.0
+                            self.recordProducerTiming(
+                                cacheAdmissionMilliseconds: admissionMilliseconds
+                            )
+                            self.producedFramesCount += 1
+                            if pausedPreparationFramesRemaining > 0 {
+                                pausedPreparationFramesRemaining -= 1
+                            }
+                            resumeAfterFramePrerollIfReady()
+                            return true
+                        case .capacityExceeded:
+                            try? await Task.sleep(nanoseconds: 2_000_000)
+                        case .rejected:
+                            self.srInitializationError = "Enhanced frames arrived out of presentation order."
+                            return false
+                        }
+                    }
+                    return false
+                }
+                #endif
                 let admissionStart = DispatchTime.now()
                 guard await waitForCacheCapacity(byteCount) else { return false }
+                guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { return false }
                 let admissionMilliseconds = Double(
                     DispatchTime.now().uptimeNanoseconds - admissionStart.uptimeNanoseconds
                 ) / 1_000_000.0
@@ -506,11 +662,176 @@ extension VTPlayerViewModel {
                 )
                 if inserted {
                     self.producedFramesCount += 1
+                    if pausedPreparationFramesRemaining > 0 {
+                        pausedPreparationFramesRemaining -= 1
+                    }
                     resumeAfterFramePrerollIfReady()
                 }
                 return !Task.isCancelled && gen == self.playbackGeneration
             }
 
+            #if os(macOS)
+            if let preparedFrameCacheKey,
+               preparedFrameCacheMode == .full,
+               preparedFrameCacheKey.cacheFormatVersion >= 2 {
+                let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
+                let presentationReserveTarget = max(60, screenMaximumFrameRate)
+                let maximumPresentationReserveFrames = max(
+                    initialPrerollFrameCount * 4,
+                    presentationReserveTarget
+                )
+                let readerControl = EnhancedPresentationReaderControl(
+                    startTime: self.lastRenderedPTS,
+                    generation: 1
+                )
+                let presentationQueue = EnhancedPresentationFrameQueue(
+                    capacityBytes: frameCacheMemoryBudget,
+                    capacityFrames: maximumPresentationReserveFrames,
+                    generation: 1
+                )
+                self.fullCacheReaderControl = readerControl
+                self.fullCachePresentationQueue = presentationQueue
+                let prerollFrameCount = initialPrerollFrameCount
+                NSLog(
+                    "CACHE: playback mode=hevc-chunks targetDisplayHz=%d queueReserve=%d",
+                    screenMaximumFrameRate,
+                    maximumPresentationReserveFrames
+                )
+
+                let readerTask = Task.detached(priority: .userInitiated) {
+                    var handledGeneration: UInt64 = 0
+
+                    while !Task.isCancelled {
+                        let request = readerControl.request()
+                        guard request.generation != handledGeneration else {
+                            try? await Task.sleep(nanoseconds: 8_000_000)
+                            continue
+                        }
+                        handledGeneration = request.generation
+                        presentationQueue.reset(generation: handledGeneration)
+                        let startTime = request.presentationTime
+                        guard let chunkIndices = try? await diskCache.encodedChunkIndices(for: preparedFrameCacheKey),
+                              !chunkIndices.isEmpty,
+                              let firstChunkIndex = try? await diskCache.encodedChunkIndex(
+                                atOrAfter: startTime,
+                                for: preparedFrameCacheKey
+                              ),
+                              let firstOffset = chunkIndices.firstIndex(of: firstChunkIndex) else {
+                            try? await diskCache.invalidateCache(for: preparedFrameCacheKey)
+                            await MainActor.run { [weak self] in
+                                guard let self, self.playbackGeneration == gen else { return }
+                                self.srInitializationError = "The enhanced video cache has no readable chunks."
+                                self.preparedEnhancedFrameCacheKey = nil
+                                self.preparedEnhancedFrameCacheMode = nil
+                                self.enhancedCacheCoveragePercent = 0
+                                self.restoreNativePresentationAfterPipelineFailure(stage: .preparation)
+                            }
+                            return
+                        }
+                        var chunkOffset = firstOffset
+                        var decodeFailed = false
+                        while !Task.isCancelled {
+                            guard readerControl.request().generation == handledGeneration else { break }
+                            guard chunkIndices.indices.contains(chunkOffset) else { break }
+
+                            let chunkIndex = chunkIndices[chunkOffset]
+                            let signpost = MacPresentationSignposts.begin("FullCacheAdmission")
+                            let chunkGeneration = handledGeneration
+                            let sourceGroupCount: Int?
+                            do {
+                                sourceGroupCount = try await diskCache.readEncodedChunkStreaming(
+                                    chunkIndex,
+                                    for: preparedFrameCacheKey
+                                ) { frame in
+                                    while !Task.isCancelled {
+                                        guard readerControl.request().generation == chunkGeneration else {
+                                            throw CancellationError()
+                                        }
+                                        guard CMTimeCompare(
+                                            frame.presentationTimeStamp,
+                                            startTime
+                                        ) >= 0 else {
+                                            return
+                                        }
+                                        switch presentationQueue.enqueue(frame, generation: chunkGeneration) {
+                                        case .enqueued:
+                                            if presentationQueue.claimPrerollNotification(
+                                                generation: chunkGeneration,
+                                                minimumFrameCount: prerollFrameCount
+                                            ) {
+                                                Task { @MainActor in
+                                                    guard self.playbackGeneration == gen,
+                                                          self.fullCacheReaderControl === readerControl else {
+                                                        return
+                                                    }
+                                                    NSLog(
+                                                        "CACHE: HEVC playback preroll ready frames=%d chunk=%d startPTS=%.6f",
+                                                        presentationQueue.snapshot().frameCount,
+                                                        chunkIndex,
+                                                        CMTimeGetSeconds(startTime)
+                                                    )
+                                                    resumeAfterFramePrerollIfReady()
+                                                }
+                                            }
+                                            return
+                                        case .capacityExceeded:
+                                            try await Task.sleep(nanoseconds: 2_000_000)
+                                        case .rejected:
+                                            throw CancellationError()
+                                        }
+                                    }
+                                    throw CancellationError()
+                                }
+                            } catch is CancellationError {
+                                MacPresentationSignposts.end("FullCacheAdmission", identifier: signpost)
+                                break
+                            } catch {
+                                sourceGroupCount = nil
+                            }
+                            MacPresentationSignposts.end("FullCacheAdmission", identifier: signpost)
+                            guard !Task.isCancelled,
+                                  readerControl.request().generation == handledGeneration else { break }
+                            guard let sourceGroupCount else {
+                                decodeFailed = true
+                                break
+                            }
+                            presentationQueue.recordCacheHitGroups(
+                                sourceGroupCount,
+                                generation: handledGeneration
+                            )
+                            chunkOffset += 1
+                        }
+                        if decodeFailed,
+                           readerControl.request().generation == handledGeneration,
+                           !Task.isCancelled {
+                            await MainActor.run { [weak self] in
+                                guard let self, self.playbackGeneration == gen else { return }
+                                self.srInitializationError = "An enhanced cache chunk failed integrity or decode validation."
+                                self.preparedEnhancedFrameCacheKey = nil
+                                self.preparedEnhancedFrameCacheMode = nil
+                                self.enhancedCacheCoveragePercent = 0
+                                self.restoreNativePresentationAfterPipelineFailure(stage: .preparation)
+                            }
+                            return
+                        }
+                    }
+                }
+                await withTaskCancellationHandler {
+                    await readerTask.value
+                } onCancel: {
+                    readerTask.cancel()
+                }
+                if self.fullCacheReaderControl === readerControl {
+                    self.fullCacheReaderControl = nil
+                    self.fullCachePresentationQueue = nil
+                }
+                resumeAfterFramePrerollIfReady(force: true)
+                await coordinator.endSession()
+                return
+            }
+            #endif
+
+            #if os(macOS)
             if let preparedFrameCacheKey, preparedFrameCacheMode == .full {
                 #if os(macOS)
                 let screenMaximumFrameRate = renderer.schedulingSnapshot().screenMaximumFramesPerSecond
@@ -569,10 +890,7 @@ extension VTPlayerViewModel {
                         handledGeneration = request.generation
                         notifiedPrerollGeneration = nil
                         presentationQueue.reset(generation: handledGeneration)
-                        let startTime = CMTime(
-                            seconds: request.seconds,
-                            preferredTimescale: 600
-                        )
+                        let startTime = request.presentationTime
                         guard var groupIndex = try? await diskCache.groupIndex(
                             atOrAfter: startTime,
                             for: preparedFrameCacheKey
@@ -631,15 +949,19 @@ extension VTPlayerViewModel {
                                 break
                             }
                             scheduleReadAhead(from: groupIndex + 1)
+                            #if os(macOS)
                             let admissionSignpost = MacPresentationSignposts.begin("FullCacheAdmission")
+                            #endif
                             let admitted = presentationQueue.enqueue(
                                 contentsOf: frames,
                                 generation: handledGeneration
                             )
+                            #if os(macOS)
                             MacPresentationSignposts.end(
                                 "FullCacheAdmission",
                                 identifier: admissionSignpost
                             )
+                            #endif
                             guard admitted else { continue }
                             presentationQueue.recordCacheHitGroup(
                                 generation: handledGeneration,
@@ -648,9 +970,8 @@ extension VTPlayerViewModel {
                             if notifiedPrerollGeneration != handledGeneration,
                                presentationQueue.snapshot().frameCount >= prerollFrameCount {
                                 notifiedPrerollGeneration = handledGeneration
-                                Task { @MainActor [weak self] in
-                                    guard let self,
-                                          self.playbackGeneration == gen,
+                                Task { @MainActor in
+                                    guard self.playbackGeneration == gen,
                                           self.fullCacheReaderControl === readerControl else {
                                         return
                                     }
@@ -676,6 +997,7 @@ extension VTPlayerViewModel {
                 return
             }
 
+            #endif
             let sparseCacheStatus: EnhancedFrameCacheStatus?
             if let preparedFrameCacheKey, preparedFrameCacheMode == .sparse {
                 sparseCacheStatus = try? await self.enhancedFrameDiskCache.cachedStatus(for: preparedFrameCacheKey)
@@ -692,8 +1014,10 @@ extension VTPlayerViewModel {
 
             while !Task.isCancelled {
                 guard gen == self.playbackGeneration else { break }
+                sourceSeekGeneration.withLock { $0 = self.seekGeneration }
 
-                if self.isPaused && !self.isBuffering {
+                if self.isPaused && !self.isBuffering && pausedPreparationFramesRemaining == 0 {
+                    previousProcessEnd = nil
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     continue
                 }
@@ -723,7 +1047,15 @@ extension VTPlayerViewModel {
                 let count = self.lockCache {
                     max(0, self.processedFrameCache.count - self.processedFrameCacheStart)
                 }
-                if count >= self.bufferedFrameLimit {
+                #if os(macOS)
+                let liveFrameLimit = min(
+                    self.bufferedFrameLimit,
+                    max(self.initialPrerollFrameCount, Int(ceil(max(1, targetFrameRate) * 2)))
+                )
+                #else
+                let liveFrameLimit = self.bufferedFrameLimit
+                #endif
+                if count >= liveFrameLimit {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
@@ -739,13 +1071,27 @@ extension VTPlayerViewModel {
                     } else {
                         next = try await frameIterator.next()
                     }
+                    guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
                     guard let next else {
                         break  // EOF
                     }
                     vtFrame = next
+                    consecutiveFrameReadFailures = 0
                 } catch {
-                    print("VTFrameSequence error: \(error.localizedDescription)")
+                    guard isCurrentPipeline() else { break }
+                    consecutiveFrameReadFailures += 1
+                    if consecutiveFrameReadFailures >= 3 {
+                        self.srInitializationError = "Could not read video frames: \(error.localizedDescription)"
+                        #if os(macOS)
+                        self.restoreNativePresentationAfterPipelineFailure()
+                        #else
+                        self.isInitializingPipeline = false
+                        self.isBuffering = false
+                        #endif
+                        break
+                    }
                     try? await Task.sleep(nanoseconds: 100_000_000)
+                    if Task.isCancelled { break }
                     continue
                 }
                 let decodeWaitMilliseconds = Double(
@@ -755,6 +1101,13 @@ extension VTPlayerViewModel {
                 let iteratorForPrefetch = frameIterator
                 prefetchedFrameTask = Task.detached(priority: .userInitiated) {
                     try await iteratorForPrefetch.next()
+                }
+
+                if preparedFrameCacheMode == nil,
+                   PlaybackWarmupPolicy.canSkipProcessing(configuration),
+                   self.lastRenderedPTS.isValid,
+                   CMTimeCompare(vtFrame.presentationTimeStamp, self.lastRenderedPTS) <= 0 {
+                    continue
                 }
 
                 sourceFrameOrdinal += 1
@@ -798,23 +1151,101 @@ extension VTPlayerViewModel {
 
                 // Process through the VideoToolbox pipeline
                 let processStart = DispatchTime.now()
+                if let previousProcessEnd, processStart.uptimeNanoseconds >= previousProcessEnd {
+                    let gap = Double(processStart.uptimeNanoseconds - previousProcessEnd) / 1_000_000
+                    self.producerBetweenGroupsMilliseconds += gap
+                    self.producerBetweenGroupsMaximumMilliseconds = max(self.producerBetweenGroupsMaximumMilliseconds, gap)
+                    self.producerBetweenGroupsSampleCount += 1
+                }
+                #if os(macOS)
+                let liveQueue = usesLiveDedicatedPresentation ? self.fullCachePresentationQueue : nil
+                let queueEpoch = liveQueue?.currentEpoch()
+                #endif
                 do {
-                    var streamedFrameCount = 0
-                    let outputFrames = try await coordinator.processFrame(vtFrame) { frame in
-                        guard await admitStreamedFrame(frame) else { return false }
-                        streamedFrameCount += 1
-                        return true
+                    let streamedFrameCount = Mutex(0)
+                    let streamedAdmissionNanoseconds = Mutex<UInt64>(0)
+                    #if os(macOS)
+                    let renderedBeforeGroup = self.lastRenderedPTS
+                    let cacheBudget = self.frameCacheMemoryBudget
+                    let directlyEnqueued = Mutex(0)
+                    let largestEnqueuedFrame = Mutex(0)
+                    #endif
+                    let processedFrames = try await coordinator.processFrame(vtFrame) { frame in
+                        let admissionStart = DispatchTime.now().uptimeNanoseconds
+                        let admitted: Bool
+                        #if os(macOS)
+                        if let liveQueue, let queueEpoch {
+                            if renderedBeforeGroup.isValid &&
+                                CMTimeCompare(frame.presentationTimeStamp, renderedBeforeGroup) <= 0 {
+                                admitted = true
+                            } else if CVPixelBufferGetDataSize(frame.buffer) > cacheBudget {
+                                admitted = false
+                            } else {
+                                var enqueued = false
+                                while !Task.isCancelled {
+                                    switch liveQueue.enqueue(frame, generation: gen, epoch: queueEpoch) {
+                                    case .enqueued:
+                                        directlyEnqueued.withLock { $0 += 1 }
+                                        largestEnqueuedFrame.withLock {
+                                            $0 = max($0, CVPixelBufferGetDataSize(frame.buffer))
+                                        }
+                                        enqueued = true
+                                    case .capacityExceeded:
+                                        await MainActor.run {
+                                            guard self.playbackGeneration == gen,
+                                                  liveQueue.currentEpoch() == queueEpoch else { return }
+                                            prerollFrameBytes = max(prerollFrameBytes, CVPixelBufferGetDataSize(frame.buffer))
+                                            resumeAfterFramePrerollIfReady(force: true)
+                                        }
+                                        try? await Task.sleep(nanoseconds: 2_000_000)
+                                        continue
+                                    case .rejected:
+                                        break
+                                    }
+                                    break
+                                }
+                                admitted = enqueued
+                            }
+                        } else {
+                            admitted = await admitStreamedFrame(frame)
+                        }
+                        #else
+                        admitted = await admitStreamedFrame(frame)
+                        #endif
+                        let admissionEnd = DispatchTime.now().uptimeNanoseconds
+                        streamedAdmissionNanoseconds.withLock { $0 += admissionEnd - admissionStart }
+                        if admitted {
+                            streamedFrameCount.withLock { $0 += 1 }
+                        }
+                        return admitted
+                    }
+                    guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
+                    #if os(macOS)
+                    if liveQueue != nil {
+                        let count = directlyEnqueued.withLock { $0 }
+                        self.producedFramesCount += count
+                        pausedPreparationFramesRemaining = max(0, pausedPreparationFramesRemaining - count)
+                        prerollFrameBytes = max(prerollFrameBytes, largestEnqueuedFrame.withLock { $0 })
+                        if count > 0 { resumeAfterFramePrerollIfReady() }
+                    }
+                    #endif
+                    let admittedStreamedFrameCount = streamedFrameCount.withLock { $0 }
+                    let outputFrames = processedFrames.filter { frame in
+                        !self.lastRenderedPTS.isValid ||
+                            CMTimeCompare(frame.presentationTimeStamp, self.lastRenderedPTS) > 0
                     }
                     let processEnd = DispatchTime.now()
+                    previousProcessEnd = processEnd.uptimeNanoseconds
 
                     guard gen == self.playbackGeneration else { break }
 
-                    self.publishProcessingDiagnostics(
-                        Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
-                    )
-                    let processingMilliseconds = Double(processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds) / 1_000_000.0
+                    let processNanoseconds = processEnd.uptimeNanoseconds - processStart.uptimeNanoseconds
+                    let admissionNanoseconds = streamedAdmissionNanoseconds.withLock { $0 }
+                    self.producerDeliveryMilliseconds += Double(admissionNanoseconds) / 1_000_000.0
+                    let processingMilliseconds = Double(processNanoseconds - min(processNanoseconds, admissionNanoseconds)) / 1_000_000.0
+                    self.publishProcessingDiagnostics(processingMilliseconds)
                     let sourceFrameBudgetMilliseconds = sourceFPS > 0 ? 1_000.0 / sourceFPS : 0
-                    let outputFrameCount = streamedFrameCount + outputFrames.count
+                    let outputFrameCount = admittedStreamedFrameCount + outputFrames.count
                     self.recordFIProcessingTiming(
                         milliseconds: processingMilliseconds,
                         budgetMilliseconds: sourceFrameBudgetMilliseconds,
@@ -822,10 +1253,28 @@ extension VTPlayerViewModel {
                         expectsInterpolation: sourceFrameOrdinal > 1
                     )
 
-                    if streamedFrameCount > 0 {
+                    if admittedStreamedFrameCount > 0 {
                         self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
                         continue
                     }
+
+                    #if os(macOS)
+                    if usesLiveDedicatedPresentation {
+                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
+                        var admittedAll = true
+                        for frame in outputFrames {
+                            guard await admitStreamedFrame(frame) else {
+                                admittedAll = false
+                                break
+                            }
+                        }
+                        if !admittedAll {
+                            if sourceSeekGeneration.withLock({ $0 }) != self.seekGeneration { continue }
+                            break
+                        }
+                        continue
+                    }
+                    #endif
 
                     let outputByteCount = outputFrames.reduce(into: 0) { total, frame in
                         total += CVPixelBufferGetDataSize(frame.buffer)
@@ -836,7 +1285,11 @@ extension VTPlayerViewModel {
                         break
                     }
                     let cacheAdmissionStart = DispatchTime.now()
-                    guard await waitForCacheCapacity(outputByteCount) else { break }
+                    guard await waitForCacheCapacity(outputByteCount) else {
+                        if sourceSeekGeneration.withLock({ $0 }) != self.seekGeneration { continue }
+                        break
+                    }
+                    guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
                     let cacheAdmissionMilliseconds = Double(
                         DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
                     ) / 1_000_000.0
@@ -862,7 +1315,12 @@ extension VTPlayerViewModel {
                     resumeAfterFramePrerollIfReady()
 
                 } catch {
+                    guard !Task.isCancelled else { break }
                     guard gen == self.playbackGeneration else { break }
+                    guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
+                    #if os(macOS)
+                    if let liveQueue, let queueEpoch, liveQueue.currentEpoch() != queueEpoch { continue }
+                    #endif
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 &&
                         !self.useSequentialSRFIFallback && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true
@@ -873,13 +1331,27 @@ extension VTPlayerViewModel {
                         break
                     }
                     print("⚠️ Pipeline processing error: \(error) — preserving source frame; fi=\(fiLevel) sr=\(effectiveSRLevel) qsr=\(effectiveQualitySR) size=\(pipelineWidth)x\(pipelineHeight)")
+                    #if os(macOS)
+                    if usesLiveDedicatedPresentation {
+                        guard await admitStreamedFrame(vtFrame) else {
+                            if sourceSeekGeneration.withLock({ $0 }) != self.seekGeneration { continue }
+                            break
+                        }
+                        self.recordProducerTiming(decodeWaitMilliseconds: decodeWaitMilliseconds)
+                        continue
+                    }
+                    #endif
                     let fallbackByteCount = CVPixelBufferGetDataSize(vtFrame.buffer)
                     guard fallbackByteCount <= self.frameCacheMemoryBudget else {
                         self.srInitializationError = "An enhanced frame exceeds the selected frame cache limit."
                         break
                     }
                     let cacheAdmissionStart = DispatchTime.now()
-                    guard await waitForCacheCapacity(fallbackByteCount) else { break }
+                    guard await waitForCacheCapacity(fallbackByteCount) else {
+                        if sourceSeekGeneration.withLock({ $0 }) != self.seekGeneration { continue }
+                        break
+                    }
+                    guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
                     let cacheAdmissionMilliseconds = Double(
                         DispatchTime.now().uptimeNanoseconds - cacheAdmissionStart.uptimeNanoseconds
                     ) / 1_000_000.0
@@ -932,9 +1404,9 @@ extension VTPlayerViewModel {
             while !Task.isCancelled {
                 guard myGen == self.playbackGeneration else { break }
                 try? await Task.sleep(nanoseconds: 200_000_000)
-                guard !self.isPaused, let player = self.player else { continue }
+                guard !self.isPaused, let audioTime = self.enhancedAudioPlayer?.currentTime else { continue }
                 guard !self.isBuffering else { continue }
-                let currentSecs = CMTimeGetSeconds(player.currentTime())
+                let currentSecs = CMTimeGetSeconds(audioTime)
                 let lastSecs = CMTimeGetSeconds(self.lastRenderedPTS)
                 let latency = currentSecs - lastSecs
                 // Keep the audio clock independent from the processed-frame
@@ -945,7 +1417,7 @@ extension VTPlayerViewModel {
                 self.isBuffering = false
 
                 // Record desync for diagnostics without interrupting audio.
-                if latency > self.audioSyncLatencyThreshold {
+                if latency.isFinite && abs(latency) > self.audioSyncLatencyThreshold {
                     self.audioSyncLatency = latency
                 } else {
                     self.audioSyncLatency = 0

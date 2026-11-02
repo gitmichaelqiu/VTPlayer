@@ -20,6 +20,10 @@ struct AboutSettingsTab: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var navigationState: SettingsNavigationState
 
+    private var appIconSuffix: String {
+        colorScheme == .dark ? "_Dark" : "_Default"
+    }
+
     var body: some View {
         SettingsContainer(.about) {
             VStack(alignment: .leading, spacing: 32) {
@@ -54,6 +58,7 @@ struct AboutSettingsTab: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         AboutLinkRow(title: "Report an issue", url: "https://github.com/gitmichaelqiu/VTPlayer/issues")
+                        AboutLinkRow(title: "VTPlayer's website", url: "https://vtplayer.mqiu.dev/")
                         AboutLinkRow(title: "VTPlayer's GitHub", url: "https://github.com/gitmichaelqiu/VTPlayer")
                         AboutLinkRow(title: "Author's website", url: "https://mqiu.dev")
                         AboutLinkRow(title: "Author's GitHub", url: "https://github.com/gitmichaelqiu")
@@ -66,30 +71,50 @@ struct AboutSettingsTab: View {
                         .font(.headline)
                         .foregroundColor(.primary)
 
-                    VStack(spacing: 12) {
-                        OtherAppRow(
-                            imageName: "DesktopRenamerIcon_Default",
-                            darkImageName: "DesktopRenamerIcon_Dark",
-                            appName: "DesktopRenamer",
-                            description: "The essential tool for naming and organizing your desktop spaces.",
-                            url: "https://desktoprenamer.mqiu.dev"
-                        )
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Workflow Suite")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.secondary)
 
-                        OtherAppRow(
-                            imageName: "OptClickerIcon_Default",
-                            darkImageName: "OptClickerIcon_Dark",
-                            appName: "OptClicker",
-                            description: "Let you right-click with the Option key.",
-                            url: "https://optclicker.mqiu.dev"
-                        )
+                            VStack(spacing: 12) {
+                                OtherAppRow(
+                                    imageName: "DesktopRenamerIcon\(appIconSuffix)",
+                                    appName: "DesktopRenamer",
+                                    description: "The essential tool for naming and organizing your desktop spaces.",
+                                    url: "https://desktoprenamer.mqiu.dev"
+                                )
 
-                        OtherAppRow(
-                            imageName: "SpaceSwitcherIcon_Default",
-                            darkImageName: "SpaceSwitcherIcon_Dark",
-                            appName: "SpaceSwitcher",
-                            description: "Control which app and dock to show in each space.",
-                            url: "https://spaceswitcher.mqiu.dev"
-                        )
+                                OtherAppRow(
+                                    imageName: "OptClickerIcon\(appIconSuffix)",
+                                    appName: "OptClicker",
+                                    description: "Let you right-click with the Option key.",
+                                    url: "https://optclicker.mqiu.dev"
+                                )
+
+                                OtherAppRow(
+                                    imageName: "SpaceSwitcherIcon\(appIconSuffix)",
+                                    appName: "SpaceSwitcher",
+                                    description: "Control which app and dock to show in each space.",
+                                    url: "https://spaceswitcher.mqiu.dev"
+                                )
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Media Suite")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.secondary)
+
+                            VStack(spacing: 12) {
+                                OtherAppRow(
+                                    imageName: "WallPainterIcon\(appIconSuffix)",
+                                    appName: "WallPainter",
+                                    description: "Set Aerial wallpapers in each space and in each theme.",
+                                    url: "https://wallpainter.mqiu.dev"
+                                )
+                            }
+                        }
                     }
                 }
                 .id("More Apps")
@@ -194,34 +219,21 @@ struct AboutButtonRow: View {
 
 struct OtherAppRow: View {
     let imageName: String
-    let darkImageName: String
     let appName: String
     let description: LocalizedStringKey
     let url: String
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
 
     var body: some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 16) {
-                ZStack {
-                    let selectedImageName = colorScheme == .dark ? darkImageName : imageName
-                    if let nsImage = NSImage(named: selectedImageName) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 44, height: 44)
-                    } else {
-                        Image(systemName: "app.dashed")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 40, height: 40)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .shadow(color: .black.opacity(isHovering ? 0.2 : 0.1), radius: isHovering ? 6 : 2, x: 0, y: 2)
-                .scaleEffect(isHovering ? 1.05 : 1.0)
+                Image(imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 44, height: 44)
+                    .shadow(color: .black.opacity(isHovering ? 0.2 : 0.1), radius: isHovering ? 6 : 2, x: 0, y: 2)
+                    .scaleEffect(isHovering ? 1.05 : 1.0)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(appName)

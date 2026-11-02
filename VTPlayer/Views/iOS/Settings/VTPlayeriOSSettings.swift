@@ -28,7 +28,7 @@ private struct AnimatedIOSSettingValue: View {
     }
 }
 
-private struct IOSSliderSettingRow: View {
+struct IOSSliderSettingRow: View {
     let title: LocalizedStringKey
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -92,7 +92,13 @@ private struct IOSMoreApp: Identifiable {
     let iconName: String
 }
 
-private struct IOSMoreAppsSheet: View {
+private struct IOSMoreAppGroup: Identifiable {
+    let id: String
+    let title: LocalizedStringKey
+    let apps: [IOSMoreApp]
+}
+
+struct IOSMoreAppsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
@@ -101,52 +107,91 @@ private struct IOSMoreAppsSheet: View {
     private let secondaryTextColor = Color(uiColor: .secondaryLabel)
     private let tertiaryTextColor = Color(uiColor: .tertiaryLabel)
 
-    private let apps = [
-        IOSMoreApp(id: "desktoprenamer", name: "DesktopRenamer", description: "Rename and organize your desktop spaces.", url: URL(string: "https://desktoprenamer.mqiu.dev")!, iconName: "DesktopRenamerIcon_Default"),
-        IOSMoreApp(id: "optclicker", name: "OptClicker", description: "Right-click with the Option key.", url: URL(string: "https://optclicker.mqiu.dev")!, iconName: "OptClickerIcon_Default"),
-        IOSMoreApp(id: "spaceswitcher", name: "SpaceSwitcher", description: "Control apps and docks across spaces.", url: URL(string: "https://spaceswitcher.mqiu.dev")!, iconName: "SpaceSwitcherIcon_Default")
+    private let appGroups = [
+        IOSMoreAppGroup(id: "workflow", title: "Workflow Suite", apps: [
+            IOSMoreApp(
+                id: "desktoprenamer",
+                name: "DesktopRenamer",
+                description: "The essential tool for naming and organizing your desktop spaces.",
+                url: URL(string: "https://desktoprenamer.mqiu.dev")!,
+                iconName: "DesktopRenamerIcon_Default"
+            ),
+            IOSMoreApp(
+                id: "optclicker",
+                name: "OptClicker",
+                description: "Let you right-click with the Option key.",
+                url: URL(string: "https://optclicker.mqiu.dev")!,
+                iconName: "OptClickerIcon_Default"
+            ),
+            IOSMoreApp(
+                id: "spaceswitcher",
+                name: "SpaceSwitcher",
+                description: "Control which app and dock to show in each space.",
+                url: URL(string: "https://spaceswitcher.mqiu.dev")!,
+                iconName: "SpaceSwitcherIcon_Default"
+            )
+        ]),
+        IOSMoreAppGroup(id: "media", title: "Media Suite", apps: [
+            IOSMoreApp(
+                id: "wallpainter",
+                name: "WallPainter",
+                description: "Set Aerial wallpapers in each space and in each theme.",
+                url: URL(string: "https://wallpainter.mqiu.dev")!,
+                iconName: "WallPainterIcon_Default"
+            )
+        ])
     ]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 20) {
                     Text("More apps for Apple platforms")
                         .font(.subheadline)
                         .foregroundStyle(secondaryTextColor)
 
-                    ForEach(apps) { app in
-                        Button {
-                            openURL(app.url)
-                        } label: {
-                            HStack(spacing: 14) {
-                                appIcon(for: app)
+                    ForEach(appGroups) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(group.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(secondaryTextColor)
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(app.name)
-                                        .font(.headline)
+                            VStack(spacing: 12) {
+                                ForEach(group.apps) { app in
+                                    Button {
+                                        openURL(app.url)
+                                    } label: {
+                                        HStack(spacing: 14) {
+                                            appIcon(for: app)
+
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(app.name)
+                                                    .font(.headline)
+                                                    .foregroundStyle(primaryTextColor)
+                                                Text(app.description)
+                                                    .font(.subheadline)
+                                                    .foregroundStyle(secondaryTextColor)
+                                                    .fixedSize(horizontal: false, vertical: true)
+                                            }
+
+                                            Spacer(minLength: 4)
+                                            Image(systemName: "arrow.up.right")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(tertiaryTextColor)
+                                        }
+                                        .padding(14)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                         .foregroundStyle(primaryTextColor)
-                                    Text(app.description)
-                                        .font(.subheadline)
-                                        .foregroundStyle(secondaryTextColor)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-
-                                Spacer(minLength: 4)
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(tertiaryTextColor)
-                            }
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(primaryTextColor)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
                             }
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(20)
@@ -186,7 +231,7 @@ private struct IOSMoreAppsSheet: View {
     }
 }
 
-private struct IOSAcknowledgementSheet: View {
+struct IOSAcknowledgementSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

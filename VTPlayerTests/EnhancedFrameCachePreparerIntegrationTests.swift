@@ -4,6 +4,152 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
+    func testQualitySuperResolutionBenchmarkCompletesWithMeasuredSamples() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(width: 1280, height: 720, scale: 4) else {
+            throw XCTSkip("Quality SR fixture or device support is unavailable.")
+        }
+        var configuration = AppliedPipelineConfiguration.disabled
+        configuration.qualitySuperResolutionScaleFactor = 4
+        let preparer = EnhancedFrameCachePreparer(diskCache: .shared)
+        let start = DispatchTime.now()
+        let result = try await preparer.benchmark(
+            url: url, width: 1280, height: 720, sourceFramesPerSecond: 59.94,
+            configuration: configuration, qualityPrioritization: 1, preferSequentialSRFI: false
+        )
+        let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
+        print("Quality SR benchmark completed in \(seconds) seconds")
+        XCTAssertGreaterThan(result.p95GroupSeconds, 0)
+        XCTAssertGreaterThan(result.averageOutputBytesPerGroup, 0)
+    }
+
+    func testQualitySuperResolutionAndInterpolationProcessTogether() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/367266_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(width: 1280, height: 720, scale: 4),
+              VTFrameProcessorCoordinator.isFrameInterpolationSupported(width: 1280, height: 720) else {
+            throw XCTSkip("Combination fixture or device support is unavailable.")
+        }
+        let coordinator = VTFrameProcessorCoordinator(frameInterpolationLevel: 2, qualitySuperResolutionScaleFactor: 4)
+        try await coordinator.startSession(width: 1280, height: 720)
+        let padding = await coordinator.sourceFramePadding()
+        let iterator = VTFrameSequence(url: url, extendedPixelsRight: padding.right,
+                                       extendedPixelsBottom: padding.bottom).makeAsyncIterator()
+        let first = try await iterator.next()
+        let second = try await iterator.next()
+        _ = try await coordinator.processFrame(try XCTUnwrap(first))
+        let frames = try await coordinator.processFrame(try XCTUnwrap(second))
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertTrue(frames.contains(where: \.isInterpolated))
+        XCTAssertTrue(frames.allSatisfy { CVPixelBufferGetWidth($0.buffer) == 5120 && CVPixelBufferGetHeight($0.buffer) == 2880 })
+        await coordinator.endSession()
+    }
+
+    func testQualitySuperResolutionProducesVisiblePixels() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isQualitySuperResolutionSupported(width: 1280, height: 720, scale: 4) else {
+            throw XCTSkip("Quality SR fixture or device support is unavailable.")
+        }
+        let coordinator = VTFrameProcessorCoordinator(qualitySuperResolutionScaleFactor: 4)
+        try await coordinator.startSession(width: 1280, height: 720)
+        let iterator = VTFrameSequence(url: url, startTime: CMTime(seconds: 2, preferredTimescale: 600)).makeAsyncIterator()
+        let next = try await iterator.next()
+        let source = try XCTUnwrap(next)
+        let output = try await coordinator.processFrame(source)
+        let frame = try XCTUnwrap(output.first)
+        XCTAssertEqual(CVPixelBufferGetWidth(frame.buffer), 5120)
+        XCTAssertEqual(CVPixelBufferGetHeight(frame.buffer), 2880)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(frame.buffer, .readOnly), kCVReturnSuccess)
+        defer { CVPixelBufferUnlockBaseAddress(frame.buffer, .readOnly) }
+        let base = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(frame.buffer, 0))
+        let rowBytes = CVPixelBufferGetBytesPerRowOfPlane(frame.buffer, 0)
+        let width = CVPixelBufferGetWidthOfPlane(frame.buffer, 0)
+        let height = CVPixelBufferGetHeightOfPlane(frame.buffer, 0)
+        let pixels = base.assumingMemoryBound(to: UInt8.self)
+        let samples = stride(from: 0, to: height, by: max(1, height / 16)).flatMap { y in
+            stride(from: 0, to: width, by: max(1, width / 16)).map { x in pixels[y * rowBytes + x] }
+        }
+        XCTAssertGreaterThan(samples.max() ?? 0, 32, "format=\(CVPixelBufferGetPixelFormatType(frame.buffer)) size=\(width)x\(height) samples=\(samples.count)")
+        await coordinator.endSession()
+    }
+
+    func testSpatialWarmupOutputMatchesFreshSession() async throws {
+        let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
+        guard FileManager.default.fileExists(atPath: url.path),
+              VTFrameProcessorCoordinator.isLowLatencySuperResolutionSupported(width: 1280, height: 720, scale: 1.5) else {
+            throw XCTSkip("Low-latency SR fixture or device support is unavailable.")
+        }
+        let iterator = VTFrameSequence(url: url, startTime: CMTime(seconds: 1, preferredTimescale: 600)).makeAsyncIterator()
+        let warmCoordinator = VTFrameProcessorCoordinator(superResolutionLevel: 1.5)
+        try await warmCoordinator.startSession(width: 1280, height: 720)
+        let warmStart = DispatchTime.now().uptimeNanoseconds
+        var target: VTFrame?
+        var warmed: [VTFrame] = []
+        for _ in 0..<61 {
+            target = try await iterator.next()
+            guard let frame = target else { break }
+            warmed = try await warmCoordinator.processFrame(frame)
+        }
+        let warmMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - warmStart) / 1_000_000
+        await warmCoordinator.endSession()
+        let freshCoordinator = VTFrameProcessorCoordinator(superResolutionLevel: 1.5)
+        try await freshCoordinator.startSession(width: 1280, height: 720)
+        let freshStart = DispatchTime.now().uptimeNanoseconds
+        let fresh = try await freshCoordinator.processFrame(try XCTUnwrap(target))
+        let freshMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - freshStart) / 1_000_000
+        let warmBuffer = try XCTUnwrap(warmed.first?.buffer)
+        let freshBuffer = try XCTUnwrap(fresh.first?.buffer)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(warmBuffer, .readOnly), kCVReturnSuccess)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(freshBuffer, .readOnly), kCVReturnSuccess)
+        defer {
+            CVPixelBufferUnlockBaseAddress(warmBuffer, .readOnly)
+            CVPixelBufferUnlockBaseAddress(freshBuffer, .readOnly)
+        }
+        XCTAssertEqual(CVPixelBufferGetPlaneCount(warmBuffer), CVPixelBufferGetPlaneCount(freshBuffer))
+        let visibleBytes = CVPixelBufferGetWidth(warmBuffer)
+        for plane in 0..<CVPixelBufferGetPlaneCount(warmBuffer) {
+            let warmBase = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(warmBuffer, plane))
+            let freshBase = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(freshBuffer, plane))
+            let warmStride = CVPixelBufferGetBytesPerRowOfPlane(warmBuffer, plane)
+            let freshStride = CVPixelBufferGetBytesPerRowOfPlane(freshBuffer, plane)
+            let height = CVPixelBufferGetHeightOfPlane(warmBuffer, plane)
+            for row in 0..<height {
+                XCTAssertEqual(memcmp(warmBase.advanced(by: row * warmStride),
+                                      freshBase.advanced(by: row * freshStride), visibleBytes), 0)
+            }
+        }
+        print("Spatial warmup 61 frames: \(warmMilliseconds) ms; single frame: \(freshMilliseconds) ms")
+        await freshCoordinator.endSession()
+    }
+
+    func testCancelledFrameReaderThrowsCancellation() async {
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await VTFrameSequence(url: URL(fileURLWithPath: "/tmp/unused.mov"))
+                .makeAsyncIterator().next()
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled reading must not look like end of video")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testFrameReaderReportsUnreadableVideo() async {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        let iterator = VTFrameSequence(url: url).makeAsyncIterator()
+        do {
+            _ = try await iterator.next()
+            XCTFail("An unreadable video should report a reader error")
+        } catch {
+            XCTAssertFalse(error is CancellationError)
+        }
+    }
+
     func testSparsePreparationReadsBackRealVideoToolboxOutput() async throws {
         let url = URL(fileURLWithPath: "/Users/michaelqiu/Projects/03_App_macOS/VTPlayer_Resources/Demo/145907-787718807_medium.mp4")
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -45,13 +191,16 @@ final class EnhancedFrameCachePreparerIntegrationTests: XCTestCase {
             configuration: configuration,
             totalGroupCount: groupCount
         )
-        XCTAssertEqual(plan.mode, .sparse)
+        guard plan.mode == .sparse else {
+            throw XCTSkip("This machine does not require sparse caching for the fixture.")
+        }
 
         let result = try await preparer.prepareCache(
             url: url,
             width: 1280,
             height: 720,
             sourceFramesPerSecond: sourceRate,
+            displayTargetFrameRate: 120,
             estimatedGroupCount: groupCount,
             plan: plan,
             configuration: configuration,

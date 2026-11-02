@@ -2,3 +2,5 @@ CLAUDE.md
 AGENTS.md
 *.xcuserstate
 tmp/
+.build/
+.build/

@@ -31,6 +31,7 @@ extension VTMetalRenderer {
         self.enableSetNeedsDisplay = false
         self.isPaused = true
         self.preferredFramesPerSecond = 60
+        (layer as? CAMetalLayer)?.maximumDrawableCount = 3
         configureMacOSPresentationScheduling()
         #else
         self.enableSetNeedsDisplay = true
@@ -171,7 +172,7 @@ extension VTMetalRenderer {
     internal var potentialEDRHeadroom: Float {
         #if os(macOS)
         guard let screen = window?.screen else { return 1.0 }
-        return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
+        return Float(screen.maximumPotentialExtendedDynamicRangeColorComponentValue)
         #elseif os(iOS)
         guard let screen = window?.windowScene?.screen else { return 1.0 }
         return Float(screen.potentialEDRHeadroom)
@@ -199,6 +200,7 @@ extension VTMetalRenderer {
     #if os(macOS)
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
         configureMacOSPresentationScheduling()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()
@@ -222,7 +224,6 @@ extension VTMetalRenderer {
         guard let metalLayer = layer as? CAMetalLayer else { return }
         metalLayer.presentsWithTransaction = false
         metalLayer.displaySyncEnabled = true
-        metalLayer.maximumDrawableCount = 3
         metalLayer.allowsNextDrawableTimeout = false
     }
 

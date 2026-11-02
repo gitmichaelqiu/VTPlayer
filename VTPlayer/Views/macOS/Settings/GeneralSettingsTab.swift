@@ -17,7 +17,6 @@ struct GeneralSettingsTab: View {
                 SettingsSection("User Interface") {
                     SettingsRow(
                         "Show file extensions",
-                        helperText: "Show or hide file extensions."
                     ) {
                         Toggle("", isOn: $showFileExtensions)
                             .toggleStyle(.switch)
@@ -39,7 +38,6 @@ struct GeneralSettingsTab: View {
 
                     SettingsRow(
                         "Always use dark mode when playing",
-                        helperText: "Use dark styling during playback."
                     ) {
                         Toggle("", isOn: $alwaysDarkOnPlayback)
                             .toggleStyle(.switch)

@@ -16,24 +16,17 @@ import AppKit
 import UniformTypeIdentifiers
 #endif
 
-enum ContinueVideoPlaybackPreference: Int {
-    case `default`
-    case on
-    case off
-}
-
-enum EnhancedCachePreparationState: Equatable {
-    case idle
-    case benchmarking
-    case preparing(progress: Double, bytesWritten: Int64)
-    case ready
-    case failed(String)
-}
-
 /// The Main ViewModel managing the playback loop, synchronization, and processor pipeline.
 @Observable
 @MainActor
 final class VTPlayerViewModel {
+    #if os(macOS)
+    /// The settings window is a separate AppKit window rather than a child of
+    /// the player view. Keep a weak reference so its Apply/Cancel actions can
+    /// operate on the currently visible video's draft without owning it.
+    static weak var activeInstance: VTPlayerViewModel?
+    #endif
+
     var videoURL: URL?
     var isPlaying = false
     var isPaused = false
@@ -60,14 +53,66 @@ final class VTPlayerViewModel {
     /// VideoToolbox pipeline has produced a frame.
     var pipelinePresentationReady = false
 
+    #if os(macOS)
+    /// Authoritative user-facing playback phase. The legacy playback booleans
+    /// remain for the rendering hot path and are kept in sync at transitions.
+    var playbackPhase: PlaybackPhase = .empty
+    var playbackIssue: PlaybackIssue?
+    var playbackNotice: String?
+    var nativeFallbackActive = false
+    var processingEnhancementsEnabled = true
+    @ObservationIgnored var playbackNoticeTask: Task<Void, Never>?
+    @ObservationIgnored var suppressNativeTimeObserverDuringSeek = false
+    @ObservationIgnored var scrubPreviewTask: Task<Void, Never>?
+    @ObservationIgnored var wasPlayingBeforeScrub = false
+    @ObservationIgnored var suppressRateObserver = false
+    @ObservationIgnored var enhancementTransactionWasPlaying = false
+    @ObservationIgnored var enhancementTransactionReachedEnd = false
+    @ObservationIgnored var enhancementTransactionPreviousPhase: PlaybackPhase = .readyPaused
+    @ObservationIgnored var enhancementTransactionPreviousConfiguration = AppliedPipelineConfiguration.disabled
+    @ObservationIgnored var enhancementTransactionPreviousSharpness = 0.0
+    @ObservationIgnored var enhancementTransactionPreviousHDRStrength = 0.0
+    @ObservationIgnored var enhancementTransactionPreviousHDRColorfulness = 0.0
+    /// The last configuration committed to this video's settings. A newly
+    /// opened video's saved values are staged as a draft, so the active
+    /// processor remains disabled until Apply succeeds. Keeping this baseline
+    /// separate prevents closing the video from overwriting it with that
+    /// temporary disabled state.
+    @ObservationIgnored var persistedPipelineConfiguration = AppliedPipelineConfiguration.disabled
+    @ObservationIgnored var persistedSharpness = 0.0
+    @ObservationIgnored var persistedHDRStrength = 0.0
+    @ObservationIgnored var persistedHDRColorfulness = 0.0
+    /// Renderer-only controls are staged on macOS just like processor
+    /// controls. Native AVPlayer cannot consume these values, so the applied
+    /// values stay separate from the sliders until Apply succeeds.
+    var appliedSharpness = 0.0
+    var appliedHDRStrength = 0.0
+    var appliedHDRColorfulness = 0.0
+    @ObservationIgnored var enhancedPresentationMonitorTask: Task<Void, Never>?
+    @ObservationIgnored var enhancedPresentationMonitorGeneration: UInt64 = 0
+    @ObservationIgnored var forceFullCachePreparation = false
+    @ObservationIgnored var liveFallbackPreviousConfiguration = AppliedPipelineConfiguration.disabled
+    @ObservationIgnored var liveFallbackCandidateConfiguration = AppliedPipelineConfiguration.disabled
+    @ObservationIgnored var liveFallbackWasPlaying = false
+    @ObservationIgnored var liveFallbackBenchmark: EnhancedPipelineBenchmark?
+    @ObservationIgnored var liveFallbackBenchmarkURL: URL?
+    @ObservationIgnored var liveFallbackBenchmarkConfiguration: AppliedPipelineConfiguration?
+    @ObservationIgnored var livePresentationGateValidated = false
+    @ObservationIgnored var actualPresentedRateSamples: [Double] = []
+    @ObservationIgnored var actualPresentedFrameBaseline = 0
+    @ObservationIgnored var actualPresentedMetricWindowStart = DispatchTime.now()
+    var actualPresentedFrameRate: Double = 0
+    var actualPresented1PercentLow: Double = 0
+    #endif
+
     // Feature Levels (0 = Off; supported Low Latency scales vary by device)
     var superResolutionLevel: Float = 0
     var frameInterpolationLevel: Int = 0
     var frameInterpolationIsSupported = false
-    /// QSR4 and FI cannot sustain an enhanced display cadence together on
-    /// supported hardware without compromising QSR output quality.
+    /// FI availability is based on VideoToolbox support for this video's
+    /// dimensions. QSR4 + FI uses temporal-first processing, then Quality SR.
     var frameInterpolationIsAvailable: Bool {
-        frameInterpolationIsSupported && qualitySuperResolutionScaleFactor != 4
+        frameInterpolationIsSupported
     }
 
     // New API Feature Levels
@@ -82,16 +127,24 @@ final class VTPlayerViewModel {
     }
     var denoiseStrength: Double = 0.0  // 0.0=off, 0.0-1.0
     var qualityPrioritization: Int = 1  // 1=normal, 2=quality
-    /// macOS edits these controls as a draft. The processor only reads the
-    /// applied value, keeping playback stable until the user confirms Apply.
+    /// The processor uses the applied configuration while edits settle or prepare.
     var appliedPipelineConfiguration = AppliedPipelineConfiguration.disabled
     var enhancedCachePreparationState: EnhancedCachePreparationState = .idle
 
     var isPreparingEnhancedCache: Bool {
         switch enhancedCachePreparationState {
+        case .benchmarking, .prerolling, .preparing:
+            true
+        case .idle, .monitoring, .ready, .failed:
+            false
+        }
+    }
+
+    var isPreparingEnhancementTransaction: Bool {
+        switch enhancedCachePreparationState {
         case .benchmarking, .preparing:
             true
-        case .idle, .ready, .failed:
+        case .idle, .prerolling, .monitoring, .ready, .failed:
             false
         }
     }
@@ -99,9 +152,13 @@ final class VTPlayerViewModel {
     @ObservationIgnored var preparedEnhancedFrameCacheKey: EnhancedFrameCacheKey?
     @ObservationIgnored var preparedEnhancedFrameCacheMode: EnhancedCachePlaybackMode?
     @ObservationIgnored var enhancedCachePreparationTask: Task<Void, Never>?
+    @ObservationIgnored var enhancementApplyTask: Task<Void, Never>?
     @ObservationIgnored var enhancedCachePreparationGeneration: UInt64 = 0
+    @ObservationIgnored var dedicatedPresentationFallbackURL: URL?
+    @ObservationIgnored var dedicatedPresentationFallbackConfiguration: AppliedPipelineConfiguration?
+    @ObservationIgnored var dedicatedPresentationFallbackSummary: String?
 
-    var draftPipelineConfiguration: AppliedPipelineConfiguration {
+    var selectedPipelineConfiguration: AppliedPipelineConfiguration {
         AppliedPipelineConfiguration(
             superResolutionLevel: superResolutionLevel,
             qualitySuperResolutionScaleFactor: qualitySuperResolutionScaleFactor,
@@ -111,21 +168,24 @@ final class VTPlayerViewModel {
         )
     }
 
+    var draftPipelineConfiguration: AppliedPipelineConfiguration {
+        #if os(macOS)
+        if !processingEnhancementsEnabled { return .disabled }
+        #endif
+        return selectedPipelineConfiguration
+    }
+
     var hasUnappliedPipelineChanges: Bool {
         #if os(macOS)
-        draftPipelineConfiguration != appliedPipelineConfiguration
+        draftPipelineConfiguration != appliedPipelineConfiguration ||
+            abs(sharpness - appliedSharpness) > 0.0001 ||
+            abs(hdrStrength - appliedHDRStrength) > 0.0001 ||
+            abs(hdrColorfulness - appliedHDRColorfulness) > 0.0001
         #else
         false
         #endif
     }
 
-    var shouldShowTransportApplyAction: Bool {
-        #if os(macOS)
-        hasUnappliedPipelineChanges
-        #else
-        false
-        #endif
-    }
     var continueVideoPlaybackPreference: ContinueVideoPlaybackPreference = .default
     var showSidebar = false
     var showLeftSidebar = true
@@ -139,16 +199,38 @@ final class VTPlayerViewModel {
     // Playback Progress & Stats
     var isPipelineActive: Bool {
         #if os(macOS) || os(iOS)
+        #if os(macOS)
+        if nativeFallbackActive { return false }
+        let hdrIsActive = appliedHDRStrength > 0 || appliedSharpness > 0
+        #else
+        let hdrIsActive = hdrStrength > 0
+        #endif
         return (appliedPipelineConfiguration.superResolutionLevel > 0 ||
                 appliedPipelineConfiguration.frameInterpolationLevel > 0 ||
                 appliedPipelineConfiguration.qualitySuperResolutionScaleFactor > 0 ||
                 appliedPipelineConfiguration.denoiseStrength > 0 ||
                 appliedPipelineConfiguration.motionBlurStrength > 0 ||
-                hdrStrength > 0)
+                hdrIsActive)
         #else
         return true
         #endif
     }
+
+    #if os(macOS)
+    /// While enhanced frames are being presented, their media timeline is the
+    /// user-visible clock. The underlying AVPlayer clock is a separate source
+    /// and can lag or jump during cache-backed playback.
+    var enhancedPresentationOwnsTimeline: Bool {
+        guard isPlaying, !isPaused, isPipelineActive, !nativeFallbackActive else { return false }
+        switch playbackPhase {
+        case .prerollingEnhanced, .monitoringEnhanced, .playingEnhanced:
+            return true
+        default:
+            return false
+        }
+    }
+    #endif
+
     var currentTime: Double = 0.0
     var duration: Double = 0.0
     var playbackSpeed: Double = 1.0 {
@@ -158,7 +240,13 @@ final class VTPlayerViewModel {
                 playbackSpeed = clamped
             }
             if let player = player {
-                player.rate = Float(isPaused ? 0.0 : clamped)
+                // Loading a new AVPlayer restores the saved speed before the
+                // transport is allowed to play.  Using only `isPaused` here
+                // made the post-stop state (isPlaying=false, isPaused=false)
+                // look like active playback and could start audio while the
+                // newly opened video was still paused.  A rate is meaningful
+                // only for an explicitly playing transport.
+                player.rate = (isPlaying && !isPaused) ? Float(clamped) : 0.0
                 enhancedAudioPlayer?.setRate(clamped)
                 resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
                 #if os(macOS)
@@ -170,6 +258,7 @@ final class VTPlayerViewModel {
             }
         }
     }
+    @ObservationIgnored var primaryAudioMutedForEnhancement = false
     var volume: Double = 1.0 {
         didSet {
             let clamped = max(0.0, min(1.0, volume))
@@ -177,7 +266,9 @@ final class VTPlayerViewModel {
                 volume = clamped
                 return
             }
-            player?.volume = Float(clamped)
+            if !primaryAudioMutedForEnhancement {
+                player?.volume = Float(clamped)
+            }
             enhancedAudioPlayer?.setVolume(Float(clamped))
         }
     }
@@ -204,8 +295,143 @@ final class VTPlayerViewModel {
         saveVideoSettings()
     }
 
+    #if os(macOS)
+    var hasPlaybackIssue: Bool { playbackIssue != nil }
+
+    var playbackIssueAlertTitle: String {
+        switch playbackIssue?.stage {
+        case .loading, .permissions:
+            "Couldn’t Open Video"
+        case .capabilities:
+            "Enhancement Unavailable"
+        case .qualitySRPreparation:
+            "Quality Upscaling Couldn’t Start"
+        case .preparation:
+            "Couldn’t Prepare Enhancements"
+        case .pipeline:
+            "Enhanced Playback Paused"
+        case nil:
+            "Playback Paused"
+        }
+    }
+
+    func transitionPlayback(to phase: PlaybackPhase) {
+        playbackPhase = phase
+    }
+
+    func reportPlaybackIssue(stage: PlaybackIssueStage, message: String) {
+        dismissPlaybackNotice()
+        playbackIssue = PlaybackIssue(stage: stage, message: message)
+        playbackPhase = .failed
+        isBuffering = false
+        isInitializingPipeline = false
+    }
+
+    func clearPlaybackIssue() {
+        playbackIssue = nil
+    }
+
+    func showPlaybackNotice(_ message: String) {
+        playbackNoticeTask?.cancel()
+        playbackNotice = message
+        playbackNoticeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.dismissPlaybackNotice()
+        }
+    }
+
+    func dismissPlaybackNotice() {
+        playbackNoticeTask?.cancel()
+        playbackNoticeTask = nil
+        playbackNotice = nil
+    }
+
+    func dismissPendingEnhancementChanges() {
+        guard hasUnappliedPipelineChanges else { return }
+        superResolutionLevel = appliedPipelineConfiguration.superResolutionLevel
+        qualitySuperResolutionScaleFactor = appliedPipelineConfiguration.qualitySuperResolutionScaleFactor
+        frameInterpolationLevel = appliedPipelineConfiguration.frameInterpolationLevel
+        denoiseStrength = appliedPipelineConfiguration.denoiseStrength
+        motionBlurStrength = appliedPipelineConfiguration.motionBlurStrength
+        sharpness = appliedSharpness
+        hdrStrength = appliedHDRStrength
+        hdrColorfulness = appliedHDRColorfulness
+        applyActiveRendererSettings()
+        clearPlaybackIssue()
+    }
+
+    func applyActiveRendererSettings() {
+        #if os(macOS)
+        renderer.sharpness = Float(appliedSharpness)
+        renderer.hdrStrength = Float(appliedHDRStrength)
+        renderer.hdrColorfulness = Float(appliedHDRColorfulness)
+        #else
+        renderer.sharpness = Float(sharpness)
+        renderer.hdrStrength = Float(hdrStrength)
+        renderer.hdrColorfulness = Float(hdrColorfulness)
+        #endif
+    }
+
+    func retryEnhancedPlayback() {
+        guard videoURL != nil,
+              isPipelineActive || hasUnappliedPipelineChanges ||
+                playbackIssue?.stage == .pipeline || playbackIssue?.stage == .preparation ||
+                playbackIssue?.stage == .qualitySRPreparation ||
+                nativeFallbackActive else { return }
+        let shouldReprepareInvalidatedCache = (playbackIssue?.stage == .preparation ||
+            playbackIssue?.stage == .qualitySRPreparation) &&
+            !hasUnappliedPipelineChanges &&
+            isPipelineActive &&
+            preparedEnhancedFrameCacheKey == nil
+        clearPlaybackIssue()
+        dismissPlaybackNotice()
+        nativeFallbackActive = false
+        isPlaying = true
+        isPaused = false
+        if shouldReprepareInvalidatedCache {
+            retryEnhancedPreparation(configuration: appliedPipelineConfiguration)
+            return
+        }
+        if hasUnappliedPipelineChanges {
+            applyPipelineEnhancements()
+        } else {
+            isPlaying = true
+            isPaused = false
+            liveFallbackCandidateConfiguration = appliedPipelineConfiguration
+            liveFallbackWasPlaying = true
+            livePresentationGateValidated = false
+            transitionPlayback(to: .prerollingEnhanced)
+            startPlaybackLoop()
+            if let url = videoURL {
+                startEnhancedPresentationGateMonitor(
+                    url: url,
+                    candidate: appliedPipelineConfiguration,
+                    preparationGeneration: enhancedCachePreparationGeneration
+                )
+            }
+        }
+    }
+
+    func continueNativePlayback() {
+        guard player != nil else { return }
+        clearPlaybackIssue()
+        dismissPlaybackNotice()
+        nativeFallbackActive = true
+        stopEnhancedAudioPlayback()
+        stopDisplayLinkIfNeeded()
+        setNativeVideoEnabled(true)
+        isPlaying = true
+        isPaused = false
+        transitionPlayback(to: .playingNative)
+        player?.play()
+        player?.rate = Float(playbackSpeed)
+    }
+    #endif
+
     private func clearSavedProgress() {
         guard let url = videoURL else { return }
+        UserDefaults.standard.removeObject(forKey: Self.videoProgressKey(for: url))
         UserDefaults.standard.removeObject(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
     }
     @ObservationIgnored var volumeBeforeMute: Double?
@@ -237,6 +463,78 @@ final class VTPlayerViewModel {
     var displayFrameRate: Double {
         isPipelineActive ? fps : sourceFrameRate * playbackSpeed
     }
+    var requestedOutputFrameRate: Double {
+        let multiplier = appliedPipelineConfiguration.frameInterpolationLevel > 0
+            ? Double(appliedPipelineConfiguration.frameInterpolationLevel)
+            : 1.0
+        return sourceFrameRate * multiplier * playbackSpeed
+    }
+    #if os(macOS)
+    var displayTargetFrameRate: Double {
+        let physical = Double(renderer.schedulingSnapshot().screenMaximumFramesPerSecond)
+        guard physical > 0 else { return requestedOutputFrameRate }
+        return min(requestedOutputFrameRate, physical)
+    }
+
+    var enhancedProcessingModeSummary: String {
+        guard let mode = preparedEnhancedFrameCacheMode else { return "Live processing" }
+        switch mode {
+        case .realTime:
+            return "Live processing"
+        case .sparse:
+            return "Sparse cache · \(enhancedCacheCoveragePercent)%"
+        case .full:
+            return "Full cache · 100%"
+        }
+    }
+
+    var presentationQueueFrameCount: Int {
+        if let queue = fullCachePresentationQueue {
+            return queue.snapshot().frameCount
+        }
+        return frameCacheCount
+    }
+
+    var appliedEnhancementSummary: String {
+        enhancementSummary(
+            configuration: appliedPipelineConfiguration,
+            sharpness: appliedSharpness,
+            hdrStrength: appliedHDRStrength,
+            hdrColorfulness: appliedHDRColorfulness
+        )
+    }
+
+    var draftEnhancementSummary: String {
+        enhancementSummary(
+            configuration: draftPipelineConfiguration,
+            sharpness: sharpness,
+            hdrStrength: hdrStrength,
+            hdrColorfulness: hdrColorfulness
+        )
+    }
+
+    private func enhancementSummary(
+        configuration: AppliedPipelineConfiguration,
+        sharpness: Double,
+        hdrStrength: Double,
+        hdrColorfulness: Double
+    ) -> String {
+        let scale = max(configuration.superResolutionLevel, Float(configuration.qualitySuperResolutionScaleFactor))
+        let sr = scale > 0 ? String(format: "%.1fx SR", scale) : "SR off"
+        let fi = configuration.frameInterpolationLevel > 0 ? "FI \(configuration.frameInterpolationLevel)x" : "FI off"
+        var summary = "\(sr), \(fi)"
+        if sharpness > 0 {
+            summary += String(format: ", Sharpness %.2f", sharpness)
+        }
+        if hdrStrength > 0 {
+            summary += String(format: ", HDR %.2f", hdrStrength)
+        }
+        if hdrColorfulness > 0 {
+            summary += String(format: ", Color %.2f", hdrColorfulness)
+        }
+        return summary
+    }
+    #endif
     var droppedFrames = 0
     var aneUsagePercent: Double = 0.0
     @ObservationIgnored var pendingDroppedFrames = 0
@@ -261,6 +559,10 @@ final class VTPlayerViewModel {
     
     // Fullscreen and Auto-hide HUD controls state
     var isFullScreen = false
+    var fullscreenResumeURL: URL?
+    #if os(macOS)
+    weak var fullscreenTransitionWindow: NSWindow?
+    #endif
     var showControls = true
     var isHoveringControlBar = false
     var isHoveringVideo = false
@@ -297,19 +599,34 @@ final class VTPlayerViewModel {
     // Sharpness Control (0.0 = off, >0 applies CIUnsharpMask)
     var sharpness: Double = 0.0 {
         didSet {
+            #if os(macOS)
+            renderer.sharpness = Float(appliedSharpness)
+            #else
             renderer.sharpness = Float(sharpness)
+            #endif
         }
     }
 
     // HDR Tone Mapping (0.0 = off, >0 maps SDR into EDR headroom)
     var hdrStrength: Double = 0.0 {
         didSet {
+            #if os(macOS)
+            renderer.hdrStrength = Float(appliedHDRStrength)
+            #else
             renderer.hdrStrength = Float(hdrStrength)
+            #endif
             // HDR-only playback must use the decoded-frame renderer; otherwise
             // the native AVPlayer layer remains on top and no EDR content can
             // reach the display. Rebuild only when crossing the activation
             // boundary so ordinary slider adjustments stay immediate.
-            if (oldValue > 0) != (hdrStrength > 0), player != nil {
+            #if os(macOS)
+            let oldAppliedHDR = appliedHDRStrength
+            let newAppliedHDR = appliedHDRStrength
+            #else
+            let oldAppliedHDR = oldValue
+            let newAppliedHDR = hdrStrength
+            #endif
+            if (oldAppliedHDR > 0) != (newAppliedHDR > 0), player != nil {
                 restartAppliedEnhancements()
             }
         }
@@ -324,7 +641,11 @@ final class VTPlayerViewModel {
                 hdrColorfulness = clamped
                 return
             }
+            #if os(macOS)
+            renderer.hdrColorfulness = Float(appliedHDRColorfulness)
+            #else
             renderer.hdrColorfulness = Float(clamped)
+            #endif
         }
     }
 
@@ -340,7 +661,6 @@ final class VTPlayerViewModel {
     @ObservationIgnored var qualityModelRetryTask: Task<Void, Never>?
     @ObservationIgnored var displayLink: CADisplayLink?
     #if os(macOS)
-    @ObservationIgnored var macDisplayLink: CVDisplayLink?
     @ObservationIgnored var macDisplayTickDriver: MacDisplayTickDriver?
     @ObservationIgnored var macAppKitDisplayTickDriver: MacAppKitDisplayTickDriver?
     @ObservationIgnored var macMetalDisplayLink: CAMetalDisplayLink?
@@ -370,6 +690,11 @@ final class VTPlayerViewModel {
     @ObservationIgnored var producerCacheAdmissionMilliseconds = 0.0
     @ObservationIgnored var producerCacheInsertionMilliseconds = 0.0
     @ObservationIgnored var producerTimingSampleCount = 0
+    @ObservationIgnored var producerBetweenGroupsMilliseconds = 0.0
+    @ObservationIgnored var producerBetweenGroupsMaximumMilliseconds = 0.0
+    @ObservationIgnored var producerBetweenGroupsSampleCount = 0
+    @ObservationIgnored var producerDeliveryMilliseconds = 0.0
+    @ObservationIgnored var producerAdmissionExecutionMilliseconds = 0.0
     @ObservationIgnored var fiProcessingMilliseconds = 0.0
     @ObservationIgnored var fiProcessingMaximumMilliseconds = 0.0
     @ObservationIgnored var fiProcessingSampleCount = 0
@@ -423,12 +748,19 @@ final class VTPlayerViewModel {
 
     func publishCurrentTime(_ seconds: Double, immediately: Bool = false) {
         guard seconds.isFinite else { return }
-        guard immediately || abs(seconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
-        lastPublishedCurrentTime = seconds
-        currentTime = seconds
+        #if os(macOS)
+        let publishedSeconds = enhancedPresentationOwnsTimeline
+            ? max(seconds, lastPublishedCurrentTime)
+            : seconds
+        #else
+        let publishedSeconds = seconds
+        #endif
+        guard immediately || abs(publishedSeconds - lastPublishedCurrentTime) >= (1.0 / 15.0) else { return }
+        lastPublishedCurrentTime = publishedSeconds
+        currentTime = publishedSeconds
         #if os(iOS)
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = seconds
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = publishedSeconds
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPaused ? 0.0 : playbackSpeed
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         #endif
@@ -481,69 +813,6 @@ final class VTPlayerViewModel {
         lastDiagnosticsPublish = now
     }
 
-    func compactProcessedFrameCacheIfNeeded(force: Bool = false) {
-        guard processedFrameCacheStart > 0 else { return }
-        let totalCount = processedFrameCache.count
-        if force || processedFrameCacheStart >= 64 || processedFrameCacheStart * 2 >= totalCount {
-            let releasedBytes = processedFrameCache[..<processedFrameCacheStart].reduce(into: 0) { total, frame in
-                total += CVPixelBufferGetDataSize(frame.buffer)
-            }
-            // Keep the cache storage and release only the consumed pixel
-            // buffers. Rebuilding the array here briefly duplicates every
-            // queued frame reference, which is costly for a large 4x cache.
-            processedFrameCache.removeFirst(processedFrameCacheStart)
-            processedFrameCacheStart = 0
-            processedFrameCacheByteUsage = max(0, processedFrameCacheByteUsage - releasedBytes)
-        }
-    }
-
-    func cacheCanAccept(_ byteCount: Int) -> Bool {
-        guard byteCount <= frameCacheMemoryBudget else { return false }
-        return processedFrameCacheByteUsage <= frameCacheMemoryBudget - byteCount
-    }
-
-    @discardableResult
-    func insertProcessedFrameIntoCache(_ frame: VTFrame) -> Bool {
-        let byteCount = CVPixelBufferGetDataSize(frame.buffer)
-        guard cacheCanAccept(byteCount) else { return false }
-        if byteCount > processedFrameByteEstimate {
-            processedFrameByteEstimate = byteCount
-        }
-
-        let pts = frame.presentationTimeStamp
-        if let last = processedFrameCache.last {
-            let comparison = CMTimeCompare(last.presentationTimeStamp, pts)
-            if comparison == 0 { return false }
-            if comparison < 0 {
-                processedFrameCache.append(frame)
-                processedFrameCacheByteUsage += byteCount
-                return true
-            }
-        } else {
-            processedFrameCache.append(frame)
-            processedFrameCacheByteUsage += byteCount
-            return true
-        }
-
-        var lo = processedFrameCacheStart
-        var hi = processedFrameCache.count
-        while lo < hi {
-            let mid = (lo + hi) / 2
-            if processedFrameCache[mid].presentationTimeStamp < pts {
-                lo = mid + 1
-            } else {
-                hi = mid
-            }
-        }
-        if lo < processedFrameCache.count,
-           CMTimeCompare(processedFrameCache[lo].presentationTimeStamp, pts) == 0 {
-            return false
-        }
-        processedFrameCache.insert(frame, at: lo)
-        processedFrameCacheByteUsage += byteCount
-        return true
-    }
-
     func recordProducerTiming(
         decodeWaitMilliseconds: Double = 0,
         cacheAdmissionMilliseconds: Double = 0,
@@ -560,6 +829,11 @@ final class VTPlayerViewModel {
         producerCacheAdmissionMilliseconds = 0
         producerCacheInsertionMilliseconds = 0
         producerTimingSampleCount = 0
+        producerBetweenGroupsMilliseconds = 0
+        producerBetweenGroupsMaximumMilliseconds = 0
+        producerBetweenGroupsSampleCount = 0
+        producerDeliveryMilliseconds = 0
+        producerAdmissionExecutionMilliseconds = 0
         fiProcessingMilliseconds = 0
         fiProcessingMaximumMilliseconds = 0
         fiProcessingSampleCount = 0
@@ -587,44 +861,6 @@ final class VTPlayerViewModel {
         }
     }
 
-    var bufferedFrameLimit: Int {
-        let scale = max(1, max(superResolutionLevel, Float(qualitySuperResolutionScaleFactor)))
-        let outputPixels = Double(videoWidth) * Double(videoHeight) * Double(scale * scale)
-        guard outputPixels > 0 else { return maximumFrameCacheCount }
-
-        // VideoToolbox normally returns YUV. Refine this fallback from the
-        // actual processed buffers as soon as the producer has one, avoiding
-        // an unnecessarily shallow cache for 4:2:0 output.
-        let estimatedBytesPerFrame = processedFrameByteEstimate > 0
-            ? Double(processedFrameByteEstimate)
-            : max(1.0, outputPixels * 2.0)
-        let budgetedFrames = Int(Double(frameCacheMemoryBudget) / estimatedBytesPerFrame)
-        return min(maximumFrameCacheCount, max(2, budgetedFrames))
-    }
-
-    var resumeBufferFrameCount: Int {
-        min(8, max(2, bufferedFrameLimit / 2))
-    }
-
-    var initialPrerollFrameCount: Int {
-        // Startup only needs a small presentation reserve. Waiting for the
-        // full cache capacity makes high-resolution videos appear frozen while
-        // the producer fills several gigabytes, even though the consumer can
-        // already render continuously. Keep the reserve bounded and reuse the
-        // same conservative depth used when resuming from a pause.
-        return min(bufferedFrameLimit, resumeBufferFrameCount)
-    }
-
-    var outputPresentationInterval: Double {
-        guard sourceFrameRate > 0 else { return 1.0 / 30.0 }
-        let multiplier: Double
-        switch frameInterpolationLevel {
-        case 4: multiplier = 4.0
-        case 2: multiplier = 2.0
-        default: multiplier = 1.0
-        }
-        return 1.0 / (sourceFrameRate * multiplier)
-    }
     var securityScopedURL: URL?
     var lastPulledTime: CMTime = .zero {
         didSet {
@@ -632,6 +868,8 @@ final class VTPlayerViewModel {
             fullCacheReaderControl?.requestSeek(to: lastPulledTime)
             if let control = fullCacheReaderControl {
                 fullCachePresentationQueue?.reset(generation: control.request().generation)
+            } else {
+                fullCachePresentationQueue?.reset(generation: playbackGeneration)
             }
             #endif
         }
@@ -782,6 +1020,7 @@ final class VTPlayerViewModel {
     init() {
         self.renderer = VTMetalRenderer(frame: .zero, device: nil)
         #if os(macOS)
+        Self.activeInstance = self
         // Allows a reproducible headless/open-with diagnostic run without
         // changing persisted user preferences.
         if CommandLine.arguments.contains("--vtplayer-fi2-sr2") {
@@ -800,16 +1039,22 @@ final class VTPlayerViewModel {
             object: nil
         )
         
+        for name in [NSWindow.willEnterFullScreenNotification, NSWindow.willExitFullScreenNotification] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowWillChangeFullScreen(_:)), name: name, object: nil
+            )
+        }
+
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidEnterFullScreen),
+            selector: #selector(windowDidEnterFullScreen(_:)),
             name: NSWindow.didEnterFullScreenNotification,
             object: nil
         )
         
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidExitFullScreen),
+            selector: #selector(windowDidExitFullScreen(_:)),
             name: NSWindow.didExitFullScreenNotification,
             object: nil
         )
@@ -862,156 +1107,16 @@ final class VTPlayerViewModel {
     func saveProgress() {
         guard let url = videoURL else { return }
         guard shouldContinueVideoPlayback else {
+            UserDefaults.standard.removeObject(forKey: Self.videoProgressKey(for: url))
             UserDefaults.standard.removeObject(forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
             return
         }
-        UserDefaults.standard.set(self.currentTime, forKey: "VTPlaybackProgress_\(url.lastPathComponent)")
+        UserDefaults.standard.set(self.currentTime, forKey: Self.videoProgressKey(for: url))
     }
     
     #if os(macOS)
-    @ObservationIgnored private var recentSecurityScopedURLs: [URL] = []
+    @ObservationIgnored var recentSecurityScopedURLs: [URL] = []
 
-    private func securityBookmarkKey(for url: URL) -> String {
-        "VTSecurityScopedBookmarkMac.\(url.standardizedFileURL.path)"
-    }
-
-    func saveSecurityScopedBookmark(for url: URL) {
-        do {
-            let bookmark = try url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
-            UserDefaults.standard.set(bookmark, forKey: securityBookmarkKey(for: url))
-            // Ensure the grant is on disk before the app is rebuilt or
-            // terminated immediately after opening a file.
-            UserDefaults.standard.synchronize()
-            NSLog("SECURITY: saved bookmark for %@", url.path)
-        } catch {
-            print("Failed to save security-scoped bookmark: \(error.localizedDescription)")
-        }
-    }
-
-    func resolveSecurityScopedBookmark(for url: URL) -> URL {
-        let path = url.standardizedFileURL.path
-        let legacyBookmarks = UserDefaults.standard.dictionary(forKey: "VTSecurityScopedBookmarksMac")
-        let legacyBookmark = legacyBookmarks?[path] as? Data
-        guard let bookmark = UserDefaults.standard.data(forKey: securityBookmarkKey(for: url)) ?? legacyBookmark else { return url }
-        var isStale = false
-        do {
-            let resolved = try URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &isStale)
-            if isStale { saveSecurityScopedBookmark(for: resolved) }
-            NSLog("SECURITY: resolved bookmark for %@ (stale=%@)", path, isStale ? "YES" : "NO")
-            return resolved
-        } catch {
-            print("Failed to resolve security-scoped bookmark: \(error.localizedDescription)")
-            return url
-        }
-    }
-
-    func removeSecurityScopedBookmark(for url: URL) {
-        UserDefaults.standard.removeObject(forKey: securityBookmarkKey(for: url))
-    }
-
-    @objc func reloadRecentVideos() {
-        for scopedURL in recentSecurityScopedURLs {
-            scopedURL.stopAccessingSecurityScopedResource()
-        }
-        recentSecurityScopedURLs.removeAll(keepingCapacity: true)
-        let paths = UserDefaults.standard.stringArray(forKey: "VTRecentVideosMac")
-        if let paths = paths {
-            var urls: [URL] = []
-            for path in paths {
-                if let url = URL(string: path) {
-                    let resolved = resolveSecurityScopedBookmark(for: url)
-                    if resolved.startAccessingSecurityScopedResource() {
-                        recentSecurityScopedURLs.append(resolved)
-                    }
-                    urls.append(resolved)
-                }
-            }
-            self.recentVideos = urls
-        } else {
-            // First-run migration from NSDocumentController if available
-            let removed = UserDefaults.standard.stringArray(forKey: "VTRemovedRecentVideos") ?? []
-            let urls = NSDocumentController.shared.recentDocumentURLs.filter { url in
-                !removed.contains(url.path)
-            }
-            self.recentVideos = urls
-            let paths = urls.map { $0.absoluteString }
-            UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
-        }
-    }
-
-    func recordRecentDateIfNeeded(for url: URL) {
-        var addedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
-        if addedDates[url.path] == nil {
-            addedDates[url.path] = Date().timeIntervalSince1970
-            UserDefaults.standard.set(addedDates, forKey: "VTRecentVideosDatesMac")
-        }
-        var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
-        openedDates[url.path] = Date().timeIntervalSince1970
-        UserDefaults.standard.set(openedDates, forKey: "VTRecentVideosOpenedDatesMac")
-    }
-
-    func addRecentVideoMac(_ url: URL) {
-        var list = self.recentVideos.filter { $0 != url }
-        list.insert(url, at: 0)
-        if list.count > 50 {
-            list = Array(list.prefix(50))
-        }
-        self.recentVideos = list
-        
-        let paths = list.map { $0.absoluteString }
-        UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
-
-        #if os(macOS)
-        NSDocumentController.shared.noteNewRecentDocumentURL(url)
-        #endif
-    }
-    
-    func deleteRecentVideoMac(at url: URL) {
-        let wasSelected = videoURL == url
-        self.recentVideos.removeAll { $0 == url }
-        
-        let paths = self.recentVideos.map { $0.absoluteString }
-        UserDefaults.standard.set(paths, forKey: "VTRecentVideosMac")
-
-        var dates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosDatesMac") as? [String: Double] ?? [:]
-        dates.removeValue(forKey: url.path)
-        UserDefaults.standard.set(dates, forKey: "VTRecentVideosDatesMac")
-        removeSecurityScopedBookmark(for: url)
-        
-        var openedDates = UserDefaults.standard.dictionary(forKey: "VTRecentVideosOpenedDatesMac") as? [String: Double] ?? [:]
-        openedDates.removeValue(forKey: url.path)
-        UserDefaults.standard.set(openedDates, forKey: "VTRecentVideosOpenedDatesMac")
-
-        if wasSelected {
-            stop()
-            videoURL = nil
-        }
-    }
-
-    func clearRecentVideosMac() {
-        let hadSelectedVideo = videoURL != nil
-        #if os(macOS)
-        NSDocumentController.shared.clearRecentDocuments(nil)
-        #endif
-        withAnimation(.easeInOut(duration: 0.25)) {
-            self.recentVideos.removeAll()
-        }
-        UserDefaults.standard.removeObject(forKey: "VTRecentVideosMac")
-        UserDefaults.standard.removeObject(forKey: "VTRemovedRecentVideos")
-        UserDefaults.standard.removeObject(forKey: "VTRecentVideosDatesMac")
-        UserDefaults.standard.removeObject(forKey: "VTRecentVideosOpenedDatesMac")
-
-        if hadSelectedVideo {
-            stop()
-            videoURL = nil
-        }
-
-        clearPersistedVideoHistory()
-    }
     #endif
     
     func openVideo(_ url: URL) {
@@ -1115,6 +1220,11 @@ final class VTPlayerViewModel {
             panel.message = "Select this video again to restore access."
             if panel.runModal() == .OK, let selectedURL = panel.url {
                 openVideo(selectedURL)
+            } else {
+                reportPlaybackIssue(
+                    stage: .permissions,
+                    message: "VTPlayer could not access this recent video. Choose the file again to restore permission."
+                )
             }
             return
         }
@@ -1138,296 +1248,6 @@ final class VTPlayerViewModel {
         #else
         self.openVideo(url)
         #endif
-    }
-    
-    #if os(macOS)
-    @objc func windowDidEnterFullScreen() {
-        self.isFullScreen = true
-        self.userActivityDetected()
-        
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            window.backgroundColor = .black
-        }
-    }
-    
-    @objc func windowDidExitFullScreen() {
-        self.isFullScreen = false
-        self.showControls = true
-        if self.cursorHidden {
-            NSCursor.unhide()
-            self.cursorHidden = false
-        }
-        
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            window.backgroundColor = .windowBackgroundColor
-        }
-    }
-    #endif
-    
-    func userActivityDetected() {
-        let shouldAutoHide = isPlaying && !isPaused
-        
-        if shouldAutoHide {
-            self.showControls = true
-            #if os(macOS)
-            if self.cursorHidden {
-                NSCursor.unhide()
-                self.cursorHidden = false
-            }
-            #endif
-            startInactivityTimer()
-        } else {
-            self.showControls = true
-            #if os(macOS)
-            if self.cursorHidden {
-                NSCursor.unhide()
-                self.cursorHidden = false
-            }
-            #endif
-            inactivityTask?.cancel()
-        }
-    }
-    
-    /// Toggles controls visibility — used on iOS to keep the navigation bar
-    /// in sync with VideoPlayer's native transport controls which also toggle on tap.
-    func toggleControls() {
-        if showControls {
-            showControls = false
-            inactivityTask?.cancel()
-        } else {
-            showControls = true
-            startInactivityTimer()
-        }
-    }
-    
-    func startInactivityTimer() {
-        inactivityTask?.cancel()
-        inactivityTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
-            guard !Task.isCancelled, let self = self else { return }
-            #if os(iOS)
-            let shouldHide = self.isPlaying && !self.isPaused
-            #else
-            let shouldHide = self.isPlaying && !self.isPaused && !self.isHoveringControlBar && !self.isConfigurationPopoverPresented
-            #endif
-            if shouldHide {
-                self.showControls = false
-                 #if os(macOS)
-                 if !self.cursorHidden && self.isHoveringVideo {
-                     NSCursor.hide()
-                     self.cursorHidden = true
-                 }
-                 #endif
-            }
-        }
-    }
-
-    /// Seeks to a specific timestamp in seconds.
-    func seek(to seconds: Double) {
-        ignoreAutomaticTimeJumpsUntil = nil
-        pendingResumePTS = nil
-        pendingExplicitSeekPTS = CMTime(seconds: seconds, preferredTimescale: 600)
-        seekGeneration &+= 1
-        let requestGeneration = seekGeneration
-        self.lastPublishedCurrentTime = seconds
-        self.currentTime = seconds
-        self.saveProgress()
-        self.lastRenderedPTS = .zero
-        resetPresentationClock(at: seconds)
-        lockCache { self.clearProcessedFrameCache() }
-        self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
-        Task { @MainActor in
-            await self.activeCoordinator?.clearHistory()
-        }
-        guard let player = player else { return }
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        let targetRate = Float(self.playbackSpeed)
-        let shouldPlay = self.isPlaying && !self.isPaused
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
-            guard completed, let self = self else { return }
-            Task { @MainActor in
-                guard requestGeneration == self.seekGeneration,
-                      self.player === player else { return }
-
-                // Re-assert player rate — AVPlayer can transiently drop
-                // rate to 0 during seek, causing arrow-key seeks to
-                // unexpectedly pause playback.
-                if shouldPlay && self.isPlaying && !self.isPaused {
-                    player.rate = targetRate
-                }
-                await self.triggerSingleFrameUpdate(
-                    at: time,
-                    for: player,
-                    requestGeneration: requestGeneration
-                )
-            }
-        }
-    }
-
-    /// Rewinds after natural completion before building a new paused pipeline.
-    func rewindAfterPlaybackEnd(for endingPlayer: AVPlayer) async {
-        guard player === endingPlayer else { return }
-
-        pause()
-
-        let zero = CMTime.zero
-        pendingResumePTS = nil
-        pendingExplicitSeekPTS = zero
-        seekGeneration &+= 1
-        let requestGeneration = seekGeneration
-        lastPublishedCurrentTime = 0
-        currentTime = 0
-        lastRenderedPTS = .zero
-        lastPulledTime = .zero
-        resetPresentationClock(at: 0)
-        lockCache { clearProcessedFrameCache() }
-        await activeCoordinator?.clearHistory()
-
-        let completed = await endingPlayer.seek(
-            to: zero,
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
-        )
-        guard completed,
-              requestGeneration == seekGeneration,
-              player === endingPlayer else { return }
-
-        pendingExplicitSeekPTS = nil
-        startPlaybackLoop()
-    }
-
-    func handleTimeJump() {
-        guard let player = player else { return }
-        if let deadline = ignoreAutomaticTimeJumpsUntil,
-           DispatchTime.now().uptimeNanoseconds < deadline.uptimeNanoseconds {
-            return
-        }
-        let currentTime = player.currentTime()
-        if let pendingExplicitSeekPTS {
-            let expectedSeconds = CMTimeGetSeconds(pendingExplicitSeekPTS)
-            let currentSeconds = CMTimeGetSeconds(currentTime)
-            guard expectedSeconds.isFinite, currentSeconds.isFinite,
-                  abs(currentSeconds - expectedSeconds) <= 0.25 else {
-                return
-            }
-            self.pendingExplicitSeekPTS = nil
-        } else if pendingResumePTS == nil {
-            // Do not let an unsolicited AVPlayer time jump rewrite the
-            // enhanced decoder timeline. Explicit seek/scrub paths register
-            // their target above; startup resume is tracked separately.
-            return
-        }
-        if let pendingResumePTS {
-            let expectedSeconds = CMTimeGetSeconds(pendingResumePTS)
-            let currentSeconds = CMTimeGetSeconds(currentTime)
-            if expectedSeconds.isFinite, currentSeconds.isFinite,
-               abs(currentSeconds - expectedSeconds) > 0.25 {
-                return
-            }
-            self.pendingResumePTS = nil
-        }
-        enhancedAudioPlayer?.awaitRenderedFrameAnchor(shouldPlay: isPlaying && !isPaused)
-        
-        lockCache { self.clearProcessedFrameCache() }
-        self.lastPulledTime = currentTime
-        self.lastRenderedPTS = currentTime
-        resetPresentationClock(at: CMTimeGetSeconds(currentTime))
-        Task { @MainActor in
-            await self.activeCoordinator?.clearHistory()
-        }
-        
-        // If paused (e.g. scrubbing), read and draw a single frame immediately
-        // at the new seek position so the screen updates in real time.
-        if self.isPaused, let url = videoURL {
-            Task { @MainActor in
-                if let frame = await self.readSingleFrame(from: url, at: currentTime) {
-                    self.renderer.render(pixelBuffer: frame.buffer)
-                }
-            }
-        }
-    }
-
-    /// Seeks and draws the frame immediately during continuous scrubbing.
-    func scrub(to seconds: Double) {
-        ignoreAutomaticTimeJumpsUntil = nil
-        pendingResumePTS = nil
-        pendingExplicitSeekPTS = CMTime(seconds: seconds, preferredTimescale: 600)
-        seekGeneration &+= 1
-        let requestGeneration = seekGeneration
-        self.lastPublishedCurrentTime = seconds
-        self.currentTime = seconds
-        self.saveProgress()
-        self.lastRenderedPTS = .zero
-        resetPresentationClock(at: seconds)
-        lockCache { self.clearProcessedFrameCache() }
-        self.lastPulledTime = CMTime(seconds: seconds, preferredTimescale: 600)
-        Task { @MainActor in
-            await self.activeCoordinator?.clearHistory()
-        }
-        guard let player = player else { return }
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
-            guard completed, let self = self else { return }
-            Task { @MainActor in
-                guard requestGeneration == self.seekGeneration,
-                      self.player === player,
-                      let url = self.videoURL else { return }
-
-                // Read a single frame via AVAssetReader (video track is
-                // disabled on AVPlayer, so copyPixelBuffer won't work).
-                if let frame = await self.readSingleFrame(from: url, at: time) {
-                    self.renderer.render(pixelBuffer: frame.buffer)
-                }
-            }
-        }
-    }
-
-    /// Seeks forward or backward by the given relative offset in seconds.
-    func seekRelative(_ delta: Double) {
-        let target = max(0, min(duration, currentTime + delta))
-        seek(to: target)
-    }
-
-    func triggerSingleFrameUpdate(
-        at time: CMTime,
-        for player: AVPlayer,
-        requestGeneration: UInt64
-    ) async {
-        guard let url = videoURL else { return }
-        // Small delay to let the seek settle
-        try? await Task.sleep(nanoseconds: 10_000_000)
-        guard requestGeneration == seekGeneration, self.player === player else { return }
-        if let frame = await readSingleFrame(from: url, at: time) {
-            self.renderer.render(pixelBuffer: frame.buffer)
-        }
-    }
-
-    /// Decodes a single frame away from the main actor so seeking remains responsive.
-    func readSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
-        await Task.detached(priority: .userInitiated) {
-            await Self.decodeSingleFrame(from: url, at: time)
-        }.value
-    }
-
-    nonisolated static func decodeSingleFrame(from url: URL, at time: CMTime) async -> VTFrame? {
-        let asset = AVURLAsset(url: url)
-        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
-        guard let reader = try? AVAssetReader(asset: asset) else { return nil }
-        reader.timeRange = CMTimeRange(start: time, duration: CMTime(value: 1, timescale: 30))
-        let settings: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        ]
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
-        output.alwaysCopiesSampleData = false
-        guard reader.canAdd(output) else { return nil }
-        reader.add(output)
-        guard reader.startReading() else { return nil }
-        guard let sample = output.copyNextSampleBuffer() else { return nil }
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sample) else { return nil }
-        return VTFrame(
-            buffer: pixelBuffer,
-            presentationTimeStamp: CMSampleBufferGetPresentationTimeStamp(sample)
-        )
     }
     
     /// Whether the pipeline needs to be rebuilt on the next resume.

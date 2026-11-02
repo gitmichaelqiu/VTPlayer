@@ -111,6 +111,10 @@ struct VTPlayerView: View {
     @State var showSettingsSheet = false
     @State var showDiagnosticsSheet = false
     @State var showClearAllAlert = false
+    #if os(macOS)
+    @State var showPlaybackIssueAlert = false
+    @State private var lastPointerLocation: CGPoint?
+    #endif
     @State var showDenoisePopover = false
     @State var showMotionBlurPopover = false
     @State var showSuperResolutionPopover = false
@@ -171,16 +175,8 @@ struct VTPlayerView: View {
             iphoneLayout
             #else
             splitViewLayout
-                .disabled(viewModel.isPreparingEnhancedCache)
             #endif
         }
-        #if os(macOS)
-        .overlay {
-            if viewModel.isPreparingEnhancedCache {
-                enhancedCachePreparationOverlay
-            }
-        }
-        #endif
         .alert("Rename Video", isPresented: $showRenameAlert) {
             TextField("New Name", text: $renameText)
             Button("Cancel", role: .cancel) { }
@@ -202,6 +198,33 @@ struct VTPlayerView: View {
         } message: {
             Text("This will clear your recent playback history. Your video files will remain safe.")
         }
+        .alert(viewModel.playbackIssueAlertTitle, isPresented: $showPlaybackIssueAlert) {
+            if viewModel.playbackIssue?.stage == .qualitySRPreparation {
+                Button("Change Upscale Settings") {
+                    viewModel.clearPlaybackIssue()
+                    showSuperResolutionPopover = true
+                }
+                Button("Watch Original Video", role: .cancel) {
+                    viewModel.continueNativePlayback()
+                }
+            } else if viewModel.playbackIssue?.stage == .pipeline || viewModel.playbackIssue?.stage == .preparation {
+                Button("Try Enhanced Again") {
+                    viewModel.retryEnhancedPlayback()
+                }
+                Button("Watch Original Video", role: .cancel) {
+                    viewModel.continueNativePlayback()
+                }
+            } else {
+                Button("OK", role: .cancel) {
+                    viewModel.clearPlaybackIssue()
+                }
+            }
+        } message: {
+            Text(viewModel.playbackIssue?.message ?? "Playback could not continue.")
+        }
+        .onChange(of: viewModel.playbackIssue) { _, issue in
+            showPlaybackIssueAlert = issue != nil
+        }
         #endif
         .fileImporter(
             isPresented: $showFileImporter,
@@ -213,7 +236,14 @@ struct VTPlayerView: View {
                 guard let url = urls.first else { return }
                 viewModel.openVideo(url)
             case .failure(let error):
+                #if os(macOS)
+                viewModel.reportPlaybackIssue(
+                    stage: .loading,
+                    message: "The video could not be selected: \(error.localizedDescription)"
+                )
+                #else
                 print("Failed to import file: \(error.localizedDescription)")
+                #endif
             }
         }
         #if canImport(PhotosUI)
@@ -279,6 +309,7 @@ struct VTPlayerView: View {
         }
     }
 
+    #if os(macOS)
     @ViewBuilder
     var splitViewLayout: some View {
         if !viewModel.isFullScreen {
@@ -303,12 +334,10 @@ struct VTPlayerView: View {
                             Button(action: { showFileImporter = true }) {
                                 Label("Open Video", systemImage: "plus")
                             }
-                            .help("Open a local video file")
                             
                             Button(action: { viewModel.showSidebar.toggle() }) {
                                 Label("Toggle Sidebar", systemImage: "sidebar.right")
                             }
-                            .help("Toggle diagnostics and metadata sidebar panel")
                         }
                     }
             }
@@ -327,17 +356,17 @@ struct VTPlayerView: View {
                         Button(action: { showFileImporter = true }) {
                             Label("Open Video", systemImage: "plus")
                         }
-                        .help("Open a local video file")
                         
                         Button(action: { viewModel.showSidebar.toggle() }) {
                             Label("Toggle Sidebar", systemImage: "sidebar.right")
                         }
-                        .help("Toggle diagnostics and metadata sidebar panel")
                     }
                 }
                 .macWindowToolbarFullScreenVisibility()
         }
     }
+
+    #endif
 
     #if os(iOS)
     @ViewBuilder
@@ -348,6 +377,7 @@ struct VTPlayerView: View {
 
 
 
+    #if os(macOS)
     @ViewBuilder
     var videoContent: some View {
         ZStack {
@@ -356,7 +386,19 @@ struct VTPlayerView: View {
                 .ignoresSafeArea()
 
             mainVideoArea
+                #if os(macOS)
+                .overlay(alignment: .topTrailing) {
+                    if viewModel.isPreparingEnhancedCache {
+                        enhancedCachePreparationIndicator
+                            .opacity(viewModel.showControls ? 1 : 0)
+                            .allowsHitTesting(viewModel.showControls)
+                            .accessibilityHidden(!viewModel.showControls)
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
+                    }
+                }
+                #endif
 
+            #if os(macOS)
             // QuickTime-style Floating Control Bar at the bottom
             if viewModel.videoURL != nil {
                 VStack {
@@ -364,6 +406,8 @@ struct VTPlayerView: View {
                     controlBar
                 }
             }
+
+            #endif
 
             // Hidden keyboard shortcuts for seeking
             Button("") { viewModel.seekRelative(-5) }
@@ -420,12 +464,30 @@ struct VTPlayerView: View {
             }
             #endif
         }
+#if os(macOS)
+        .overlay(alignment: .top) {
+            playbackFallbackNotice
+                .padding(.top, 14)
+                .padding(.horizontal, 18)
+                .animation(.snappy(duration: 0.22), value: viewModel.playbackNotice)
+                .zIndex(2)
+        }
+#endif
         .onContinuousHover { phase in
             switch phase {
             case .active(_):
                 viewModel.isHoveringVideo = true
+                #if os(macOS)
+                let location = NSEvent.mouseLocation
+                guard location != lastPointerLocation else { return }
+                lastPointerLocation = location
+                #endif
                 viewModel.userActivityDetected()
             case .ended:
+                #if os(macOS)
+                if !viewModel.showControls, NSEvent.mouseLocation == lastPointerLocation { return }
+                lastPointerLocation = NSEvent.mouseLocation
+                #endif
                 viewModel.isHoveringVideo = false
                 #if os(macOS)
                 if viewModel.cursorHidden {
@@ -435,7 +497,16 @@ struct VTPlayerView: View {
                 #endif
             }
         }
+        #if os(macOS)
+        .onChange(of: viewModel.enhancedCachePreparationState) { oldState, newState in
+            guard case .preparing = newState else { return }
+            if case .preparing = oldState { return }
+            viewModel.userActivityDetected()
+        }
+        #endif
     }
+
+    #endif
 
     func formatTime(_ seconds: Double) -> String {
         guard !seconds.isNaN && !seconds.isInfinite else { return "00:00" }

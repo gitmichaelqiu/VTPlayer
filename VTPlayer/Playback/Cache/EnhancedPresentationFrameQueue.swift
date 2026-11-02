@@ -20,17 +20,25 @@ nonisolated struct EnhancedPresentationFrameSelection: Sendable {
     let droppedInterpolatedFrames: Int
 }
 
+nonisolated enum EnhancedPresentationEnqueueResult: Sendable, Equatable {
+    case enqueued
+    case capacityExceeded
+    case rejected
+}
+
 nonisolated private struct EnhancedPresentationFrameQueueState: Sendable {
     var frames: [VTFrame] = []
     var startIndex = 0
     var queuedByteUsage = 0
     var generation: UInt64
+    var epoch: UInt64 = 0
     var enqueuedFrames = 0
     var cacheHitGroups = 0
     var intentionallySampledOutFrames = 0
     var dequeueAttempts = 0
     var starvationCount = 0
     var lateInterpolatedDrops = 0
+    var didNotifyPreroll = false
 }
 
 nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
@@ -50,46 +58,97 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
             state.startIndex = 0
             state.queuedByteUsage = 0
             state.generation = generation
+            state.epoch &+= 1
             state.enqueuedFrames = 0
             state.cacheHitGroups = 0
             state.intentionallySampledOutFrames = 0
             state.dequeueAttempts = 0
             state.starvationCount = 0
             state.lateInterpolatedDrops = 0
+            state.didNotifyPreroll = false
+        }
+    }
+
+    func claimPrerollNotification(generation: UInt64, minimumFrameCount: Int) -> Bool {
+        state.withLock { state in
+            guard state.generation == generation,
+                  !state.didNotifyPreroll,
+                  state.frames.count - state.startIndex >= max(1, minimumFrameCount) else {
+                return false
+            }
+            state.didNotifyPreroll = true
+            return true
         }
     }
 
     func enqueue(contentsOf frames: [VTFrame], generation: UInt64) -> Bool {
+        enqueueResult(contentsOf: frames, generation: generation) == .enqueued
+    }
+
+    func currentEpoch() -> UInt64 {
+        state.withLock { $0.epoch }
+    }
+
+    func enqueue(_ frame: VTFrame, generation: UInt64, epoch: UInt64? = nil) -> EnhancedPresentationEnqueueResult {
         state.withLock { state in
-            guard state.generation == generation else { return false }
+            guard state.generation == generation,
+                  epoch == nil || state.epoch == epoch else { return .rejected }
+            let byteCount = CVPixelBufferGetDataSize(frame.buffer)
+            guard byteCount <= capacityBytes else { return .rejected }
+            guard state.queuedByteUsage <= capacityBytes - byteCount,
+                  state.frames.count - state.startIndex < capacityFrames else {
+                return .capacityExceeded
+            }
+            if let previous = state.frames.last,
+               CMTimeCompare(previous.presentationTimeStamp, frame.presentationTimeStamp) >= 0 {
+                return .rejected
+            }
+            state.frames.append(frame)
+            state.queuedByteUsage += byteCount
+            state.enqueuedFrames += 1
+            return .enqueued
+        }
+    }
+
+    func enqueueResult(
+        contentsOf frames: [VTFrame],
+        generation: UInt64
+    ) -> EnhancedPresentationEnqueueResult {
+        state.withLock { state in
+            guard state.generation == generation, !frames.isEmpty else { return .rejected }
             let byteCount = frames.reduce(into: 0) { total, frame in
                 total += CVPixelBufferGetDataSize(frame.buffer)
             }
-            guard !frames.isEmpty,
-                  byteCount <= capacityBytes,
+            guard byteCount <= capacityBytes,
+                  frames.count <= capacityFrames else { return .rejected }
+            guard
                   state.queuedByteUsage <= capacityBytes - byteCount,
                   state.frames.count - state.startIndex <= capacityFrames - frames.count else {
-                return false
+                return .capacityExceeded
             }
             var previousPTS = state.frames.last?.presentationTimeStamp
             for frame in frames {
                 if let previousPTS,
                    CMTimeCompare(previousPTS, frame.presentationTimeStamp) >= 0 {
-                    return false
+                    return .rejected
                 }
                 previousPTS = frame.presentationTimeStamp
             }
             state.frames.append(contentsOf: frames)
             state.queuedByteUsage += byteCount
             state.enqueuedFrames += frames.count
-            return true
+            return .enqueued
         }
     }
 
     func recordCacheHitGroup(generation: UInt64, sampledOutFrames: Int = 0) {
+        recordCacheHitGroups(1, generation: generation, sampledOutFrames: sampledOutFrames)
+    }
+
+    func recordCacheHitGroups(_ count: Int, generation: UInt64, sampledOutFrames: Int = 0) {
         state.withLock { state in
             guard state.generation == generation else { return }
-            state.cacheHitGroups += 1
+            state.cacheHitGroups += max(0, count)
             state.intentionallySampledOutFrames += max(0, sampledOutFrames)
         }
     }
@@ -194,24 +253,35 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
 nonisolated final class EnhancedPresentationReaderControl: @unchecked Sendable {
     nonisolated struct Request: Sendable {
         var generation: UInt64
-        var seconds: Double
+        var presentationTime: CMTime
     }
 
     private let state: Mutex<Request>
 
     init(startTime: CMTime, generation: UInt64) {
-        self.state = Mutex(Request(generation: generation, seconds: CMTimeGetSeconds(startTime)))
+        self.state = Mutex(Request(
+            generation: generation,
+            presentationTime: Self.normalizedPresentationTime(startTime)
+        ))
     }
 
     func requestSeek(to time: CMTime) {
-        let seconds = CMTimeGetSeconds(time)
+        let presentationTime = Self.normalizedPresentationTime(time)
         state.withLock { request in
             request.generation &+= 1
-            request.seconds = seconds.isFinite ? max(0, seconds) : 0
+            request.presentationTime = presentationTime
         }
     }
 
     func request() -> Request {
         state.withLock { $0 }
+    }
+
+    private static func normalizedPresentationTime(_ time: CMTime) -> CMTime {
+        let seconds = CMTimeGetSeconds(time)
+        guard time.isValid, seconds.isFinite, CMTimeCompare(time, .zero) >= 0 else {
+            return .zero
+        }
+        return time
     }
 }

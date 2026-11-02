@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import AVKit
 import AVFoundation
@@ -61,8 +62,10 @@ extension VTPlayerView {
 
                 Slider(value: $scrubTime, in: 0...viewModel.duration, onEditingChanged: { editing in
                     isScrubbing = editing
-                    if !editing {
-                        viewModel.seek(to: scrubTime)
+                    if editing {
+                        viewModel.beginScrub()
+                    } else {
+                        viewModel.finishScrub(to: scrubTime)
                     }
                 })
                 .labelsHidden()
@@ -82,16 +85,19 @@ extension VTPlayerView {
             }
             .padding(.horizontal, 12)
 
-            // Bottom control actions
-            // Keep every enhancement control available at narrow widths.
-            // The bar scrolls horizontally instead of silently removing the
-            // controls that are useful while tuning playback.
-            GeometryReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                // Play/Pause button
+            HStack(spacing: 10) {
                 playPauseButton
-
+                Toggle(isOn: Binding(
+                    get: { viewModel.processingEnhancementsEnabled },
+                    set: { viewModel.setProcessingEnhancementsEnabled($0) }
+                )) {
+                    Image(systemName: "sparkles")
+                }
+                .toggleStyle(.button)
+                .accessibilityLabel("Enhancements")
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 8) {
+                Group {
                 // Super Resolution Popover
                 Button {
                     showSuperResolutionPopover.toggle()
@@ -102,14 +108,13 @@ extension VTPlayerView {
                     let isActive = scale > 0
                     enhancementControlLabel(
                         isActive
-                            ? String(format: String(localized: isQL ? "Quality player scale %@" : "Low Latency player scale %@"), "\(scaleLabel)x")
+                            ? String(format: String(localized: isQL ? "Quality %@" : "Low Latency %@"), "\(scaleLabel)x")
                             : "\(String(localized: "Super Res")): \(String(localized: "Off"))",
                         isActive: isActive
                     )
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Super Resolution — increases spatial resolution using neural upscaling")
                 .popover(isPresented: $showSuperResolutionPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Super Resolution")
@@ -143,6 +148,7 @@ extension VTPlayerView {
                             }
                         }
                         .pickerStyle(.inline)
+                        .accessibilityLabel("Super Resolution")
                     }
                     .padding(12)
 
@@ -159,7 +165,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Frame Interpolation — increases video frame rate for fluid movement")
                 .popover(isPresented: $showFrameInterpolationPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Frame Interpolation")
@@ -175,6 +180,7 @@ extension VTPlayerView {
                             }
                         }
                         .pickerStyle(.inline)
+                        .accessibilityLabel("Frame Interpolation")
                     }
                     .padding(12)
                 }
@@ -191,7 +197,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Motion Blur — simulates natural motion blur on upscaled/interpolated frames")
                 .popover(isPresented: $showMotionBlurPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Motion Blur: \(viewModel.motionBlurStrength > 0 ? "\(viewModel.motionBlurStrength)" : String(localized: "Off"))")
@@ -203,15 +208,11 @@ extension VTPlayerView {
                                 get: { Double(viewModel.motionBlurStrength) },
                                 set: { newValue in
                                     withAnimation(.snappy(duration: 0.18)) { viewModel.motionBlurStrength = Int(newValue) }
+                                    viewModel.updateEnhancements()
                                 }
                             ),
                             in: 0...100,
-                            step: 5,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    viewModel.updateEnhancements()
-                                }
-                            }
+                            step: 5
                         )
                     }
                     .padding(16)
@@ -230,7 +231,6 @@ extension VTPlayerView {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("Denoise — filters compression noise and high-frequency grain")
                 .popover(isPresented: $showDenoisePopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Denoise: \(viewModel.denoiseStrength > 0 ? String(format: "%.2f", viewModel.denoiseStrength) : String(localized: "Off"))")
@@ -242,20 +242,20 @@ extension VTPlayerView {
                                 get: { viewModel.denoiseStrength },
                                 set: { newValue in
                                     withAnimation(.snappy(duration: 0.18)) { viewModel.denoiseStrength = newValue }
+                                    viewModel.updateEnhancements()
                                 }
                             ),
                             in: 0...1,
-                            step: 0.05,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    viewModel.updateEnhancements()
-                                }
-                            }
+                            step: 0.05
                         )
                     }
                     .padding(16)
                     .frame(width: 220)
                 }
+
+                }
+                .disabled(!viewModel.processingEnhancementsEnabled)
+                .opacity(viewModel.processingEnhancementsEnabled ? 1 : 0.5)
 
                 // Image Adjustments Popover Button
                 Button(action: { viewModel.showAdjustmentsPopover.toggle() }) {
@@ -283,7 +283,10 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.sharpness)
                             Slider(value: Binding(
                                 get: { viewModel.sharpness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue } }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) { viewModel.sharpness = newValue }
+                                    viewModel.updateRendererEnhancements()
+                                }
                             ), in: 0...2, step: 0.05)
                         }
 
@@ -294,7 +297,10 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrStrength)
                             Slider(value: Binding(
                                 get: { viewModel.hdrStrength },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue } }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) { viewModel.hdrStrength = newValue }
+                                    viewModel.updateRendererEnhancements()
+                                }
                             ), in: 0...2, step: 0.05)
                         }
 
@@ -305,7 +311,10 @@ extension VTPlayerView {
                                 .animation(.snappy(duration: 0.18), value: viewModel.hdrColorfulness)
                             Slider(value: Binding(
                                 get: { viewModel.hdrColorfulness },
-                                set: { newValue in withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue } }
+                                set: { newValue in
+                                    withAnimation(.snappy(duration: 0.18)) { viewModel.hdrColorfulness = newValue }
+                                    viewModel.updateRendererEnhancements()
+                                }
                             ), in: 0...1, step: 0.05)
                                 .disabled(viewModel.hdrStrength <= 0)
                         }
@@ -314,19 +323,14 @@ extension VTPlayerView {
                     .frame(width: 220)
                 }
 
-                Spacer()
-
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 volumeControl
-
                 playbackSpeedControl
-
                 Divider()
                     .frame(height: 16)
-
-                        fullscreenButton
-                    }
-                    .frame(minWidth: proxy.size.width, alignment: .leading)
-                }
+                fullscreenButton
             }
             .frame(height: 30)
         }
@@ -337,6 +341,7 @@ extension VTPlayerView {
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
         .opacity(viewModel.showControls ? 1.0 : 0.0)
+        .allowsHitTesting(viewModel.showControls)
         .offset(y: viewModel.showControls ? 0 : 50)
         .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
         .onChange(of: showSuperResolutionPopover) { _, _ in syncConfigurationPopoverVisibility() }
@@ -362,3 +367,5 @@ extension VTPlayerView {
     }
 
 }
+
+#endif

@@ -42,35 +42,34 @@ struct EnhancementsSettingsTab: View {
 
                     SliderSettingsRow(
                         "Enhanced frame disk cache",
-                        helperText: "Maximum persistent storage for lossless enhanced frames.",
+                        helperText: "Maximum space cached enhanced frames.",
                         value: Binding(
                             get: { Double(min(max(enhancedFrameCacheDiskGB, 2), 200)) },
                             set: { enhancedFrameCacheDiskGB = Int($0.rounded()) }
                         ),
-                        range: 2.0...200.0,
-                        defaultValue: 20.0,
-                        step: 1.0,
+                        range: 5.0...200.0,
+                        defaultValue: 15.0,
+                        step: 5.0,
                         valueString: { String(format: "%.0f GB", $0) }
                     )
 
-                    HStack {
-                        Label("Current disk usage", systemImage: "internaldrive")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: diskCacheUsageBytes, countStyle: .file))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
+                    Divider()
 
-                    HStack {
-                        Button("Clear Disk Cache", role: .destructive) {
-                            showClearDiskCacheConfirmation = true
-                        }
-                        .disabled(isClearingDiskCache || diskCacheUsageBytes == 0)
+                    SettingsRow("Current disk usage") {
+                        HStack(spacing: 10) {
+                            Text(ByteCountFormatter.string(fromByteCount: diskCacheUsageBytes, countStyle: .file))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
 
-                        if isClearingDiskCache {
-                            ProgressView()
-                                .controlSize(.small)
+                            if isClearingDiskCache {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+
+                            Button("Clear Disk Cache", role: .destructive) {
+                                showClearDiskCacheConfirmation = true
+                            }
+                            .disabled(isClearingDiskCache || diskCacheUsageBytes == 0)
                         }
                     }
 
@@ -78,13 +77,15 @@ struct EnhancementsSettingsTab: View {
                         Text(diskCacheError)
                             .font(.caption)
                             .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.bottom, 8)
                     }
                 }
 
                 SettingsSection("Postprocessing") {
                     SliderSettingsRow(
                         "Motion Blur",
-                        helperText: "Apply motion blur.",
                         value: Binding(
                             get: { Double(defaultMBLevel) },
                             set: { defaultMBLevel = Int($0) }
@@ -99,7 +100,6 @@ struct EnhancementsSettingsTab: View {
 
                     SliderSettingsRow(
                         "Denoise",
-                        helperText: "Reduce video noise.",
                         value: $defaultDNLevel,
                         range: 0.0...1.0,
                         defaultValue: 0.0,
@@ -122,7 +122,6 @@ struct EnhancementsSettingsTab: View {
 
                         SliderSettingsRow(
                             "HDR Boost",
-                            helperText: "Expand luminance for HDR displays.",
                             value: $defaultHDRBoost,
                             range: 0.0...2.0,
                             defaultValue: 0.0,
@@ -135,7 +134,6 @@ struct EnhancementsSettingsTab: View {
 
                             SliderSettingsRow(
                                 "HDR Colorfulness",
-                                helperText: "Adjust HDR color intensity.",
                                 value: $defaultHDRColorfulness,
                                 range: 0.0...1.0,
                                 defaultValue: 0.0,

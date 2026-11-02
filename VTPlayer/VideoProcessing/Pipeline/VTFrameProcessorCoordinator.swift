@@ -56,10 +56,12 @@ public actor VTFrameProcessorCoordinator {
             return false
         }
         if #available(macOS 27.0, iOS 27.0, tvOS 27.0, visionOS 27.0, *) {
-            let maximumDimension = VTLowLatencyFrameInterpolationConfiguration
-                .maximumDimension(forSpatialScaleFactor: 1)
-            let maximumPixelCount = VTLowLatencyFrameInterpolationConfiguration
-                .maximumPixelCount(forSpatialScaleFactor: 1)
+            guard let maximumDimension = VTLowLatencyFrameInterpolationConfiguration
+                    .maximumDimension(forSpatialScaleFactor: 1),
+                  let maximumPixelCount = VTLowLatencyFrameInterpolationConfiguration
+                    .maximumPixelCount(forSpatialScaleFactor: 1) else {
+                return false
+            }
             return maximumDimension > 0 && maximumPixelCount > 0 &&
                 width <= maximumDimension && height <= maximumDimension &&
                 Int64(width) * Int64(height) <= Int64(maximumPixelCount)
@@ -190,6 +192,15 @@ public actor VTFrameProcessorCoordinator {
     // as many pixels and cannot sustain the generated-frame cadence.
     var temporalFirstForSRInterpolation = false
 
+    #if DEBUG && os(macOS)
+    var spatialFirstForDiagnostics = false
+
+    func selectSpatialFirstForDiagnostics() {
+        precondition(!isSessionActive)
+        spatialFirstForDiagnostics = true
+    }
+    #endif
+
     // Bicubic upscale for interpolated frames in temporal-first mode.
     // LL SR is trained on real video and produces softer output on
     // synthetically interpolated frames.
@@ -221,6 +232,10 @@ public actor VTFrameProcessorCoordinator {
         self.motionBlurStrength = motionBlurStrength
         self.denoiseStrength = denoiseStrength
         self.qualityPrioritization = qualityPrioritization
+        #if DEBUG && os(macOS)
+        self.spatialFirstForDiagnostics = superResolutionLevel == 2 && frameInterpolationLevel == 2 &&
+            ProcessInfo.processInfo.environment["VTPLAYER_SRFI_SPATIAL_FIRST"] == "1"
+        #endif
     }
 
 }
@@ -286,7 +301,10 @@ public actor VTFrameProcessorCoordinator {
 
     public func startSession(width: Int, height: Int) async throws {}
 
-    public func processFrame(_ frame: VTFrame) async throws -> [VTFrame] {
+    public func processFrame(
+        _ frame: VTFrame,
+        onOutput: (@Sendable (VTFrame) async -> Bool)? = nil
+    ) async throws -> [VTFrame] {
         return [frame]
     }
 

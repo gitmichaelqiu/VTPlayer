@@ -4,6 +4,43 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedFrameDiskCacheTests: XCTestCase {
+    func testSourceFingerprintDistinguishesCanonicalPathsAndMiddleContentChanges() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let firstFolder = directory.appendingPathComponent("first", isDirectory: true)
+        let secondFolder = directory.appendingPathComponent("second", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondFolder, withIntermediateDirectories: true)
+        let firstURL = firstFolder.appendingPathComponent("same-name.mp4")
+        let secondURL = secondFolder.appendingPathComponent("same-name.mp4")
+        let content = Data(repeating: 0, count: 10 * 1_024 * 1_024)
+        try content.write(to: firstURL)
+        try content.write(to: secondURL)
+        let fixedModificationDate = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes(
+            [.modificationDate: fixedModificationDate],
+            ofItemAtPath: firstURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: fixedModificationDate],
+            ofItemAtPath: secondURL.path
+        )
+
+        let firstFingerprint = try EnhancedFrameDiskCache.sourceFingerprint(for: firstURL)
+        XCTAssertNotEqual(firstFingerprint, try EnhancedFrameDiskCache.sourceFingerprint(for: secondURL))
+
+        let handle = try FileHandle(forWritingTo: firstURL)
+        try handle.seek(toOffset: 5 * 1_024 * 1_024)
+        try handle.write(contentsOf: Data([0x7F]))
+        try handle.close()
+        try FileManager.default.setAttributes(
+            [.modificationDate: fixedModificationDate],
+            ofItemAtPath: firstURL.path
+        )
+
+        XCTAssertNotEqual(firstFingerprint, try EnhancedFrameDiskCache.sourceFingerprint(for: firstURL))
+    }
+
     func testStatusRequiresEveryGroupInAnExpandedCoveragePlan() {
         let status = EnhancedFrameCacheStatus(
             key: EnhancedFrameCacheKey(
@@ -21,12 +58,33 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertFalse(status.satisfies(coverage: [false, true]))
     }
 
+    func testFullCacheReuseRequiresCompleteTimeline() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("full-timeline")
+        _ = try await cache.prepare(key: key, coverageBitmap: [true, true], diskBudgetBytes: 1_000_000, requiredAdditionalBytes: 0)
+        for index in 0..<2 {
+            let frame = try makeFrame(value: 42, time: CMTime(seconds: Double(index) * 9.5, preferredTimescale: 600), interpolated: false)
+            try await cache.writeGroup([frame], for: index, sourcePresentationTime: frame.presentationTimeStamp)
+        }
+        _ = try await cache.finalizePreparation()
+        let complete = try await cache.completedFullCache(for: key, duration: 10)
+        let truncated = try await cache.completedFullCache(for: key, duration: 100)
+        XCTAssertNotNil(complete)
+        XCTAssertNil(truncated)
+    }
+
     func testRawFrameRoundTripPreservesPixelsTimingAndAttachments() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = EnhancedFrameDiskCache(rootDirectory: directory)
         let key = cacheKey("round-trip")
-        let frame = try makeFrame(value: 0x7A, time: CMTime(value: 123, timescale: 600), interpolated: true)
+        let frame = try makeFrame(
+            value: 0x7A,
+            time: CMTime(value: 123, timescale: 600, flags: .valid, epoch: 3),
+            interpolated: true
+        )
 
         _ = try await cache.prepare(
             key: key,
@@ -141,6 +199,25 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertNil(cachedStatus)
     }
 
+    func testDiskUsageRecoversCacheInterruptedDuringDirectoryReplacement() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("replacement-recovery")
+        try await completeCache(cache, key: key)
+
+        let completed = directory.appendingPathComponent(key.directoryName, isDirectory: true)
+        let replaced = directory.appendingPathComponent("\(key.directoryName).replaced", isDirectory: true)
+        try FileManager.default.moveItem(at: completed, to: replaced)
+
+        let usage = try await cache.diskUsageBytes()
+        let status = try await cache.cachedStatus(for: key)
+        XCTAssertGreaterThan(usage, 0)
+        XCTAssertNotNil(status)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: completed.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: replaced.path))
+    }
+
     func testCapacityEvictsLeastRecentlyUsedCompletedCache() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -195,6 +272,312 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
             for: key
         )
         XCTAssertEqual(nextGroup, 1)
+        let midpoint = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let midpointGroup = try await cache.groupIndex(closestTo: midpoint, for: key)
+        let beforeGroup = try await cache.groupIndex(closestTo: CMTime(seconds: -1, preferredTimescale: 600), for: key)
+        let afterGroup = try await cache.groupIndex(closestTo: CMTime(seconds: 2, preferredTimescale: 600), for: key)
+        XCTAssertEqual(midpointGroup, 0)
+        XCTAssertEqual(beforeGroup, 0)
+        XCTAssertEqual(afterGroup, 1)
+    }
+
+    func testLookupHandlesNonMonotonicSourceTimestamps() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("nonmonotonic-lookup")
+        _ = try await cache.prepare(key: key, coverageBitmap: [false, false, false],
+                                    diskBudgetBytes: 1_000_000, requiredAdditionalBytes: 0)
+        for (index, seconds) in [0.0, 2.0, 1.0].enumerated() {
+            try await cache.recordSourceGroup(index, presentationTime: CMTime(seconds: seconds, preferredTimescale: 600))
+        }
+        _ = try await cache.finalizePreparation()
+        let closest = try await cache.groupIndex(closestTo: CMTime(seconds: 1.1, preferredTimescale: 600), for: key)
+        XCTAssertEqual(closest, 2)
+    }
+
+    func testEncodedChunkRoundTripsExactTimestampsInterpolationAndColorAttachments() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = EnhancedFrameCacheKey(
+            sourceFingerprint: "encoded-chunk-round-trip",
+            configuration: .disabled,
+            cacheFormatVersion: EnhancedFrameCacheKey.currentHEVCChunkFormatVersion,
+            displayTargetFrameRate: 120
+        )
+        let preparation = UUID()
+        let firstTime = CMTime(value: 0, timescale: 60_000, flags: .valid, epoch: 2)
+        let secondTime = CMTime(value: 1_001, timescale: 120_000, flags: .valid, epoch: 2)
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true, true],
+            diskBudgetBytes: 10 * 1_024 * 1_024,
+            requiredAdditionalBytes: 1 * 1_024 * 1_024,
+            preparationIdentifier: preparation
+        )
+        try await cache.recordEncodedSourceGroup(
+            0,
+            presentationTime: firstTime,
+            chunkIndex: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.appendEncodedFrame(
+            makeFrame(value: 48, time: firstTime, interpolated: false, width: 64, height: 64),
+            groupIndex: 0,
+            chunkIndex: 0,
+            averageBitRate: 2_000_000,
+            expectedFrameRate: 120,
+            preparationIdentifier: preparation
+        )
+        try await cache.recordEncodedSourceGroup(
+            1,
+            presentationTime: CMTime(value: 1_001, timescale: 60_000, flags: .valid, epoch: 2),
+            chunkIndex: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.appendEncodedFrame(
+            makeFrame(value: 96, time: secondTime, interpolated: true, width: 64, height: 64),
+            groupIndex: 1,
+            chunkIndex: 0,
+            averageBitRate: 2_000_000,
+            expectedFrameRate: 120,
+            preparationIdentifier: preparation
+        )
+
+        let completed = try await cache.finalizePreparation(preparationIdentifier: preparation)
+        let optionalChunkIndex = try await cache.encodedChunkIndex(atOrAfter: firstTime, for: key)
+        let chunkIndex = try XCTUnwrap(optionalChunkIndex)
+        let optionalDecodedChunk = try await cache.readEncodedChunk(chunkIndex, for: key)
+        let decodedChunk = try XCTUnwrap(optionalDecodedChunk)
+
+        XCTAssertTrue(completed.satisfies(coverage: [true, true]))
+        XCTAssertEqual(decodedChunk.sourceGroupCount, 2)
+        XCTAssertEqual(decodedChunk.metadata.sourceGroupCount, 2)
+        XCTAssertEqual(decodedChunk.frames.count, 2)
+        XCTAssertEqual(CMTimeCompare(decodedChunk.frames[0].presentationTimeStamp, firstTime), 0)
+        XCTAssertEqual(CMTimeCompare(decodedChunk.frames[1].presentationTimeStamp, secondTime), 0)
+        XCTAssertTrue(decodedChunk.frames[1].isInterpolated)
+        XCTAssertEqual(decodedChunk.metadata.codec, "HEVC")
+        XCTAssertTrue(decodedChunk.metadata.profile.contains("AutoLevel"))
+        XCTAssertTrue(decodedChunk.metadata.closedGOP)
+        XCTAssertTrue(decodedChunk.metadata.startsWithSyncSample)
+        XCTAssertFalse(decodedChunk.metadata.allowsFrameReordering)
+        XCTAssertEqual(decodedChunk.metadata.maximumKeyFrameInterval, 600)
+        XCTAssertEqual(decodedChunk.metadata.attachmentTable.count, 1)
+        XCTAssertNotNil(CVBufferCopyAttachment(
+            decodedChunk.frames[0].buffer,
+            kCVImageBufferColorPrimariesKey,
+            nil
+        ))
+
+        let streamProbe = EncodedChunkStreamProbe()
+        let streamedGroupCount = try await cache.readEncodedChunkStreaming(
+            chunkIndex,
+            for: key
+        ) { frame in
+            await streamProbe.append(frame)
+        }
+        let streamedFrames = await streamProbe.frames
+        XCTAssertEqual(streamedGroupCount, 2)
+        XCTAssertEqual(streamedFrames.map(\.presentationTimeStamp), decodedChunk.frames.map(\.presentationTimeStamp))
+        XCTAssertEqual(streamedFrames.map(\.isInterpolated), decodedChunk.frames.map(\.isInterpolated))
+    }
+
+    func testEncodedMain10ChunkRetainsHDRColorMetadataAndBitDepth() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = EnhancedFrameCacheKey(
+            sourceFingerprint: "main10-round-trip",
+            configuration: .disabled,
+            cacheFormatVersion: EnhancedFrameCacheKey.currentHEVCChunkFormatVersion,
+            displayTargetFrameRate: 30
+        )
+        let preparation = UUID()
+        let firstTime = CMTime(value: 0, timescale: 30)
+        let secondTime = CMTime(value: 1, timescale: 30)
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true, true],
+            diskBudgetBytes: 10 * 1_024 * 1_024,
+            requiredAdditionalBytes: 1 * 1_024 * 1_024,
+            preparationIdentifier: preparation
+        )
+        try await cache.recordEncodedSourceGroup(
+            0,
+            presentationTime: firstTime,
+            chunkIndex: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.appendEncodedFrame(
+            makeMain10Frame(time: firstTime),
+            groupIndex: 0,
+            chunkIndex: 0,
+            averageBitRate: 2_000_000,
+            expectedFrameRate: 30,
+            preparationIdentifier: preparation
+        )
+        try await cache.recordEncodedSourceGroup(
+            1,
+            presentationTime: secondTime,
+            chunkIndex: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.appendEncodedFrame(
+            makeMain10Frame(time: secondTime),
+            groupIndex: 1,
+            chunkIndex: 0,
+            averageBitRate: 2_000_000,
+            expectedFrameRate: 30,
+            preparationIdentifier: preparation
+        )
+
+        _ = try await cache.finalizePreparation(preparationIdentifier: preparation)
+        let optionalChunk = try await cache.readEncodedChunk(0, for: key)
+        let chunk = try XCTUnwrap(optionalChunk)
+        XCTAssertEqual(chunk.frames.count, 2)
+        XCTAssertEqual(
+            CVPixelBufferGetPixelFormatType(chunk.frames[0].buffer),
+            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+        )
+        XCTAssertEqual(
+            CVBufferCopyAttachment(chunk.frames[0].buffer, kCVImageBufferTransferFunctionKey, nil) as? String,
+            kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ as String
+        )
+        XCTAssertEqual(
+            CVBufferCopyAttachment(chunk.frames[0].buffer, kCVImageBufferColorPrimariesKey, nil) as? String,
+            kCVImageBufferColorPrimaries_ITU_R_2020 as String
+        )
+    }
+
+    func testEncodedChunksDecodeInOrderAcrossSeekBoundary() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        var key = cacheKey("long-gop-boundary")
+        key.cacheFormatVersion = EnhancedFrameCacheKey.currentHEVCChunkFormatVersion
+        let preparation = UUID()
+        let frameCount = 180
+        _ = try await cache.prepare(key: key, coverageBitmap: Array(repeating: true, count: frameCount),
+                                    diskBudgetBytes: 20 * 1_024 * 1_024, requiredAdditionalBytes: 0,
+                                    preparationIdentifier: preparation)
+        for index in 0..<frameCount {
+            let time = CMTime(value: Int64(index), timescale: 30)
+            let chunkIndex = EnhancedFrameCacheSizing.chunkIndex(for: time)
+            try await cache.recordEncodedSourceGroup(index, presentationTime: time, chunkIndex: chunkIndex,
+                                                     preparationIdentifier: preparation)
+            let frame = try makeFrame(value: UInt8(index % 255), time: time,
+                                      interpolated: index % 2 == 1, width: 64, height: 64)
+            try await cache.appendEncodedFrame(frame, groupIndex: index, chunkIndex: chunkIndex,
+                                               averageBitRate: 2_000_000, expectedFrameRate: 30,
+                                               preparationIdentifier: preparation)
+        }
+        _ = try await cache.finalizePreparation(preparationIdentifier: preparation)
+        let firstChunk = try await cache.readEncodedChunk(0, for: key)
+        let secondChunk = try await cache.readEncodedChunk(1, for: key)
+        let first = try XCTUnwrap(firstChunk)
+        let second = try XCTUnwrap(secondChunk)
+        XCTAssertTrue(first.metadata.startsWithSyncSample)
+        XCTAssertTrue(second.metadata.startsWithSyncSample)
+        XCTAssertEqual(first.metadata.maximumKeyFrameInterval, 150)
+        let decoded = first.frames + second.frames
+        XCTAssertEqual(decoded.count, frameCount)
+        for (index, frame) in decoded.enumerated() {
+            XCTAssertEqual(CMTimeCompare(frame.presentationTimeStamp, CMTime(value: Int64(index), timescale: 30)), 0)
+            XCTAssertEqual(frame.isInterpolated, index % 2 == 1)
+        }
+        for (seconds, expectedChunk) in [(4.9, 0), (4.99, 1), (5.0, 1), (5.01, 1), (5.9, 1)] {
+            let seek = CMTime(seconds: seconds, preferredTimescale: 600)
+            let chunk = try await cache.encodedChunkIndex(atOrAfter: seek, for: key)
+            XCTAssertEqual(chunk, expectedChunk)
+            let frames = expectedChunk == 0 ? first.frames : second.frames
+            XCTAssertNotNil(frames.first { CMTimeCompare($0.presentationTimeStamp, seek) >= 0 })
+        }
+    }
+
+    func testEncodedChunkMeetsMinimumQualityAgainstEnhancedInput() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = EnhancedFrameCacheKey(
+            sourceFingerprint: "quality-round-trip",
+            configuration: .disabled,
+            cacheFormatVersion: EnhancedFrameCacheKey.currentHEVCChunkFormatVersion,
+            displayTargetFrameRate: 30
+        )
+        let preparation = UUID()
+        let originalFrames = try [
+            makeQualityFrame(time: .zero, shift: 0),
+            makeQualityFrame(time: CMTime(value: 1, timescale: 120), shift: 3)
+        ]
+        let qualityBitRate = EnhancedFrameCacheSizing.targetBitRate(
+            width: 1_280,
+            height: 720,
+            frameRate: 120
+        )
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true, true],
+            diskBudgetBytes: 20 * 1_024 * 1_024,
+            requiredAdditionalBytes: 1 * 1_024 * 1_024,
+            preparationIdentifier: preparation
+        )
+        for (groupIndex, frame) in originalFrames.enumerated() {
+            try await cache.recordEncodedSourceGroup(
+                groupIndex,
+                presentationTime: frame.presentationTimeStamp,
+                chunkIndex: 0,
+                preparationIdentifier: preparation
+            )
+            try await cache.appendEncodedFrame(
+                frame,
+                groupIndex: groupIndex,
+                chunkIndex: 0,
+                averageBitRate: qualityBitRate,
+                expectedFrameRate: 120,
+                preparationIdentifier: preparation
+            )
+        }
+        _ = try await cache.finalizePreparation(preparationIdentifier: preparation)
+        let optionalDecodedChunk = try await cache.readEncodedChunk(0, for: key)
+        let decodedChunk = try XCTUnwrap(optionalDecodedChunk)
+
+        XCTAssertEqual(decodedChunk.frames.count, originalFrames.count)
+        for (original, decoded) in zip(originalFrames, decodedChunk.frames) {
+            XCTAssertGreaterThan(imagePSNR(original.buffer, decoded.buffer), 32)
+        }
+    }
+
+    func testCancelledPreparationCannotBeFinalized() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("cancelled-preparation")
+        let preparation = UUID()
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true],
+            diskBudgetBytes: 1_000_000,
+            requiredAdditionalBytes: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.writeGroup(
+            [try makeFrame(value: 1, time: .zero, interpolated: false)],
+            for: 0,
+            preparationIdentifier: preparation
+        )
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await cache.finalizePreparation(preparationIdentifier: preparation)
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled preparation must not be promoted")
+        } catch is CancellationError { }
+        let status = try await cache.cachedStatus(for: key)
+        XCTAssertNil(status)
+        try await cache.discardPreparation(preparationIdentifier: preparation)
     }
 
     func testStalePreparationCannotWriteOrDiscardNewPreparation() async throws {
@@ -236,6 +619,83 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
             preparationIdentifier: secondPreparation
         )
         _ = try await cache.finalizePreparation(preparationIdentifier: secondPreparation)
+    }
+
+    func testInvalidatedEncodedCacheCannotBeReusedAndWaitsForPlaybackPin() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = cacheKey("invalidate-cache")
+        try await completeCache(cache, key: key)
+
+        await cache.beginPlayback(for: key)
+        try await cache.invalidateCache(for: key)
+        let invalidatedStatus = try await cache.cachedStatus(for: key)
+        XCTAssertNil(invalidatedStatus)
+
+        let replacementTask = Task {
+            try await cache.prepare(
+                key: key,
+                coverageBitmap: [true],
+                diskBudgetBytes: 1_000_000,
+                requiredAdditionalBytes: 0
+            )
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        await cache.endPlayback(for: key)
+        let replacement = try await replacementTask.value
+        XCTAssertEqual(replacement.missingGroupIndices, [0])
+    }
+
+    func testCorruptEncodedChunkIsRejectedAndInvalidated() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        let key = EnhancedFrameCacheKey(
+            sourceFingerprint: "corrupt-encoded-chunk",
+            configuration: .disabled,
+            cacheFormatVersion: EnhancedFrameCacheKey.currentHEVCChunkFormatVersion,
+            displayTargetFrameRate: 30
+        )
+        let preparation = UUID()
+        _ = try await cache.prepare(
+            key: key,
+            coverageBitmap: [true],
+            diskBudgetBytes: 10 * 1_024 * 1_024,
+            requiredAdditionalBytes: 1 * 1_024 * 1_024,
+            preparationIdentifier: preparation
+        )
+        try await cache.recordEncodedSourceGroup(
+            0,
+            presentationTime: .zero,
+            chunkIndex: 0,
+            preparationIdentifier: preparation
+        )
+        try await cache.appendEncodedFrame(
+            makeFrame(value: 48, time: .zero, interpolated: false, width: 64, height: 64),
+            groupIndex: 0,
+            chunkIndex: 0,
+            averageBitRate: 2_000_000,
+            expectedFrameRate: 30,
+            preparationIdentifier: preparation
+        )
+        _ = try await cache.finalizePreparation(preparationIdentifier: preparation)
+
+        let chunkURL = directory
+            .appendingPathComponent(key.directoryName, isDirectory: true)
+            .appendingPathComponent("chunk-00000000.mov")
+        var bytes = try Data(contentsOf: chunkURL)
+        bytes[bytes.startIndex] ^= 0xff
+        try bytes.write(to: chunkURL, options: .atomic)
+
+        do {
+            _ = try await cache.readEncodedChunkStreaming(0, for: key) { _ in }
+            XCTFail("Expected digest validation to reject the modified chunk")
+        } catch {
+            XCTAssertNotNil(error)
+        }
+        let invalidatedStatus = try await cache.cachedStatus(for: key)
+        XCTAssertNil(invalidatedStatus)
     }
 
     func testSparseManifestIndexesUncachedSourceGroupsForSeek() async throws {
@@ -332,6 +792,60 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertEqual(remainingUsage, 0)
     }
 
+    func testCompressedManifestRoundTripAndLegacyData() throws {
+        let original = Data(repeating: 42, count: 256 * 1_024)
+        let compressed = EnhancedFrameDiskCache.encodeManifestData(original, compress: true)
+        XCTAssertLessThan(compressed.count, original.count)
+        XCTAssertEqual(try EnhancedFrameDiskCache.decodeManifestData(compressed), original)
+        XCTAssertEqual(try EnhancedFrameDiskCache.decodeManifestData(original), original)
+        XCTAssertEqual(EnhancedFrameDiskCache.encodeManifestData(original, compress: false), original)
+        XCTAssertThrowsError(try EnhancedFrameDiskCache.decodeManifestData(Data("VTP-LZFSE-1\ninvalid".utf8)))
+    }
+
+    func testLargeEncodedManifestCanBeReopened() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = EnhancedFrameDiskCache(rootDirectory: directory)
+        var key = cacheKey("compressed-manifest")
+        key.cacheFormatVersion = EnhancedFrameCacheKey.currentHEVCChunkFormatVersion
+        var coverage = Array(repeating: false, count: 200_000)
+        coverage[0] = true
+        _ = try await cache.prepare(key: key, coverageBitmap: coverage, diskBudgetBytes: 1_000_000,
+                                    requiredAdditionalBytes: 0)
+        try await cache.writeGroup([try makeFrame(value: 1, time: .zero, interpolated: false)], for: 0)
+        _ = try await cache.finalizePreparation()
+        let manifestURL = directory.appendingPathComponent(key.directoryName).appendingPathComponent("manifest.plist")
+        let stored = try Data(contentsOf: manifestURL)
+        XCTAssertTrue(stored.starts(with: Data("VTP-LZFSE-1\n".utf8)))
+        let reopened = EnhancedFrameDiskCache(rootDirectory: directory)
+        let status = try await reopened.cachedStatus(for: key)
+        let frames = try await reopened.readGroup(0, for: key)
+        XCTAssertEqual(status?.coverageBitmap, coverage)
+        XCTAssertEqual(frames?.count, 1)
+    }
+
+    func testManifestOmitsRedundantSecondsAndReadsLegacyEntries() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let key = cacheKey("legacy-timestamps")
+        try await completeCache(EnhancedFrameDiskCache(rootDirectory: directory), key: key)
+        let manifestURL = directory.appendingPathComponent(key.directoryName).appendingPathComponent("manifest.plist")
+        let data = try Data(contentsOf: manifestURL)
+        var manifest = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        var groups = try XCTUnwrap(manifest["groups"] as? [[String: Any]])
+        XCTAssertNil(groups[0]["sourcePresentationSeconds"])
+        groups[0]["sourcePresentationSeconds"] = 0.0
+        manifest["groups"] = groups
+        let legacyData = try PropertyListSerialization.data(fromPropertyList: manifest, format: .binary, options: 0)
+        try legacyData.write(to: manifestURL)
+
+        let restored = EnhancedFrameDiskCache(rootDirectory: directory)
+        let status = try await restored.cachedStatus(for: key)
+        let frames = try await restored.readGroup(0, for: key)
+        XCTAssertNotNil(status)
+        XCTAssertEqual(frames?.count, 1)
+    }
+
     private func cacheKey(_ source: String) -> EnhancedFrameCacheKey {
         EnhancedFrameCacheKey(sourceFingerprint: source, configuration: .disabled)
     }
@@ -359,7 +873,13 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         return directory
     }
 
-    private func makeFrame(value: UInt8, time: CMTime, interpolated: Bool) throws -> VTFrame {
+    private func makeFrame(
+        value: UInt8,
+        time: CMTime,
+        interpolated: Bool,
+        width: Int = 4,
+        height: Int = 4
+    ) throws -> VTFrame {
         var buffer: CVPixelBuffer?
         let attributes: [CFString: Any] = [
             kCVPixelBufferMetalCompatibilityKey: true,
@@ -368,8 +888,8 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         XCTAssertEqual(
             CVPixelBufferCreate(
                 kCFAllocatorDefault,
-                4,
-                4,
+                width,
+                height,
                 kCVPixelFormatType_32BGRA,
                 attributes as CFDictionary,
                 &buffer
@@ -389,9 +909,117 @@ final class EnhancedFrameDiskCacheTests: XCTestCase {
         return VTFrame(buffer: pixelBuffer, presentationTimeStamp: time, isInterpolated: interpolated)
     }
 
+    private func makeMain10Frame(time: CMTime) -> VTFrame {
+        var buffer: CVPixelBuffer?
+        let attributes: [CFString: Any] = [
+            kCVPixelBufferMetalCompatibilityKey: true,
+            kCVPixelBufferIOSurfacePropertiesKey: [:]
+        ]
+        let result = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            32,
+            32,
+            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+            attributes as CFDictionary,
+            &buffer
+        )
+        XCTAssertEqual(result, kCVReturnSuccess)
+        guard let buffer else { fatalError("Unable to allocate Main10 test frame") }
+        let colorAttachments: [(CFString, CFString)] = [
+            (kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_2020),
+            (kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ),
+            (kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_2020)
+        ]
+        for (key, value) in colorAttachments {
+            CVBufferSetAttachment(buffer, key, value, .shouldPropagate)
+        }
+        return VTFrame(buffer: buffer, presentationTimeStamp: time, isInterpolated: false)
+    }
+
+    private func makeQualityFrame(time: CMTime, shift: Int) throws -> VTFrame {
+        let width = 1_280
+        let height = 720
+        var buffer: CVPixelBuffer?
+        let attributes: [CFString: Any] = [
+            kCVPixelBufferMetalCompatibilityKey: true,
+            kCVPixelBufferIOSurfacePropertiesKey: [:]
+        ]
+        XCTAssertEqual(
+            CVPixelBufferCreate(
+                kCFAllocatorDefault,
+                width,
+                height,
+                kCVPixelFormatType_32BGRA,
+                attributes as CFDictionary,
+                &buffer
+            ),
+            kCVReturnSuccess
+        )
+        let pixelBuffer = try XCTUnwrap(buffer)
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer)!.assumingMemoryBound(to: UInt8.self)
+        for y in 0..<height {
+            for x in 0..<width {
+                let index = y * bytesPerRow + x * 4
+                let level = UInt8((x + shift) % 256)
+                let checker = ((x / 16 + y / 16).isMultiple(of: 2)) ? 8 : 0
+                baseAddress[index] = level
+                baseAddress[index + 1] = UInt8(min(255, Int(level) + checker))
+                baseAddress[index + 2] = UInt8(max(0, Int(level) - checker))
+                baseAddress[index + 3] = 255
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        return VTFrame(buffer: pixelBuffer, presentationTimeStamp: time, isInterpolated: false)
+    }
+
+    private func imagePSNR(_ original: CVPixelBuffer, _ decoded: CVPixelBuffer) -> Double {
+        XCTAssertEqual(CVPixelBufferGetWidth(original), CVPixelBufferGetWidth(decoded))
+        XCTAssertEqual(CVPixelBufferGetHeight(original), CVPixelBufferGetHeight(decoded))
+        CVPixelBufferLockBaseAddress(original, .readOnly)
+        CVPixelBufferLockBaseAddress(decoded, .readOnly)
+        defer {
+            CVPixelBufferUnlockBaseAddress(original, .readOnly)
+            CVPixelBufferUnlockBaseAddress(decoded, .readOnly)
+        }
+        let width = CVPixelBufferGetWidth(original)
+        let height = CVPixelBufferGetHeight(original)
+        let originalStride = CVPixelBufferGetBytesPerRow(original)
+        let decodedStride = CVPixelBufferGetBytesPerRow(decoded)
+        let originalBase = CVPixelBufferGetBaseAddress(original)!.assumingMemoryBound(to: UInt8.self)
+        let decodedBase = CVPixelBufferGetBaseAddress(decoded)!.assumingMemoryBound(to: UInt8.self)
+        var squaredError = 0.0
+        var sampleCount = 0
+        for y in 0..<height {
+            for x in 0..<width {
+                let originalIndex = y * originalStride + x * 4
+                let decodedIndex = y * decodedStride + x * 4
+                for channel in 0..<3 {
+                    let difference = Double(originalBase[originalIndex + channel]) -
+                        Double(decodedBase[decodedIndex + channel])
+                    squaredError += difference * difference
+                    sampleCount += 1
+                }
+            }
+        }
+        let meanSquaredError = squaredError / Double(max(1, sampleCount))
+        return meanSquaredError == 0
+            ? .infinity
+            : 10 * log10(Double(255 * 255) / meanSquaredError)
+    }
+
     private func firstByte(of buffer: CVPixelBuffer) -> UInt8 {
         CVPixelBufferLockBaseAddress(buffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
         return CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self).pointee
+    }
+}
+
+private actor EncodedChunkStreamProbe {
+    private(set) var frames: [VTFrame] = []
+
+    func append(_ frame: VTFrame) {
+        frames.append(frame)
     }
 }

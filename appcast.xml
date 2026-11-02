@@ -6,6 +6,18 @@
         <description>Updates for VTPlayer.</description>
         <language>en</language>
         <item>
+            <title>1.1.0</title>
+            <pubDate>Mon, 02 Nov 2026 23:49:55 +0800</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/gitmichaelqiu/VTPlayer/releases/download/v1.1.0/VTPlayer_macOS_v1.1.0.dmg" length="30310674" type="application/octet-stream" sparkle:edSignature="K9OgiMKBoezIdE+szIL4sQVcRmXAdlCmwRjph/LHBFcG8RooQHPAIn+lWM0tpvHv1CYQptS6C6vLLPk+PpKzAQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://raw.githubusercontent.com/gitmichaelqiu/VTPlayer/main/VTPlayer/Resources/Sparkle/VTPlayer2-1.delta" sparkle:deltaFrom="1" length="16958714" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977824" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="UAotOiXkE9OLulIk9Ex4Vau9uLQlqv7TV5bBVLGJku+yrcscrEzcm7Wm04P2gADvFARWY5vIQZlNCti2e5b8DA=="/>
+            </sparkle:deltas>
+            <sparkle:releaseNotesLink>https://github.com/gitmichaelqiu/VTPlayer/releases/tag/v1.1.0</sparkle:releaseNotesLink>
+        </item>
+        <item>
             <title>1.0.0</title>
             <pubDate>Sat, 01 Aug 2026 10:53:05 -0500</pubDate>
             <sparkle:version>1</sparkle:version>

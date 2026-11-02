@@ -4,6 +4,56 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedPresentationFrameQueueTests: XCTestCase {
+    func testResetRejectsInFlightFramesFromPreviousSeek() throws {
+        let queue = EnhancedPresentationFrameQueue(capacityBytes: 4096, capacityFrames: 1, generation: 7)
+        let oldEpoch = queue.currentEpoch()
+        let first = try makeFrame(time: CMTime(seconds: 1, preferredTimescale: 600), interpolated: false)
+        let second = try makeFrame(time: CMTime(seconds: 2, preferredTimescale: 600), interpolated: false)
+        XCTAssertEqual(queue.enqueue(first, generation: 7, epoch: oldEpoch), .enqueued)
+        XCTAssertEqual(queue.enqueue(second, generation: 7, epoch: oldEpoch), .capacityExceeded)
+        queue.reset(generation: 7)
+        let currentEpoch = queue.currentEpoch()
+        XCTAssertNotEqual(oldEpoch, currentEpoch)
+        XCTAssertEqual(queue.enqueue(second, generation: 7, epoch: oldEpoch), .rejected)
+        XCTAssertEqual(queue.enqueue(second, generation: 7, epoch: currentEpoch), .enqueued)
+        XCTAssertEqual(queue.snapshot().frameCount, 1)
+    }
+
+    func testOnlyStatelessSpatialPipelineSkipsWarmupProcessing() {
+        var configuration = AppliedPipelineConfiguration.disabled
+        configuration.superResolutionLevel = 2
+        XCTAssertTrue(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.frameInterpolationLevel = 2
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.frameInterpolationLevel = 0
+        configuration.denoiseStrength = 0.5
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.denoiseStrength = 0
+        configuration.motionBlurStrength = 1
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+        configuration.motionBlurStrength = 0
+        configuration.qualitySuperResolutionScaleFactor = 4
+        XCTAssertFalse(PlaybackWarmupPolicy.canSkipProcessing(configuration))
+    }
+
+    func testHighRateLiveInterpolationUsesDedicatedPresentation() {
+        XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 25,
+            frameInterpolationLevel: 4,
+            screenMaximumFramesPerSecond: 120
+        ))
+        XCTAssertTrue(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 25,
+            frameInterpolationLevel: 2,
+            screenMaximumFramesPerSecond: 120
+        ))
+        XCTAssertFalse(MacDedicatedPresentationPolicy.shouldUseLiveQueue(
+            sourceFramesPerSecond: 25,
+            frameInterpolationLevel: 4,
+            screenMaximumFramesPerSecond: 60
+        ))
+    }
+
     func testFullCachePresentationRejectsStaleGenerationAndStoppedPlayback() {
         XCTAssertTrue(FullCachePresentationGeneration.accepts(
             driverGeneration: 7,
@@ -86,6 +136,39 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
         ))
     }
 
+    func testDedicatedSchedulerFallsBackWhenItCannotSubmit() {
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 0,
+            queuedFrames: 0,
+            submittedFrames: 0,
+            presentedFrames: 0
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 0,
+            submittedFrames: 0,
+            presentedFrames: 0
+        ))
+        XCTAssertTrue(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 12,
+            submittedFrames: 0,
+            presentedFrames: 0
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 12,
+            submittedFrames: 8,
+            presentedFrames: 0
+        ))
+        XCTAssertFalse(EnhancedDisplaySchedulingPolicy.shouldFallbackFromDedicatedDriver(
+            callbacks: 20,
+            queuedFrames: 12,
+            submittedFrames: 8,
+            presentedFrames: 8
+        ))
+    }
+
     func testDisplayTargetClockExtrapolatesToPredictedPresentation() {
         XCTAssertEqual(
             DisplayTargetClock.presentationSeconds(
@@ -132,6 +215,18 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
         XCTAssertEqual(queue.snapshot().frameCount, 0)
     }
 
+    func testLateSourceFramesCatchUpToPresentationClock() throws {
+        let queue = EnhancedPresentationFrameQueue(capacityBytes: 1_000_000, capacityFrames: 8, generation: 1)
+        let frames = try (0..<6).map {
+            try makeFrame(time: CMTime(value: Int64($0), timescale: 30), interpolated: false)
+        }
+        XCTAssertTrue(queue.enqueue(contentsOf: frames, generation: 1))
+        let selection = queue.dequeueNewestDue(at: 0.14, after: CMTime(value: -1, timescale: 30),
+                                               catchesUpInterpolation: true)
+        XCTAssertEqual(selection?.frame.presentationTimeStamp, frames[4].presentationTimeStamp)
+        XCTAssertEqual(queue.snapshot().frameCount, 1)
+    }
+
     func testResetRejectsFramesFromSupersededGeneration() throws {
         let queue = EnhancedPresentationFrameQueue(
             capacityBytes: 1_000_000,
@@ -143,6 +238,64 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
 
         XCTAssertFalse(queue.enqueue(contentsOf: [frame], generation: 1))
         XCTAssertTrue(queue.enqueue(contentsOf: [frame], generation: 2))
+    }
+
+    func testPrerollNotificationIsClaimedOnceForCurrentQueueGeneration() throws {
+        let queue = EnhancedPresentationFrameQueue(
+            capacityBytes: 1_000_000,
+            capacityFrames: 4,
+            generation: 1
+        )
+        let first = try makeFrame(time: .zero, interpolated: false)
+        let second = try makeFrame(time: CMTime(value: 1, timescale: 120), interpolated: true)
+
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 2, minimumFrameCount: 2))
+        XCTAssertEqual(queue.enqueue(first, generation: 1), .enqueued)
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 2))
+        XCTAssertEqual(queue.enqueue(second, generation: 1), .enqueued)
+        XCTAssertTrue(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 2))
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 2))
+
+        queue.reset(generation: 2)
+        XCTAssertFalse(queue.claimPrerollNotification(generation: 1, minimumFrameCount: 1))
+        XCTAssertEqual(queue.enqueue(first, generation: 2), .enqueued)
+        XCTAssertTrue(queue.claimPrerollNotification(generation: 2, minimumFrameCount: 1))
+    }
+
+    func testReaderControlPreservesExactPresentationTimeAcrossSeeks() {
+        let control = EnhancedPresentationReaderControl(
+            startTime: CMTime(value: 59_940, timescale: 10_000),
+            generation: 4
+        )
+        XCTAssertEqual(control.request().presentationTime, CMTime(value: 59_940, timescale: 10_000))
+        XCTAssertEqual(control.request().generation, 4)
+
+        control.requestSeek(to: CMTime(value: 1001, timescale: 60_000))
+        XCTAssertEqual(control.request().presentationTime, CMTime(value: 1001, timescale: 60_000))
+        XCTAssertEqual(control.request().generation, 5)
+    }
+
+    func testEnqueueResultDistinguishesBackpressureFromRejectedFrames() throws {
+        let queue = EnhancedPresentationFrameQueue(
+            capacityBytes: 1_000_000,
+            capacityFrames: 1,
+            generation: 1
+        )
+        let first = try makeFrame(time: .zero, interpolated: false)
+        let second = try makeFrame(time: CMTime(value: 1, timescale: 120), interpolated: true)
+
+        XCTAssertEqual(
+            queue.enqueueResult(contentsOf: [first], generation: 1),
+            .enqueued
+        )
+        XCTAssertEqual(
+            queue.enqueueResult(contentsOf: [second], generation: 1),
+            .capacityExceeded
+        )
+        XCTAssertEqual(
+            queue.enqueueResult(contentsOf: [second], generation: 2),
+            .rejected
+        )
     }
 
     func testQueueSnapshotSeparatesSamplingStarvationAndLateDrops() throws {
@@ -179,18 +332,25 @@ final class EnhancedPresentationFrameQueueTests: XCTestCase {
     func testPresentationRecorderExcludesZeroPresentedTime() {
         let recorder = RendererPresentationPerformanceRecorder()
         recorder.record(presentedTime: 0)
-        recorder.record(presentedTime: 10)
-        recorder.record(presentedTime: 10 + 1.0 / 120.0)
+        recorder.record(presentedTime: 1.000)
+        recorder.record(presentedTime: 1.008)
+        recorder.record(presentedTime: 1.017)
+        recorder.record(presentedTime: 1.017)
+        recorder.record(presentedTime: 1.049)
 
         let snapshot = recorder.consumeSnapshot()
-        XCTAssertEqual(snapshot.presentedFrames, 2)
+        XCTAssertEqual(snapshot.presentedFrames, 4)
         XCTAssertEqual(snapshot.droppedPresentations, 1)
-        XCTAssertEqual(snapshot.intervalSamples, 1)
-        XCTAssertEqual(
-            Double(snapshot.totalIntervalNanoseconds) / 1_000_000,
-            1_000.0 / 120.0,
-            accuracy: 0.001
+        XCTAssertEqual(snapshot.duplicatePresentations, 1)
+        XCTAssertEqual(snapshot.intervalSamples, 3)
+        let performance = RendererPerformanceAggregate().consumeSnapshot(
+            completedGPU: RendererGPUPerformanceSnapshot(completedFrames: 0, totalNanoseconds: 0),
+            presentation: snapshot
         )
+        XCTAssertEqual(performance.p50PresentationIntervalMilliseconds, 9, accuracy: 0.01)
+        XCTAssertEqual(performance.p95PresentationIntervalMilliseconds, 32, accuracy: 0.01)
+        XCTAssertEqual(performance.maximumPresentationGapMilliseconds, 32, accuracy: 0.01)
+        XCTAssertEqual(performance.presentationIntervalStandardDeviationMilliseconds, 11.09, accuracy: 0.05)
     }
 
     private func makeFrame(time: CMTime, interpolated: Bool) throws -> VTFrame {

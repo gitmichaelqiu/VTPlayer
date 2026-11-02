@@ -123,15 +123,47 @@ extension VTPlayerView {
     var iosDiagnosticsSheet: some View {
         NavigationStack {
             Form {
+                Section("Playback") {
+                    LabeledContent("State", value: String(localized: viewModel.isPaused || !viewModel.isPlaying ? "Paused" : "Playing"))
+                    LabeledContent("Presentation", value: String(localized: viewModel.isPipelineActive ? "Enhanced" : "Native"))
+                    LabeledContent("Playback speed") {
+                        Text(String(format: "%.2f×", viewModel.playbackSpeed))
+                            .monospacedDigit()
+                    }
+                    if viewModel.isPipelineActive {
+                        LabeledContent("Submitted rate") {
+                            Text(viewModel.fps > 0 ? String(format: "%.1f fps", viewModel.fps) : "—")
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Frame processing") {
+                            Text(viewModel.frameProcessingTime > 0 ? String(format: "%.1f ms", viewModel.frameProcessingTime) : "—")
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Buffered frames") {
+                            Text("\(viewModel.frameCacheCount)")
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Dropped frames") {
+                            Text("\(viewModel.droppedFrames)")
+                                .monospacedDigit()
+                        }
+                        LabeledContent("Rendered timeline") {
+                            Text(viewModel.renderedTimelineSampleDuration > 0
+                                 ? String(format: "%.0f%%", viewModel.renderedTimelineRatio * 100)
+                                 : "—")
+                                .monospacedDigit()
+                        }
+                    }
+                }
+
                 Section("Video metadata") {
                     LabeledContent("Resolution", value: "\(viewModel.videoWidth)×\(viewModel.videoHeight)")
                     LabeledContent("Source rate") {
                         Text(String(format: "%.2f fps", viewModel.sourceFrameRate))
                             .monospacedDigit()
                     }
-                    let scale = viewModel.frameInterpolationLevel > 0 ? Double(viewModel.frameInterpolationLevel) : 1.0
                     LabeledContent("Target rate") {
-                        Text(String(format: "%.2f fps", viewModel.sourceFrameRate * scale))
+                        Text(String(format: "%.2f fps", viewModel.isPipelineActive ? viewModel.requestedOutputFrameRate : viewModel.sourceFrameRate * viewModel.playbackSpeed))
                             .monospacedDigit()
                     }
                     LabeledContent("Codec", value: viewModel.videoFormat)
@@ -172,7 +204,7 @@ extension VTPlayerView {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     func formatDateOpened(for url: URL) -> String {
