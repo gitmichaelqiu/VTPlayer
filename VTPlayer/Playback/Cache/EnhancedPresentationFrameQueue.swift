@@ -31,6 +31,7 @@ nonisolated private struct EnhancedPresentationFrameQueueState: Sendable {
     var startIndex = 0
     var queuedByteUsage = 0
     var generation: UInt64
+    var epoch: UInt64 = 0
     var enqueuedFrames = 0
     var cacheHitGroups = 0
     var intentionallySampledOutFrames = 0
@@ -57,6 +58,7 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
             state.startIndex = 0
             state.queuedByteUsage = 0
             state.generation = generation
+            state.epoch &+= 1
             state.enqueuedFrames = 0
             state.cacheHitGroups = 0
             state.intentionallySampledOutFrames = 0
@@ -83,9 +85,14 @@ nonisolated final class EnhancedPresentationFrameQueue: @unchecked Sendable {
         enqueueResult(contentsOf: frames, generation: generation) == .enqueued
     }
 
-    func enqueue(_ frame: VTFrame, generation: UInt64) -> EnhancedPresentationEnqueueResult {
+    func currentEpoch() -> UInt64 {
+        state.withLock { $0.epoch }
+    }
+
+    func enqueue(_ frame: VTFrame, generation: UInt64, epoch: UInt64? = nil) -> EnhancedPresentationEnqueueResult {
         state.withLock { state in
-            guard state.generation == generation else { return .rejected }
+            guard state.generation == generation,
+                  epoch == nil || state.epoch == epoch else { return .rejected }
             let byteCount = CVPixelBufferGetDataSize(frame.buffer)
             guard byteCount <= capacityBytes else { return .rejected }
             guard state.queuedByteUsage <= capacityBytes - byteCount,

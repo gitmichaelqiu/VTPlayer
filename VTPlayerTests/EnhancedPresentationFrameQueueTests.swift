@@ -4,6 +4,21 @@ import XCTest
 @testable import VTPlayer
 
 final class EnhancedPresentationFrameQueueTests: XCTestCase {
+    func testResetRejectsInFlightFramesFromPreviousSeek() throws {
+        let queue = EnhancedPresentationFrameQueue(capacityBytes: 4096, capacityFrames: 1, generation: 7)
+        let oldEpoch = queue.currentEpoch()
+        let first = try makeFrame(time: CMTime(seconds: 1, preferredTimescale: 600), interpolated: false)
+        let second = try makeFrame(time: CMTime(seconds: 2, preferredTimescale: 600), interpolated: false)
+        XCTAssertEqual(queue.enqueue(first, generation: 7, epoch: oldEpoch), .enqueued)
+        XCTAssertEqual(queue.enqueue(second, generation: 7, epoch: oldEpoch), .capacityExceeded)
+        queue.reset(generation: 7)
+        let currentEpoch = queue.currentEpoch()
+        XCTAssertNotEqual(oldEpoch, currentEpoch)
+        XCTAssertEqual(queue.enqueue(second, generation: 7, epoch: oldEpoch), .rejected)
+        XCTAssertEqual(queue.enqueue(second, generation: 7, epoch: currentEpoch), .enqueued)
+        XCTAssertEqual(queue.snapshot().frameCount, 1)
+    }
+
     func testOnlyStatelessSpatialPipelineSkipsWarmupProcessing() {
         var configuration = AppliedPipelineConfiguration.disabled
         configuration.superResolutionLevel = 2

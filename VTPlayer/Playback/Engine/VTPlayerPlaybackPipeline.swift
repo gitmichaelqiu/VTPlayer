@@ -1157,12 +1157,55 @@ extension VTPlayerViewModel {
                     self.producerBetweenGroupsMaximumMilliseconds = max(self.producerBetweenGroupsMaximumMilliseconds, gap)
                     self.producerBetweenGroupsSampleCount += 1
                 }
+                #if os(macOS)
+                let liveQueue = usesLiveDedicatedPresentation ? self.fullCachePresentationQueue : nil
+                let queueEpoch = liveQueue?.currentEpoch()
+                #endif
                 do {
                     let streamedFrameCount = Mutex(0)
                     let streamedAdmissionNanoseconds = Mutex<UInt64>(0)
+                    #if os(macOS)
+                    let renderedBeforeGroup = self.lastRenderedPTS
+                    let cacheBudget = self.frameCacheMemoryBudget
+                    let directlyEnqueued = Mutex(0)
+                    let largestEnqueuedFrame = Mutex(0)
+                    #endif
                     let processedFrames = try await coordinator.processFrame(vtFrame) { frame in
                         let admissionStart = DispatchTime.now().uptimeNanoseconds
-                        let admitted = await admitStreamedFrame(frame)
+                        let admitted: Bool
+                        #if os(macOS)
+                        if let liveQueue, let queueEpoch {
+                            if renderedBeforeGroup.isValid &&
+                                CMTimeCompare(frame.presentationTimeStamp, renderedBeforeGroup) <= 0 {
+                                admitted = true
+                            } else if CVPixelBufferGetDataSize(frame.buffer) > cacheBudget {
+                                admitted = false
+                            } else {
+                                var enqueued = false
+                                while !Task.isCancelled {
+                                    switch liveQueue.enqueue(frame, generation: gen, epoch: queueEpoch) {
+                                    case .enqueued:
+                                        directlyEnqueued.withLock { $0 += 1 }
+                                        largestEnqueuedFrame.withLock {
+                                            $0 = max($0, CVPixelBufferGetDataSize(frame.buffer))
+                                        }
+                                        enqueued = true
+                                    case .capacityExceeded:
+                                        try? await Task.sleep(nanoseconds: 2_000_000)
+                                        continue
+                                    case .rejected:
+                                        break
+                                    }
+                                    break
+                                }
+                                admitted = enqueued
+                            }
+                        } else {
+                            admitted = await admitStreamedFrame(frame)
+                        }
+                        #else
+                        admitted = await admitStreamedFrame(frame)
+                        #endif
                         let admissionEnd = DispatchTime.now().uptimeNanoseconds
                         streamedAdmissionNanoseconds.withLock { $0 += admissionEnd - admissionStart }
                         if admitted {
@@ -1171,6 +1214,15 @@ extension VTPlayerViewModel {
                         return admitted
                     }
                     guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
+                    #if os(macOS)
+                    if liveQueue != nil {
+                        let count = directlyEnqueued.withLock { $0 }
+                        self.producedFramesCount += count
+                        pausedPreparationFramesRemaining = max(0, pausedPreparationFramesRemaining - count)
+                        prerollFrameBytes = max(prerollFrameBytes, largestEnqueuedFrame.withLock { $0 })
+                        if count > 0 { resumeAfterFramePrerollIfReady() }
+                    }
+                    #endif
                     let admittedStreamedFrameCount = streamedFrameCount.withLock { $0 }
                     let outputFrames = processedFrames.filter { frame in
                         !self.lastRenderedPTS.isValid ||
@@ -1257,8 +1309,12 @@ extension VTPlayerViewModel {
                     resumeAfterFramePrerollIfReady()
 
                 } catch {
+                    guard !Task.isCancelled else { break }
                     guard gen == self.playbackGeneration else { break }
                     guard sourceSeekGeneration.withLock({ $0 }) == self.seekGeneration else { continue }
+                    #if os(macOS)
+                    if let liveQueue, let queueEpoch, liveQueue.currentEpoch() != queueEpoch { continue }
+                    #endif
                     if effectiveSRLevel == 2 && fiLevel == 2 && effectiveQualitySR == 0 &&
                         !self.useSequentialSRFIFallback && !combinedProcessFallbackAttempted {
                         combinedProcessFallbackAttempted = true
