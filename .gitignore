@@ -3,4 +3,5 @@ AGENTS.md
 *.xcuserstate
 tmp/
 .build/
-.build/
+.codex/
+.claude/
