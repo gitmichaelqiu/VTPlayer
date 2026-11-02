@@ -731,6 +731,8 @@ extension VTPlayerViewModel {
             var presentationWindowStart = DispatchTime.now()
             var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
             var failureTracker = EnhancedPresentationFailureTracker()
+            var wasInactive = false
+            var recoveryDeadline: UInt64 = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !Task.isCancelled,
@@ -747,7 +749,18 @@ extension VTPlayerViewModel {
                 }
                 let now = DispatchTime.now()
                 if let window = self.renderer.window,
-                   (!window.occlusionState.contains(.visible) || self.isWindowFullyCovered(window)) {
+                   (!NSApp.isActive || !window.isKeyWindow || !window.occlusionState.contains(.visible) || self.isWindowFullyCovered(window)) {
+                    wasInactive = true
+                    failureTracker = EnhancedPresentationFailureTracker()
+                    presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
+                    presentationWindowStart = now
+                    continue
+                }
+                if wasInactive {
+                    wasInactive = false
+                    recoveryDeadline = now.uptimeNanoseconds + 2_000_000_000
+                }
+                if now.uptimeNanoseconds < recoveryDeadline {
                     failureTracker = EnhancedPresentationFailureTracker()
                     presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
                     presentationWindowStart = now
