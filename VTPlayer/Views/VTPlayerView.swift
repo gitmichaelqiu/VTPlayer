@@ -114,7 +114,6 @@ struct VTPlayerView: View {
     #if os(macOS)
     @State var showPlaybackIssueAlert = false
     @State private var lastPointerLocation: CGPoint?
-    @State private var pointerMoveMonitor: Any?
     #endif
     @State var showDenoisePopover = false
     @State var showMotionBlurPopover = false
@@ -503,27 +502,6 @@ struct VTPlayerView: View {
             guard case .preparing = newState else { return }
             if case .preparing = oldState { return }
             viewModel.userActivityDetected()
-        }
-        .onAppear {
-            guard pointerMoveMonitor == nil else { return }
-            pointerMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]) { event in
-                guard !viewModel.showControls,
-                      let playerWindow = viewModel.renderer.window ?? NSApp.keyWindow,
-                      playerWindow.isKeyWindow,
-                      (event.window == nil || event.window === playerWindow),
-                      playerWindow.frame.contains(NSEvent.mouseLocation) else { return event }
-                let location = NSEvent.mouseLocation
-                guard location != lastPointerLocation else { return event }
-                lastPointerLocation = location
-                viewModel.userActivityDetected()
-                return event
-            }
-        }
-        .onDisappear {
-            if let pointerMoveMonitor {
-                NSEvent.removeMonitor(pointerMoveMonitor)
-                self.pointerMoveMonitor = nil
-            }
         }
         #endif
     }

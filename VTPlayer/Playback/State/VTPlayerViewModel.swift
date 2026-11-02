@@ -1667,11 +1667,19 @@ final class VTPlayerViewModel {
             if shouldHide {
                 self.showControls = false
                  #if os(macOS)
-                 let pointerInFullscreen = self.isFullScreen &&
-                    (self.renderer.window ?? NSApp.keyWindow)?.frame.contains(NSEvent.mouseLocation) == true
-                 if !self.cursorHidden && (self.isHoveringVideo || pointerInFullscreen) {
+                 let initialPointerLocation = NSEvent.mouseLocation
+                 let pointerInWindow = (self.renderer.window ?? NSApp.keyWindow)?.frame.contains(initialPointerLocation) == true
+                 if !self.cursorHidden && (self.isHoveringVideo || pointerInWindow) {
                      NSCursor.hide()
                      self.cursorHidden = true
+                 }
+                 while !Task.isCancelled && !self.showControls {
+                     try? await Task.sleep(nanoseconds: 100_000_000)
+                     guard !Task.isCancelled else { return }
+                     if NSEvent.mouseLocation != initialPointerLocation || !NSApp.isActive {
+                         self.userActivityDetected()
+                         return
+                     }
                  }
                  #endif
             }
