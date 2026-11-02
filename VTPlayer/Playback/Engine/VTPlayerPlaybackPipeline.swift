@@ -1191,6 +1191,12 @@ extension VTPlayerViewModel {
                                         }
                                         enqueued = true
                                     case .capacityExceeded:
+                                        await MainActor.run {
+                                            guard self.playbackGeneration == gen,
+                                                  liveQueue.currentEpoch() == queueEpoch else { return }
+                                            prerollFrameBytes = max(prerollFrameBytes, CVPixelBufferGetDataSize(frame.buffer))
+                                            resumeAfterFramePrerollIfReady(force: true)
+                                        }
                                         try? await Task.sleep(nanoseconds: 2_000_000)
                                         continue
                                     case .rejected:
