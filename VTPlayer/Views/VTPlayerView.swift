@@ -508,8 +508,10 @@ struct VTPlayerView: View {
             guard pointerMoveMonitor == nil else { return }
             pointerMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]) { event in
                 guard !viewModel.showControls,
-                      let playerWindow = viewModel.renderer.window,
-                      (event.window ?? NSApp.keyWindow) === playerWindow else { return event }
+                      let playerWindow = viewModel.renderer.window ?? NSApp.keyWindow,
+                      playerWindow.isKeyWindow,
+                      (event.window == nil || event.window === playerWindow),
+                      playerWindow.frame.contains(NSEvent.mouseLocation) else { return event }
                 let location = NSEvent.mouseLocation
                 guard location != lastPointerLocation else { return event }
                 lastPointerLocation = location

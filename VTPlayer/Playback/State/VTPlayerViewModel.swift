@@ -1594,6 +1594,7 @@ final class VTPlayerViewModel {
 
     @objc func windowDidEnterFullScreen(_ notification: Notification) {
         self.isFullScreen = true
+        (notification.object as? NSWindow)?.acceptsMouseMovedEvents = true
         resumeAfterFullScreenTransition(notification)
         self.userActivityDetected()
         
@@ -1666,7 +1667,9 @@ final class VTPlayerViewModel {
             if shouldHide {
                 self.showControls = false
                  #if os(macOS)
-                 if !self.cursorHidden && self.isHoveringVideo {
+                 let pointerInFullscreen = self.isFullScreen &&
+                    (self.renderer.window ?? NSApp.keyWindow)?.frame.contains(NSEvent.mouseLocation) == true
+                 if !self.cursorHidden && (self.isHoveringVideo || pointerInFullscreen) {
                      NSCursor.hide()
                      self.cursorHidden = true
                  }
