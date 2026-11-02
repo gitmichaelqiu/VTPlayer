@@ -112,13 +112,27 @@ struct EnhancedPresentationGate {
 
 nonisolated struct EnhancedPresentationFailureTracker {
     static let windowSeconds = 2.0
+    static let healthyWindowsToResetRetry = 5
     private var consecutiveFailures = 0
+    private var consecutiveHealthyWindows = 0
+    private(set) var canRetry = true
+
+    mutating func markRetry() {
+        consecutiveFailures = 0
+        consecutiveHealthyWindows = 0
+        canRetry = false
+    }
 
     mutating func shouldRecover(passes: Bool) -> Bool {
         if passes {
             consecutiveFailures = 0
+            consecutiveHealthyWindows = min(consecutiveHealthyWindows + 1, Self.healthyWindowsToResetRetry)
+            if consecutiveHealthyWindows == Self.healthyWindowsToResetRetry {
+                canRetry = true
+            }
             return false
         }
+        consecutiveHealthyWindows = 0
         consecutiveFailures += 1
         return consecutiveFailures >= 2
     }

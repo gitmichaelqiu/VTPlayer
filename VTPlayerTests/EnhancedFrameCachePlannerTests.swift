@@ -583,6 +583,21 @@ final class EnhancedFrameCachePlannerTests: XCTestCase {
         XCTAssertFalse(tracker.shouldRecover(passes: false))
     }
 
+    func testPresentationRetryIsRestoredAfterSustainedRecovery() {
+        var tracker = EnhancedPresentationFailureTracker()
+        tracker.markRetry()
+        XCTAssertFalse(tracker.canRetry)
+        for _ in 0..<4 { XCTAssertFalse(tracker.shouldRecover(passes: true)) }
+        XCTAssertFalse(tracker.canRetry)
+        XCTAssertFalse(tracker.shouldRecover(passes: false))
+        for _ in 0..<4 { XCTAssertFalse(tracker.shouldRecover(passes: true)) }
+        XCTAssertFalse(tracker.canRetry)
+        XCTAssertFalse(tracker.shouldRecover(passes: true))
+        XCTAssertTrue(tracker.canRetry)
+        XCTAssertFalse(tracker.shouldRecover(passes: false))
+        XCTAssertTrue(tracker.shouldRecover(passes: false))
+    }
+
     func testRendererOnlyPlaybackDoesNotUseProcessedFrameCache() {
         XCTAssertFalse(EnhancedPresentationGate.canUseProcessedFrameCache(for: .disabled))
         var denoise = AppliedPipelineConfiguration.disabled

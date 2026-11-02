@@ -731,7 +731,6 @@ extension VTPlayerViewModel {
             var presentationWindowStart = DispatchTime.now()
             var presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
             var failureTracker = EnhancedPresentationFailureTracker()
-            var retriedLivePresentation = false
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !Task.isCancelled,
@@ -804,15 +803,14 @@ extension VTPlayerViewModel {
                         presentationWindowStart = now
                         continue
                     }
-                    if !retriedLivePresentation,
+                    if failureTracker.canRetry,
                        self.preparedEnhancedFrameCacheMode != .full,
                        self.macDedicatedMetalDisplayTickDriver != nil,
                        let player = self.player {
-                        retriedLivePresentation = true
                         self.stopDisplayLinkIfNeeded()
                         self.resetPresentationClock(at: CMTimeGetSeconds(player.currentTime()))
                         self.startDisplayLinkIfNeeded()
-                        failureTracker = EnhancedPresentationFailureTracker()
+                        failureTracker.markRetry()
                         presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
                         presentationWindowStart = DispatchTime.now()
                         NSLog("RENDER: retrying live presentation before cache fallback")
