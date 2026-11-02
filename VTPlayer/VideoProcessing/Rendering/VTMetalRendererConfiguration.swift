@@ -172,7 +172,7 @@ extension VTMetalRenderer {
     internal var potentialEDRHeadroom: Float {
         #if os(macOS)
         guard let screen = window?.screen else { return 1.0 }
-        return Float(screen.maximumExtendedDynamicRangeColorComponentValue)
+        return Float(screen.maximumPotentialExtendedDynamicRangeColorComponentValue)
         #elseif os(iOS)
         guard let screen = window?.windowScene?.screen else { return 1.0 }
         return Float(screen.potentialEDRHeadroom)
