@@ -341,6 +341,7 @@ extension VTPlayerView {
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
         .opacity(viewModel.showControls ? 1.0 : 0.0)
+        .allowsHitTesting(viewModel.showControls)
         .offset(y: viewModel.showControls ? 0 : 50)
         .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
         .onChange(of: showSuperResolutionPopover) { _, _ in syncConfigurationPopoverVisibility() }

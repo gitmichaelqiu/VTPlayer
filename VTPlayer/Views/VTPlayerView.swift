@@ -113,6 +113,7 @@ struct VTPlayerView: View {
     @State var showClearAllAlert = false
     #if os(macOS)
     @State var showPlaybackIssueAlert = false
+    @State private var lastPointerLocation: CGPoint?
     #endif
     @State var showDenoisePopover = false
     @State var showMotionBlurPopover = false
@@ -476,8 +477,17 @@ struct VTPlayerView: View {
             switch phase {
             case .active(_):
                 viewModel.isHoveringVideo = true
+                #if os(macOS)
+                let location = NSEvent.mouseLocation
+                guard location != lastPointerLocation else { return }
+                lastPointerLocation = location
+                #endif
                 viewModel.userActivityDetected()
             case .ended:
+                #if os(macOS)
+                if !viewModel.showControls, NSEvent.mouseLocation == lastPointerLocation { return }
+                lastPointerLocation = NSEvent.mouseLocation
+                #endif
                 viewModel.isHoveringVideo = false
                 #if os(macOS)
                 if viewModel.cursorHidden {
