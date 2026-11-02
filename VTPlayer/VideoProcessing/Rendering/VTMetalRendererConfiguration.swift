@@ -200,6 +200,7 @@ extension VTMetalRenderer {
     #if os(macOS)
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
         configureMacOSPresentationScheduling()
         updateDrawableSizeForBackingScale()
         configureExtendedDynamicRangePresentation()

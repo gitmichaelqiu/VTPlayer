@@ -499,12 +499,17 @@ struct VTPlayerView: View {
             }
         }
         #if os(macOS)
+        .onChange(of: viewModel.enhancedCachePreparationState) { oldState, newState in
+            guard case .preparing = newState else { return }
+            if case .preparing = oldState { return }
+            viewModel.userActivityDetected()
+        }
         .onAppear {
             guard pointerMoveMonitor == nil else { return }
             pointerMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]) { event in
                 guard !viewModel.showControls,
-                      event.window === viewModel.renderer.window,
-                      viewModel.isHoveringVideo else { return event }
+                      let playerWindow = viewModel.renderer.window,
+                      (event.window ?? NSApp.keyWindow) === playerWindow else { return event }
                 let location = NSEvent.mouseLocation
                 guard location != lastPointerLocation else { return event }
                 lastPointerLocation = location
