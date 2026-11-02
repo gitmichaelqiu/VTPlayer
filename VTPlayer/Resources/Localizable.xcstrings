@@ -267,6 +267,16 @@
         }
       }
     },
+    "Buffered frames" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓冲帧数"
+          }
+        }
+      }
+    },
     "Buffered Frames" : {
       "localizations" : {
         "zh-Hans" : {
@@ -614,6 +624,16 @@
         }
       }
     },
+    "Dropped frames" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "丢帧数"
+          }
+        }
+      }
+    },
     "Enhanced frame cache" : {
       "localizations" : {
         "zh-Hans" : {
@@ -740,6 +760,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "帧生成"
+          }
+        }
+      }
+    },
+    "Frame processing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帧处理"
           }
         }
       }
@@ -1204,6 +1234,16 @@
         }
       }
     },
+    "Playback speed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放速度"
+          }
+        }
+      }
+    },
     "Playback State" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1223,6 +1263,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "后处理"
+          }
+        }
+      }
+    },
+    "Presentation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "呈现方式"
           }
         }
       }
@@ -1353,6 +1403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重命名视频"
+          }
+        }
+      }
+    },
+    "Rendered timeline" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "渲染时间线"
           }
         }
       }
@@ -1583,6 +1643,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "支持超分"
+          }
+        }
+      }
+    },
+    "State" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状态"
+          }
+        }
+      }
+    },
+    "Submitted rate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提交帧率"
           }
         }
       }
