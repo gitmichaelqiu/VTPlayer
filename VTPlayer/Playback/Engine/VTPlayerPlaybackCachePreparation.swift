@@ -749,7 +749,7 @@ extension VTPlayerViewModel {
                 }
                 let now = DispatchTime.now()
                 if let window = self.renderer.window,
-                   (!NSApp.isActive || !window.isKeyWindow || !window.occlusionState.contains(.visible) || self.isWindowFullyCovered(window)) {
+                   (!NSApp.isActive || !window.isKeyWindow || !window.occlusionState.contains(.visible)) {
                     wasInactive = true
                     failureTracker = EnhancedPresentationFailureTracker()
                     presentationFrameBaseline = self.renderer.totalPresentedFrameCount()
@@ -842,20 +842,6 @@ extension VTPlayerViewModel {
                 presentationFrameBaseline = totalPresentedFrames
                 presentationWindowStart = now
             }
-        }
-    }
-
-    private func isWindowFullyCovered(_ window: NSWindow) -> Bool {
-        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
-              let targetIndex = windows.firstIndex(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == window.windowNumber }),
-              let targetBounds = windows[targetIndex][kCGWindowBounds as String] as? [String: Any],
-              let targetRect = CGRect(dictionaryRepresentation: targetBounds as CFDictionary), !targetRect.isEmpty else { return false }
-        return windows[..<targetIndex].contains { info in
-            guard (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
-                  (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue == 1,
-                  let bounds = info[kCGWindowBounds as String] as? [String: Any],
-                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return false }
-            return rect.contains(targetRect)
         }
     }
 
